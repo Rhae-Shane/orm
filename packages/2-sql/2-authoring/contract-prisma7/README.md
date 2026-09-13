@@ -58,9 +58,9 @@ By decision (option (a)), a generator or `@updatedAt` on an optional field is `P
 
 `@unique` and `@@unique` become unique indexes named `{table}_{columns}_key` and `@@index` becomes an index named `{table}_{columns}_idx`, `map` overriding either (`name` on `@@unique` is the client-side name and is ignored). `type: Hash` and the other Prisma 8 index types map through; field arguments such as `sort` and `length`, and `ops`, are `PRISMA7_INDEX_ARGUMENT_UNSUPPORTED` because Prisma 8 indexes carry none.
 
-## Not yet covered
+## Multi-file input
 
-Enum names are checked for duplicates within one file only.
+A directory input is read file by file in sorted name order; the datasource check runs once over all of them. A model or enum declared in more than one file is `PSL_DUPLICATE_DECLARATION` on the later file, the same code the parser's symbol table uses for a duplicate within one file.
 
 ## Tests
 

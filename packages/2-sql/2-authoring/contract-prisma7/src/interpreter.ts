@@ -51,6 +51,7 @@ import {
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
+import { basename } from 'pathe';
 import { lowerPrisma7Default } from './defaults';
 import { prisma7Diagnostic } from './diagnostics';
 import { type IndexAttribute, indexNode, parseIndexAttribute } from './indexes';
@@ -167,6 +168,23 @@ export function interpretPrisma7Documents(
   const enumBlocks: SourceBlock[] = [];
   const models: ModelDeclaration[] = [];
   const ignoredModels = new Set<string>();
+  // The symbol table catches duplicates within one file; a name declared
+  // again in a later file is caught here with the later file's id.
+  const declaredNames = new Map<string, string>();
+  const claimName = (kind: string, name: string, sourceId: string, span: PslSpan): boolean => {
+    const previous = declaredNames.get(name);
+    if (previous === undefined) {
+      declaredNames.set(name, sourceId);
+      return true;
+    }
+    diagnostics.push({
+      code: 'PSL_DUPLICATE_DECLARATION',
+      message: `Duplicate declaration of ${kind} "${name}"; first declared in ${basename(previous)}.`,
+      sourceId,
+      span,
+    });
+    return false;
+  };
 
   for (const { document, sourceFile, sourceId } of input.documents) {
     const { table, diagnostics: tableDiagnostics } = buildSymbolTable({
@@ -198,7 +216,9 @@ export function interpretPrisma7Documents(
         case 'generator':
           break;
         case 'enum':
-          enumBlocks.push({ block, sourceId, sourceFile });
+          if (claimName('enum', block.name, sourceId, block.span)) {
+            enumBlocks.push({ block, sourceId, sourceFile });
+          }
           break;
         case 'view':
           diagnostics.push(
@@ -224,6 +244,7 @@ export function interpretPrisma7Documents(
       unsupported('types', namedType.span);
     }
     for (const symbol of Object.values(table.topLevel.models)) {
+      if (!claimName('model', symbol.name, sourceId, symbol.span)) continue;
       const declaration = readModelDeclaration(symbol, sourceId, defaultNamespaceId, diagnostics);
       if (declaration === undefined) {
         ignoredModels.add(symbol.name);

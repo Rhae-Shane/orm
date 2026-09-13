@@ -56,6 +56,7 @@ describe('Prisma 7 fixtures', () => {
       'junction-composite-id',
       'keys',
       'multi-file',
+      'multi-file-duplicate',
       'multi-file-errors',
       'multi-schema',
       'naming',
