@@ -70,7 +70,7 @@ Implicit many-to-many (a list field on both sides, no junction model) becomes th
 
 ## Error catalogue
 
-`PRISMA7_PROVIDER_MISMATCH`, `PRISMA7_RELATION_MODE_UNSUPPORTED`, `PRISMA7_VIEW_UNSUPPORTED`, `PRISMA7_UNSUPPORTED_TYPE`, `PRISMA7_NATIVE_TYPE_UNSUPPORTED`, `PRISMA7_INDEX_ARGUMENT_UNSUPPORTED`, `PRISMA7_UNKNOWN_ATTRIBUTE`, `PRISMA7_UNKNOWN_DEFAULT`, `PRISMA7_RELATION_UNRESOLVED`. Each has a fixture. The implementer may add codes; every added code needs a fixture and a line here.
+`PRISMA7_PROVIDER_MISMATCH`, `PRISMA7_RELATION_MODE_UNSUPPORTED`, `PRISMA7_VIEW_UNSUPPORTED`, `PRISMA7_UNSUPPORTED_TYPE`, `PRISMA7_NATIVE_TYPE_UNSUPPORTED`, `PRISMA7_INDEX_ARGUMENT_UNSUPPORTED`, `PRISMA7_UNKNOWN_ATTRIBUTE`, `PRISMA7_UNKNOWN_DEFAULT`, `PRISMA7_RELATION_UNRESOLVED`, `PRISMA7_ENUM_NAMESPACE_MISMATCH` (added in dispatch 4: a column may only use an enum type from its own schema, which is what the IR can express). Each has a fixture. The implementer may add codes; every added code needs a fixture and a line here.
 
 ## Edge cases
 

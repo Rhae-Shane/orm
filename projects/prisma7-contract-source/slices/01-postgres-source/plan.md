@@ -36,7 +36,7 @@ Calibration threaded into every brief: `drive/calibration/failure-modes.md` F3 (
 - **Outcome:** `packages/2-sql/2-authoring/contract-prisma7` exists; `prisma7Schema(path)` returns a `ContractConfig`; `defineConfig({ contract: prisma7Schema(...) })` type-checks in `@prisma/orm-postgres/config`; the interpreter handles the Blocks, Naming, and Field types sections of the slice spec (models, fields, scalars, `@db.*` from dispatch 1's table, lists, native enums, namespaces, `@ignore`, `@@ignore`, provider check, `relationMode`, `view`, `Unsupported`, unmapped native types) and every produced contract passes `validateContract`.
 - **Builds on:** dispatches 1 and 3.
 - **Hands to:** a loading, validating source with a fixture harness the remaining dispatches extend.
-- **Focus:** package layout per `vite-plugin-contract-emit`; `architecture.config.json` entry; `packages/3-extensions/postgres/src/config/define-config.ts`; fixtures under the package's `test/fixtures/` with one `.prisma` per rule row and expected diagnostics for error rows.
+- **Focus:** package layout per `vite-plugin-contract-emit`; `architecture.config.json` needed no entry (the `packages/2-sql/2-authoring/**` glob covers it), but the publish-surface shell map did; `packages/3-extensions/postgres/src/config/define-config.ts`; fixtures under the package's `test/fixtures/` with one `.prisma` per rule row and expected diagnostics for error rows.
 - **Gates:** package `test`, `typecheck`, `lint`; `pnpm lint:deps`; `pnpm --filter @prisma/orm-postgres typecheck` after building the new package.
 
 ### Dispatch 5: defaults, keys, uniques, indexes
@@ -48,9 +48,11 @@ Calibration threaded into every brief: `drive/calibration/failure-modes.md` F3 (
 
 ### Dispatch 6: relations
 
+_Order change 2026-09-13: dispatch 6 runs before dispatch 5, which is blocked on the operator's `@updatedAt` decision. Dispatch 6 builds on dispatch 4 only._
+
 - **Outcome:** Explicit relations carry Prisma 7's effective actions; implicit many-to-many relations produce the junction model from dispatch 1's SQL; back-relations resolve through the existing pairing code, decoupled from `FieldSymbol`.
-- **Builds on:** dispatch 5.
-- **Hands to:** the complete rule table.
+- **Builds on:** dispatch 4.
+- **Hands to:** the relation rows of the rule table; dispatch 5 completes it.
 - **Focus:** `packages/2-sql/2-authoring/contract-psl/src/psl-relation-resolution.ts` (replace `FieldSymbol` on `ModelBackrelationCandidate` with a structural type; the PSL interpreter's tests must not change), then the Prisma 7 relation rules.
 - **Gates:** as dispatch 4 plus `pnpm --filter @internal/sql-contract-psl test`.
 
