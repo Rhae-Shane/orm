@@ -87,6 +87,14 @@ _Order change 2026-09-13: dispatch 6 runs before dispatch 5, which is blocked on
 - **Hands to:** slice DoD.
 - **Gates:** `pnpm build`, `pnpm lint:deps`, `pnpm lint:docs`, `pnpm test:packages`, `pnpm fixtures:check`; grep gate for `projects/` references outside `projects/`.
 
+### Dispatch 10: manual QA fixes
+
+_Added after the manual QA run (`manual-qa-reports/2026-09-13-qa-runner.md`): the README config snippet was rejected by the CLI, hard-error diagnostics appeared only under `--json`, and the default output path followed the schema file name._
+
+- **Outcome:** every QA finding fixed or documented, with a re-run of the affected steps.
+- **Builds on:** dispatch 9.
+- **Hands to:** slice DoD.
+
 ## Handoff completeness
 
 Dispatches 1 and 2 pin items 1, 2, 3, 4, 6. Dispatch 3 gives the grammar. Dispatches 4 to 7 cover every rule row and error code. Dispatch 8 is the end-to-end proof. Dispatch 9 the docs and gates. Together they reach every slice DoD item.
