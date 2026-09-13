@@ -13,12 +13,45 @@ import { canonicalStringify } from '@internal/utils/canonical-stringify';
  * `nativeType` provides the temporal- and int64-normalization context (the
  * actual side's resolved native type in a diff comparison).
  */
+/**
+ * A raw expression that is nothing but a quoted SQL string, optionally cast
+ * (`'confidential'::auth.oauth_client_type`), denotes that string. The
+ * introspection side may read such a default as a literal while an older
+ * contract still declares it as a raw expression; comparing the string the
+ * expression spells keeps both spellings equal.
+ */
+const QUOTED_STRING_EXPRESSION = /^'((?:[^']|'')*)'(?:::.+)?$/s;
+
+function quotedStringValue(expression: string): string | undefined {
+  const match = QUOTED_STRING_EXPRESSION.exec(expression.trim());
+  return match?.[1] === undefined ? undefined : match[1].replace(/''/g, "'");
+}
+
+function rawExpressionEqualsLiteral(
+  raw: ColumnDefault,
+  literal: ColumnDefault,
+  nativeType?: string,
+): boolean {
+  if (raw.kind !== 'function' || literal.kind !== 'literal') return false;
+  const spelled = quotedStringValue(raw.expression);
+  if (spelled === undefined) return false;
+  return literalValuesEqual(
+    normalizeLiteralValue(spelled, nativeType),
+    normalizeLiteralValue(literal.value, nativeType),
+  );
+}
+
 export function resolvedDefaultsEqual(
   expected: ColumnDefault,
   actual: ColumnDefault,
   nativeType?: string,
 ): boolean {
-  if (expected.kind !== actual.kind) return false;
+  if (expected.kind !== actual.kind) {
+    return (
+      rawExpressionEqualsLiteral(expected, actual, nativeType) ||
+      rawExpressionEqualsLiteral(actual, expected, nativeType)
+    );
+  }
   if (expected.kind === 'literal' && actual.kind === 'literal') {
     return literalValuesEqual(
       normalizeLiteralValue(expected.value, nativeType),

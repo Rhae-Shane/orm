@@ -25,6 +25,10 @@ interface EnumTableCase {
   readonly table: string;
   readonly enumName: string;
   readonly typeName: string;
+  /** A default on `action`: declared on the contract as given, created live as `DEFAULT 'CREATE'`. */
+  readonly contractDefault?:
+    | { readonly kind: 'literal'; readonly value: string }
+    | { readonly kind: 'function'; readonly expression: string };
 }
 
 /** One table whose `action` column is typed by a native enum, in the given schema. */
@@ -49,6 +53,9 @@ function buildContract(input: EnumTableCase): Contract<SqlStorage> {
                     nativeType: qualifiedType,
                     codecId: 'pg/enum@1',
                     nullable: false,
+                    ...(input.contractDefault === undefined
+                      ? {}
+                      : { default: input.contractDefault }),
                     typeParams: { typeName: qualifiedType },
                     valueSet: {
                       plane: 'storage',
@@ -88,12 +95,17 @@ async function verifyEnumTable(
   input: EnumTableCase,
 ): Promise<readonly (readonly string[])[]> {
   const quotedType = `"${input.schema}"."${input.typeName}"`;
+  // `resetDatabase` clears `public` only; a schema created by an earlier case
+  // (and the type inside it) would otherwise survive into this one.
   if (input.schema !== 'public') {
-    await driver.query(`CREATE SCHEMA IF NOT EXISTS "${input.schema}"`);
+    await driver.query(`DROP SCHEMA IF EXISTS "${input.schema}" CASCADE`);
+    await driver.query(`CREATE SCHEMA "${input.schema}"`);
   }
+  await driver.query(`DROP TYPE IF EXISTS ${quotedType} CASCADE`);
   await driver.query(`CREATE TYPE ${quotedType} AS ENUM ('CREATE', 'DELETE')`);
+  const liveDefault = input.contractDefault === undefined ? '' : " DEFAULT 'CREATE'";
   await driver.query(
-    `CREATE TABLE "${input.schema}"."${input.table}" (id int PRIMARY KEY, action ${quotedType} NOT NULL)`,
+    `CREATE TABLE "${input.schema}"."${input.table}" (id int PRIMARY KEY, action ${quotedType} NOT NULL${liveDefault})`,
   );
   const contract = buildContract(input);
   const introspected = await familyInstance.introspect({ driver, contract });
@@ -138,6 +150,33 @@ describe('a native enum outside public verifies clean', { concurrent: false }, (
       table: 'audit_log',
       enumName: 'AuditAction',
       typeName: 'AuditAction',
+    });
+    expect(paths).toEqual([]);
+  });
+
+  it('reports zero findings for an enum default declared as a raw cast expression', {
+    timeout: testTimeout,
+  }, async () => {
+    // The spelling an older inferred contract carries (dbgenerated("'x'::sch.t")).
+    const paths = await verifyEnumTable(driver!, {
+      schema: 'audit',
+      table: 'audit_log',
+      enumName: 'AuditAction',
+      typeName: 'AuditAction',
+      contractDefault: { kind: 'function', expression: '\'CREATE\'::audit."AuditAction"' },
+    });
+    expect(paths).toEqual([]);
+  });
+
+  it('reports zero findings for an enum default declared as a literal', {
+    timeout: testTimeout,
+  }, async () => {
+    const paths = await verifyEnumTable(driver!, {
+      schema: 'audit',
+      table: 'audit_log',
+      enumName: 'AuditAction',
+      typeName: 'AuditAction',
+      contractDefault: { kind: 'literal', value: 'CREATE' },
     });
     expect(paths).toEqual([]);
   });

@@ -190,3 +190,38 @@ describe('resolvedDefaultsEqual zoneless timestamp literals', () => {
     ).toBe(false);
   });
 });
+
+describe('resolvedDefaultsEqual raw string literal expressions', () => {
+  // A contract written before introspection read schema-qualified enum casts as
+  // literals declares `@default(dbgenerated("'confidential'::auth.oauth_client_type"))`
+  // (packages/3-extensions/supabase/src/contract/contract.prisma). Introspection
+  // now reads that column's default as the literal `confidential`; the two
+  // must still compare equal, in either direction.
+  const supabaseSpelling = "'confidential'::auth.oauth_client_type";
+
+  it('a raw expression that is a cast string literal equals the literal it spells', () => {
+    expect(
+      resolvedDefaultsEqual(
+        fn(supabaseSpelling),
+        literal('confidential'),
+        'auth.oauth_client_type',
+      ),
+    ).toBe(true);
+    expect(
+      resolvedDefaultsEqual(
+        literal('confidential'),
+        fn(supabaseSpelling),
+        'auth.oauth_client_type',
+      ),
+    ).toBe(true);
+  });
+
+  it('unescapes a doubled quote and ignores an uncast spelling difference', () => {
+    expect(resolvedDefaultsEqual(fn("'it''s'"), literal("it's"), 'text')).toBe(true);
+  });
+
+  it('a raw expression that is not a string literal still never equals a literal', () => {
+    expect(resolvedDefaultsEqual(fn('now()'), literal('now'), 'text')).toBe(false);
+    expect(resolvedDefaultsEqual(fn("'a'::text"), literal('b'), 'text')).toBe(false);
+  });
+});

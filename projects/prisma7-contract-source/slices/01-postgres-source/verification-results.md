@@ -52,6 +52,10 @@ Consequence for the rule table: a database built by Prisma 5 or earlier and neve
 
 Not assigned to this slice.
 
+## Compatibility
+
+Pre-existing inferred contracts keep verifying after the default-normaliser fixes: a contract that declares `@default(dbgenerated("'confidential'::auth.oauth_client_type"))` (the shipped Supabase contract, `packages/3-extensions/supabase/src/contract/contract.prisma`) compares equal to the literal `confidential` introspection now reads, because `resolvedDefaultsEqual` treats a raw expression that is a cast string literal as the string it spells; the Supabase suite and the introspect, infer, and supabase integration tests pass with no contract file regenerated.
+
 ## Slice 2 follow-up
 
 The Mongo PSL interpreter (`packages/2-mongo-family/2-authoring/contract-psl/src/interpreter.ts`) reads only `enum` blocks from the top-level blocks and silently ignores every other unknown top-level block, including `view`. Slice 2 must add a diagnostic there so a Prisma 7 Mongo schema with a view is rejected the way the SQL interpreter rejects it (`PSL_UNSUPPORTED_TOP_LEVEL_BLOCK`).
