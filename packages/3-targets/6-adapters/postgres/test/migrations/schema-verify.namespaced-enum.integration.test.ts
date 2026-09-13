@@ -20,7 +20,17 @@ import {
   testTimeout,
 } from './fixtures/runner-fixtures';
 
-function buildContract(): Contract<SqlStorage> {
+interface EnumTableCase {
+  readonly schema: string;
+  readonly table: string;
+  readonly enumName: string;
+  readonly typeName: string;
+}
+
+/** One table whose `action` column is typed by a native enum, in the given schema. */
+function buildContract(input: EnumTableCase): Contract<SqlStorage> {
+  const qualifiedType =
+    input.schema === 'public' ? input.typeName : `${input.schema}.${input.typeName}`;
   return {
     target: 'postgres',
     targetFamily: 'sql',
@@ -28,23 +38,23 @@ function buildContract(): Contract<SqlStorage> {
     storage: new SqlStorage({
       storageHash: coreHash('namespaced-enum'),
       namespaces: {
-        audit: postgresCreateNamespace({
-          id: asNamespaceId('audit'),
+        [input.schema]: postgresCreateNamespace({
+          id: asNamespaceId(input.schema),
           entries: {
             table: {
-              audit_log: {
+              [input.table]: {
                 columns: {
                   id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
                   action: {
-                    nativeType: 'audit.AuditAction',
+                    nativeType: qualifiedType,
                     codecId: 'pg/enum@1',
                     nullable: false,
-                    typeParams: { typeName: 'audit.AuditAction' },
+                    typeParams: { typeName: qualifiedType },
                     valueSet: {
                       plane: 'storage',
                       entityKind: 'valueSet',
-                      namespaceId: 'audit',
-                      entityName: 'AuditAction',
+                      namespaceId: input.schema,
+                      entityName: input.enumName,
                     },
                   },
                 },
@@ -55,12 +65,12 @@ function buildContract(): Contract<SqlStorage> {
               },
             },
             native_enum: {
-              AuditAction: new PostgresNativeEnum({
-                typeName: 'AuditAction',
+              [input.enumName]: new PostgresNativeEnum({
+                typeName: input.typeName,
                 members: ['CREATE', 'DELETE'],
               }),
             },
-            valueSet: { AuditAction: { kind: 'valueSet', values: ['CREATE', 'DELETE'] } },
+            valueSet: { [input.enumName]: { kind: 'valueSet', values: ['CREATE', 'DELETE'] } },
           },
         }),
       },
@@ -71,6 +81,29 @@ function buildContract(): Contract<SqlStorage> {
     extensions: {},
     meta: {},
   };
+}
+
+async function verifyEnumTable(
+  driver: PostgresControlDriver,
+  input: EnumTableCase,
+): Promise<readonly (readonly string[])[]> {
+  const quotedType = `"${input.schema}"."${input.typeName}"`;
+  if (input.schema !== 'public') {
+    await driver.query(`CREATE SCHEMA IF NOT EXISTS "${input.schema}"`);
+  }
+  await driver.query(`CREATE TYPE ${quotedType} AS ENUM ('CREATE', 'DELETE')`);
+  await driver.query(
+    `CREATE TABLE "${input.schema}"."${input.table}" (id int PRIMARY KEY, action ${quotedType} NOT NULL)`,
+  );
+  const contract = buildContract(input);
+  const introspected = await familyInstance.introspect({ driver, contract });
+  const verifyResult = familyInstance.verifySchema({
+    contract,
+    schema: introspected,
+    strict: false,
+    frameworkComponents,
+  });
+  return verifyResult.schema.issues.map((issue) => issue.path);
 }
 
 describe('a native enum outside public verifies clean', { concurrent: false }, () => {
@@ -100,22 +133,36 @@ describe('a native enum outside public verifies clean', { concurrent: false }, (
   it('reports zero findings for a mixed-case enum type in another schema', {
     timeout: testTimeout,
   }, async () => {
-    await driver!.query('CREATE SCHEMA IF NOT EXISTS audit');
-    await driver!.query(`CREATE TYPE "audit"."AuditAction" AS ENUM ('CREATE', 'DELETE')`);
-    await driver!.query(
-      'CREATE TABLE "audit"."audit_log" (id int PRIMARY KEY, action "audit"."AuditAction" NOT NULL)',
-    );
-
-    const contract = buildContract();
-    const introspected = await familyInstance.introspect({ driver: driver!, contract });
-    const verifyResult = familyInstance.verifySchema({
-      contract,
-      schema: introspected,
-      strict: false,
-      frameworkComponents,
+    const paths = await verifyEnumTable(driver!, {
+      schema: 'audit',
+      table: 'audit_log',
+      enumName: 'AuditAction',
+      typeName: 'AuditAction',
     });
+    expect(paths).toEqual([]);
+  });
 
-    expect(verifyResult.schema.issues.map((issue) => issue.path)).toEqual([]);
-    expect(verifyResult.ok).toBe(true);
+  it('reports zero findings for a type name that contains a dot', {
+    timeout: testTimeout,
+  }, async () => {
+    const paths = await verifyEnumTable(driver!, {
+      schema: 'public',
+      table: 'dotted_log',
+      enumName: 'Dotted',
+      typeName: 'a.b',
+    });
+    expect(paths).toEqual([]);
+  });
+
+  it('reports zero findings for a dotted type name in another schema', {
+    timeout: testTimeout,
+  }, async () => {
+    const paths = await verifyEnumTable(driver!, {
+      schema: 'sch',
+      table: 'dotted_log',
+      enumName: 'Dotted',
+      typeName: 'a.b',
+    });
+    expect(paths).toEqual([]);
   });
 });

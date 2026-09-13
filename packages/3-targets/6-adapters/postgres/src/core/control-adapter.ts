@@ -1519,16 +1519,35 @@ function normalizeFormattedType(formattedType: string, dataType: string, udtName
     return formattedType.replace(' without time zone', '').trim();
   }
   // `format_type` quotes a user-defined type name that needs it (mixed case,
-  // reserved word) and schema-qualifies one outside the search path, so a
-  // mixed-case enum in another schema arrives as `audit."AuditAction"`. The
-  // contract side spells every type name unquoted (`audit.AuditAction`), so
-  // strip the quotes from each identifier segment.
-  return formattedType
-    .split('.')
-    .map((segment) =>
-      segment.startsWith('"') && segment.endsWith('"') ? segment.slice(1, -1) : segment,
-    )
-    .join('.');
+  // reserved word, a dot) and schema-qualifies one outside the search path,
+  // so a mixed-case enum in another schema arrives as `audit."AuditAction"`.
+  // The contract side spells every type name unquoted (`audit.AuditAction`),
+  // so strip the quotes from each identifier segment, splitting only on dots
+  // that sit outside the quotes.
+  return splitQualifiedName(formattedType).map(unquoteIdentifier).join('.');
+}
+
+function splitQualifiedName(name: string): string[] {
+  const segments: string[] = [];
+  let current = '';
+  let quoted = false;
+  for (const char of name) {
+    if (char === '"') quoted = !quoted;
+    if (char === '.' && !quoted) {
+      segments.push(current);
+      current = '';
+      continue;
+    }
+    current += char;
+  }
+  segments.push(current);
+  return segments;
+}
+
+function unquoteIdentifier(segment: string): string {
+  return segment.length >= 2 && segment.startsWith('"') && segment.endsWith('"')
+    ? segment.slice(1, -1).replaceAll('""', '"')
+    : segment;
 }
 
 /**
