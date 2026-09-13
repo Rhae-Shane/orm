@@ -19,13 +19,18 @@ Pick the facade that matches your deployment lifecycle. The asymmetry is intenti
 
 ```typescript
 // prisma.config.ts
-import { defineConfig } from '@internal/postgres/config';
+import { definePrismaConfig } from '@prisma/cli-engine';
+import { defineConfig as ormConfig } from '@internal/postgres/config';
 
-export default defineConfig({
-  contract: './prisma/contract.prisma',
-  db: { connection: process.env['DATABASE_URL']! },
+export default definePrismaConfig({
+  orm: ormConfig({
+    contract: './prisma/contract.prisma',
+    db: { connection: process.env['DATABASE_URL']! },
+  }),
 });
 ```
+
+The default export must be the value `definePrismaConfig` from `@prisma/cli-engine` returns, with the ORM settings nested under `orm`; the CLI rejects a bare `defineConfig` result with `CONFIG.VERSION_MARKER_MISSING`.
 
 ### Node (long-lived process)
 
@@ -72,13 +77,23 @@ Simplified `defineConfig` that pre-wires all Postgres internals (family, target,
 
 ```typescript
 // prisma.config.ts
-import { defineConfig, prisma7Schema } from '@prisma/orm-postgres/config';
+import { definePrismaConfig } from '@prisma/cli-engine';
+import { defineConfig as ormConfig, prisma7Schema } from '@prisma/orm-postgres/config';
 
-export default defineConfig({
-  contract: prisma7Schema('prisma/schema.prisma'),
-  db: { connection: process.env['DATABASE_URL']! },
+export default definePrismaConfig({
+  orm: ormConfig({
+    contract: prisma7Schema('prisma/schema.prisma'),
+    db: { connection: process.env['DATABASE_URL']! },
+  }),
 });
 ```
+
+What the project needs around that file:
+
+- A `package.json` that depends on `@prisma/orm-postgres` and `@prisma/cli-engine`. `contract emit` reads the nearest manifest to decide which package names `contract.d.ts` imports; without one it imports workspace-internal names that are not published.
+- `db.connection` is the same database URL Prisma 7 has in its own `prisma.config.ts` (`datasource.url`). Prisma 8 does not read Prisma 7's config, so pass it here too, usually from the same `DATABASE_URL` variable.
+- The Prisma 7 schema stays as Prisma 7 wants it: the `datasource` block carries `provider` only. Prisma 7 rejects `url` in the schema (it moved to `prisma.config.ts`), and this source ignores it.
+- The commands print prose to the terminal and JSON when stdout is not a terminal (a pipe, a file, or an agent). Pass `--json` to get JSON in a terminal too.
 
 During the transition Prisma 7 keeps owning the database and its migrations. Prisma 8 reads the schema and verifies it against what Prisma 7 built; it does not migrate. After every Prisma 7 migration, run `prisma contract emit` and then `prisma db sign` so the recorded contract matches the database again; `prisma db verify` reports nothing when they match. A database last migrated on Prisma 5 or earlier must migrate on Prisma 7 first: since Prisma 6.0.0 the implicit many-to-many junction tables carry a primary key on `(A, B)` instead of a unique index, and the source describes that shape.
 

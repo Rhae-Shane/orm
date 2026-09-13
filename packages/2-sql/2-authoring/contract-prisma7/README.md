@@ -11,10 +11,14 @@ Reads a Prisma 7 `schema.prisma` as a Prisma 8 contract source for the SQL famil
 ## Usage
 
 ```ts
-import { defineConfig, prisma7Schema } from '@prisma/orm-postgres/config';
+import { definePrismaConfig } from '@prisma/cli-engine';
+import { defineConfig as ormConfig, prisma7Schema } from '@prisma/orm-postgres/config';
 
-export default defineConfig({
-  contract: prisma7Schema('prisma/schema.prisma'),
+export default definePrismaConfig({
+  orm: ormConfig({
+    contract: prisma7Schema('prisma/schema.prisma'),
+    db: { connection: process.env['DATABASE_URL']! },
+  }),
 });
 ```
 
