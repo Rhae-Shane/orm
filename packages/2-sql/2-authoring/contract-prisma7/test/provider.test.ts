@@ -12,15 +12,22 @@ function scratchDir(name: string): string {
 }
 
 describe('prisma7Schema', () => {
-  it('declares the prisma7 format, the input path, and a colocated contract.json output', () => {
-    const config = prisma7Schema('prisma/schema.prisma', postgresPrisma7Options);
-    expect(config).toMatchObject({
+  it('declares the prisma7 format and the input path', () => {
+    expect(prisma7Schema('prisma/schema.prisma', postgresPrisma7Options)).toMatchObject({
       source: { format: 'prisma7', inputs: ['prisma/schema.prisma'] },
-      output: 'prisma/contract.json',
     });
-    expect(prisma7Schema('prisma/schema', postgresPrisma7Options).output).toBe(
-      'prisma/schema/contract.json',
-    );
+  });
+
+  it('writes contract.json beside the schema file or directory, whatever either is named', () => {
+    const outputOf = (path: string) => prisma7Schema(path, postgresPrisma7Options).output;
+    expect(outputOf('prisma/schema.prisma')).toBe('prisma/contract.json');
+    expect(outputOf('prisma/schema-single.prisma')).toBe('prisma/contract.json');
+    expect(outputOf('prisma/schema')).toBe('prisma/contract.json');
+    expect(outputOf('prisma/models/')).toBe('prisma/contract.json');
+    expect(outputOf('schema.prisma')).toBe('contract.json');
+  });
+
+  it('lets options.output override the default', () => {
     expect(
       prisma7Schema('prisma/schema.prisma', { ...postgresPrisma7Options, output: 'out/c.json' })
         .output,

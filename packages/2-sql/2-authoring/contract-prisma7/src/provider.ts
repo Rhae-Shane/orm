@@ -9,7 +9,7 @@ import type { SqlNamespaceBase, SqlNamespaceInput } from '@internal/sql-contract
 import { applySqlSpecifierControlPolicy } from '@internal/sql-contract-ts/contract-builder';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok } from '@internal/utils/result';
-import { basename, extname, join } from 'pathe';
+import { basename, dirname, extname, join } from 'pathe';
 import { prisma7Diagnostic } from './diagnostics';
 import { interpretPrisma7Documents, type Prisma7Document } from './interpreter';
 import type { Prisma7TypeMap } from './native-types';
@@ -35,13 +35,7 @@ export interface Prisma7SchemaOptions {
 }
 
 function defaultOutputFromSchemaPath(schemaPath: string): string {
-  const ext = extname(schemaPath);
-  if (ext.length === 0) return join(schemaPath, 'contract.json');
-  const base = schemaPath.slice(0, -ext.length);
-  if (basename(base) === 'schema') {
-    return `${base.slice(0, -'schema'.length)}contract.json`;
-  }
-  return `${base}.json`;
+  return join(dirname(schemaPath), 'contract.json');
 }
 
 function mapParseDiagnostics(
