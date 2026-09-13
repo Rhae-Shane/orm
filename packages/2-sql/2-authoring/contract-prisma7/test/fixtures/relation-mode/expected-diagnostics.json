@@ -1,0 +1,7 @@
+[
+  {
+    "code": "PRISMA7_RELATION_MODE_UNSUPPORTED",
+    "line": 3,
+    "message": "relationMode = \"prisma\" is not supported; Prisma 8 verifies foreign keys in the database. Remove relationMode or set it to \"foreignKeys\"."
+  }
+]

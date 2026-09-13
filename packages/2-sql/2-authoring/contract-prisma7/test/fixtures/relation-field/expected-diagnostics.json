@@ -1,0 +1,17 @@
+[
+  {
+    "code": "PRISMA7_RELATION_UNRESOLVED",
+    "line": 7,
+    "message": "Field \"User.posts\" is a relation to \"Post\"; relations are not supported yet by the Prisma 7 contract source."
+  },
+  {
+    "code": "PRISMA7_UNKNOWN_ATTRIBUTE",
+    "line": 13,
+    "message": "Field \"Post.author\": attribute \"@relation\" is not supported yet by the Prisma 7 contract source."
+  },
+  {
+    "code": "PRISMA7_RELATION_UNRESOLVED",
+    "line": 13,
+    "message": "Field \"Post.author\" is a relation to \"User\"; relations are not supported yet by the Prisma 7 contract source."
+  }
+]

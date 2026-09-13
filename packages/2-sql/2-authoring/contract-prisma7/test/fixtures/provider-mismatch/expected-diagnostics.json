@@ -1,0 +1,7 @@
+[
+  {
+    "code": "PRISMA7_PROVIDER_MISMATCH",
+    "line": 2,
+    "message": "The datasource provider is \"mysql\"; this contract source reads Prisma 7 schemas for provider \"postgresql\"."
+  }
+]

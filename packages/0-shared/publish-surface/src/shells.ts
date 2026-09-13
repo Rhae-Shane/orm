@@ -405,6 +405,11 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
           entry: 'schema-ir',
         },
         {
+          dir: 'packages/2-sql/2-authoring/contract-prisma7',
+          name: '@internal/sql-contract-prisma7',
+          entry: 'contract-prisma7',
+        },
+        {
           dir: 'packages/2-sql/2-authoring/contract-psl',
           name: '@internal/sql-contract-psl',
           entry: 'contract-psl',

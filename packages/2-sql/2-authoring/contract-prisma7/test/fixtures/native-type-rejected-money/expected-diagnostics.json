@@ -1,0 +1,7 @@
+[
+  {
+    "code": "PRISMA7_NATIVE_TYPE_UNSUPPORTED",
+    "line": 7,
+    "message": "Field \"Rejected.value\": native type \"@db.Money\" has no Prisma 8 codec. Change the column type or keep the column out of the contract with @ignore."
+  }
+]

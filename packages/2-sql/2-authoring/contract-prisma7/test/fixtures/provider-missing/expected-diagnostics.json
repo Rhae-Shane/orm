@@ -1,0 +1,6 @@
+[
+  {
+    "code": "PRISMA7_PROVIDER_MISMATCH",
+    "message": "No datasource block found; a Prisma 7 schema for Postgres declares `datasource db { provider = \"postgresql\" }`."
+  }
+]

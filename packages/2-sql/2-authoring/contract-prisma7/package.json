@@ -1,15 +1,19 @@
 {
-  "name": "@internal/sql-contract-psl",
+  "name": "@internal/sql-contract-prisma7",
   "private": true,
   "version": "8.0.0-rc.9",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "description": "PSL-to-SQL ContractIR interpreter for Prisma 8",
+  "description": "Prisma 7 schema.prisma to SQL ContractIR interpreter for Prisma 8",
+  "files": [
+    "dist",
+    "src"
+  ],
   "scripts": {
     "build": "tsdown",
     "test": "vitest run",
-    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "typecheck": "tsc --project tsconfig.json --noEmit && tsc --project tsconfig.test.json --noEmit",
     "lint": "biome check . --error-on-warnings",
     "lint:fix": "biome check --write .",
     "lint:fix:unsafe": "biome check --write --unsafe .",
@@ -18,19 +22,23 @@
   "dependencies": {
     "@internal/config": "workspace:8.0.0-rc.9",
     "@internal/contract": "workspace:8.0.0-rc.9",
-    "@internal/contract-authoring": "workspace:8.0.0-rc.9",
     "@internal/framework-components": "workspace:8.0.0-rc.9",
     "@internal/psl-parser": "workspace:8.0.0-rc.9",
     "@internal/sql-contract": "workspace:8.0.0-rc.9",
+    "@internal/sql-contract-psl": "workspace:8.0.0-rc.9",
     "@internal/sql-contract-ts": "workspace:8.0.0-rc.9",
     "@internal/utils": "workspace:8.0.0-rc.9",
     "pathe": "^2.0.3"
   },
   "devDependencies": {
+    "@internal/adapter-postgres": "workspace:8.0.0-rc.9",
+    "@internal/driver-postgres": "workspace:8.0.0-rc.9",
+    "@internal/family-sql": "workspace:8.0.0-rc.9",
+    "@internal/target-postgres": "workspace:8.0.0-rc.9",
     "@repo/test-utils": "workspace:8.0.0-rc.9",
     "@repo/tsconfig": "workspace:8.0.0-rc.9",
     "@repo/tsdown": "workspace:8.0.0-rc.9",
-    "arktype": "^2.2.2",
+    "@types/node": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
@@ -43,24 +51,18 @@
       "optional": true
     }
   },
-  "files": [
-    "dist",
-    "src"
-  ],
-  "types": "./dist/index.d.mts",
   "exports": {
-    ".": "./dist/index.mjs",
-    "./attribute-specs": "./dist/attribute-specs.mjs",
+    "./interpreter": "./dist/interpreter.mjs",
     "./provider": "./dist/provider.mjs",
-    "./resolution": "./dist/resolution.mjs",
     "./package.json": "./package.json"
   },
+  "types": "./dist/provider.d.mts",
   "engines": {
     "node": ">=24"
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/prisma/orm.git",
-    "directory": "packages/2-sql/2-authoring/contract-psl"
+    "directory": "packages/2-sql/2-authoring/contract-prisma7"
   }
 }

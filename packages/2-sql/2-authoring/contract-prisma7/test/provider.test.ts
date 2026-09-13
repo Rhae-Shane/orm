@@ -1,0 +1,81 @@
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'pathe';
+import { describe, expect, it } from 'vitest';
+import { prisma7Schema } from '../src/provider';
+import { postgresPrisma7Options, postgresSourceContext } from './support';
+
+function scratchDir(name: string): string {
+  const dir = join(tmpdir(), `prisma7-provider-${name}-${process.pid}-${Date.now()}`);
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+describe('prisma7Schema', () => {
+  it('declares the prisma7 format, the input path, and a colocated contract.json output', () => {
+    const config = prisma7Schema('prisma/schema.prisma', postgresPrisma7Options);
+    expect(config).toMatchObject({
+      source: { format: 'prisma7', inputs: ['prisma/schema.prisma'] },
+      output: 'prisma/contract.json',
+    });
+    expect(prisma7Schema('prisma/schema', postgresPrisma7Options).output).toBe(
+      'prisma/schema/contract.json',
+    );
+    expect(
+      prisma7Schema('prisma/schema.prisma', { ...postgresPrisma7Options, output: 'out/c.json' })
+        .output,
+    ).toBe('out/c.json');
+  });
+
+  it('reads every .prisma file directly under a directory input, sorted by name', async () => {
+    const dir = scratchDir('directory');
+    writeFileSync(
+      join(dir, 'b-models.prisma'),
+      'model Post {\n  id Int\n  title String @map("post_title")\n}\n',
+    );
+    writeFileSync(
+      join(dir, 'a-datasource.prisma'),
+      'datasource db {\n  provider = "postgresql"\n}\n',
+    );
+    writeFileSync(join(dir, 'notes.txt'), 'model Ignored {\n  id Int\n}\n');
+    mkdirSync(join(dir, 'nested'));
+    writeFileSync(join(dir, 'nested', 'c.prisma'), 'model Nested {\n  id Int\n}\n');
+
+    const config = prisma7Schema('prisma/schema', postgresPrisma7Options);
+    const result = await config.source.load(postgresSourceContext([dir]));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(Object.keys(result.value.domain.namespaces['public']?.models ?? {})).toEqual(['Post']);
+  });
+
+  it('reports a diagnostic with the file id when a file in the directory is malformed', async () => {
+    const dir = scratchDir('malformed');
+    writeFileSync(join(dir, 'schema.prisma'), 'datasource db {\n  provider = "postgresql"\n}\n');
+    writeFileSync(join(dir, 'broken.prisma'), 'model Broken {\n  id Int\n');
+
+    const config = prisma7Schema('prisma/schema', postgresPrisma7Options);
+    const result = await config.source.load(postgresSourceContext([dir]));
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'PSL_UNTERMINATED_BLOCK',
+        sourceId: 'prisma/schema/broken.prisma',
+      }),
+    );
+  });
+
+  it('returns PRISMA7_SCHEMA_READ_FAILED when the input does not exist', async () => {
+    const config = prisma7Schema('prisma/missing.prisma', postgresPrisma7Options);
+    const result = await config.source.load(
+      postgresSourceContext([join(scratchDir('missing'), 'missing.prisma')]),
+    );
+    expect(result).toMatchObject({
+      ok: false,
+      failure: {
+        summary: 'Failed to read Prisma 7 schema at "prisma/missing.prisma"',
+        diagnostics: [expect.objectContaining({ code: 'PRISMA7_SCHEMA_READ_FAILED' })],
+      },
+    });
+  });
+});

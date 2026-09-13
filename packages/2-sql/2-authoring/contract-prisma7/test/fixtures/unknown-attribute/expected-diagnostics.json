@@ -1,0 +1,32 @@
+[
+  {
+    "code": "PRISMA7_UNKNOWN_ATTRIBUTE",
+    "line": 11,
+    "message": "Model \"User\": attribute \"@@index\" is not supported yet by the Prisma 7 contract source."
+  },
+  {
+    "code": "PRISMA7_UNKNOWN_ATTRIBUTE",
+    "line": 6,
+    "message": "Field \"User.id\": attribute \"@id\" is not supported yet by the Prisma 7 contract source."
+  },
+  {
+    "code": "PRISMA7_UNKNOWN_ATTRIBUTE",
+    "line": 6,
+    "message": "Field \"User.id\": attribute \"@default\" is not supported yet by the Prisma 7 contract source."
+  },
+  {
+    "code": "PRISMA7_UNKNOWN_ATTRIBUTE",
+    "line": 7,
+    "message": "Field \"User.email\": attribute \"@unique\" is not supported yet by the Prisma 7 contract source."
+  },
+  {
+    "code": "PRISMA7_UNKNOWN_ATTRIBUTE",
+    "line": 8,
+    "message": "Field \"User.createdAt\": attribute \"@default\" is not supported yet by the Prisma 7 contract source."
+  },
+  {
+    "code": "PRISMA7_UNKNOWN_ATTRIBUTE",
+    "line": 9,
+    "message": "Field \"User.updatedAt\": attribute \"@updatedAt\" is not supported yet by the Prisma 7 contract source."
+  }
+]
