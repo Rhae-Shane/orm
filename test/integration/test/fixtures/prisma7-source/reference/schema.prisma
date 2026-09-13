@@ -217,6 +217,17 @@ model AuditLog {
   @@schema("audit")
 }
 
+model MappedIndexes {
+  id        Int    @id @default(autoincrement())
+  firstName String @map("first_name")
+  other     String
+
+  @@unique([firstName, other])
+  @@index([firstName])
+  @@map("mapped_indexes")
+  @@schema("public")
+}
+
 model LegacyThing {
   id Int @id
 

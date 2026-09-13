@@ -186,6 +186,15 @@ CREATE TABLE "audit"."audit_log" (
 );
 
 -- CreateTable
+CREATE TABLE "mapped_indexes" (
+    "id" SERIAL NOT NULL,
+    "first_name" TEXT NOT NULL,
+    "other" TEXT NOT NULL,
+
+    CONSTRAINT "mapped_indexes_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "LegacyThing" (
     "id" INTEGER NOT NULL,
 
@@ -242,6 +251,12 @@ CREATE UNIQUE INDEX "Profile_userId_key" ON "Profile"("userId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Settings_userId_key" ON "Settings"("userId");
+
+-- CreateIndex
+CREATE INDEX "mapped_indexes_first_name_idx" ON "mapped_indexes"("first_name");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "mapped_indexes_first_name_other_key" ON "mapped_indexes"("first_name", "other");
 
 -- CreateIndex
 CREATE INDEX "_Follows_B_index" ON "_Follows"("B");

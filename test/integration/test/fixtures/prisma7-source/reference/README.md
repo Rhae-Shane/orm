@@ -27,6 +27,7 @@ Notes on the run:
 - Without a config file the schema engine exits with `The following required arguments were not provided: --datasource <JSON>` and the CLI prints nothing. The URL in `prisma.config.ts` is a placeholder; a `--from-empty` diff never connects to it.
 - `prisma validate` accepts the schema with one warning: `Preview feature "multiSchema" is deprecated. The functionality can be used without specifying it as a preview feature.` The schema keeps `previewFeatures = ["multiSchema", "views"]` because the slice spec says the interpreter must ignore preview features other than `multiSchema`.
 - Prisma 7 rejected no construct in the schema. Nothing was removed.
+- `MappedIndexes` (added 2026-09-13, regenerated with the same command) pins the index names Prisma 7 derives over `@map`ped columns: `mapped_indexes_first_name_idx` and `mapped_indexes_first_name_other_key` use the column names, not the field names.
 - The `view UserSummary` block produces no SQL. Prisma Migrate does not create views.
 
 ## Applying `migration.sql` to a clean database
