@@ -4,9 +4,23 @@ Data in this file is quoted from `test/integration/test/fixtures/prisma7-source/
 
 ## Item 1: `autoincrement()` column default
 
+**Answer: verifies with zero findings.** Prisma 8's `@default(autoincrement())` (TypeScript builder: `field.column(int4Column).defaultSql('autoincrement()')`) lowers to the column default `{ kind: 'function', expression: 'autoincrement()' }` on an `int4` column (see `test/integration/test/authoring/parity/core-surface/expected.contract.json`). On the live side the Postgres control adapter (`packages/3-targets/6-adapters/postgres/src/core/control-adapter.ts`) resolves a `nextval(...)` default, and both identity-column forms, to the same `autoincrement()` expression before the diff, so Prisma 7's `"id" SERIAL NOT NULL` matches.
+
+Test: `test/integration/test/prisma7-source/verification-items.integration.test.ts`, `item 1: autoincrement() verifies against a Prisma 7 SERIAL column with zero findings`. It applies `CREATE TABLE "Tag" ("id" SERIAL NOT NULL, ...)` from `supported/migration.sql` and asserts `{ ok: true, schema: { issues: [] } }`. The same test then drops the column default and asserts the one finding that appears, at path `['database', 'public', 'Tag', 'column:id', 'default']`, which is how the claim was checked to discriminate.
+
 ## Item 2: `now()` column default
 
+**Answer: verifies with zero findings, provided the contract column carries precision 3.** Prisma 8's `@default(now())` lowers to `{ kind: 'function', expression: 'now()' }`; the control adapter's `parsePostgresDefault` maps `CURRENT_TIMESTAMP` to `now()` too (`packages/3-targets/3-targets/postgres/src/core/default-normalizer.ts`), and function defaults compare case- and whitespace-insensitively. The native type must match separately: Prisma 7 creates `TIMESTAMP(3)`, which introspection reports as `timestamp(3)`, so the interpreter must emit the column as `pg/timestamp-temporal@1` with `typeParams: { precision: 3 }` (expanded to `timestamp(3)` by the adapter's precision hook). A bare `timestamp` column would be a native type finding, not a default finding.
+
+Test: same file, `item 2: now() on timestamp(3) verifies against a Prisma 7 DEFAULT CURRENT_TIMESTAMP column with zero findings`. It applies `"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP` and asserts zero issues, then sets the default to `clock_timestamp()` and asserts the single finding at `['database', 'public', 'Timestamps', 'column:createdAt', 'default']`.
+
 ## Item 3: generators on optional fields
+
+**Answer: the SQL contract validator accepts both combinations.** `validateSqlContractFully` (`packages/2-sql/1-core/contract/src/validators.ts`) checks the `execution` section structurally only (`ExecutionSchema`: a `ref`, and optional `onCreate` / `onUpdate` values of `kind: 'generator'`). It has no rule linking a generator to the column's nullability or to the presence of a storage default. Both a column with `default: now()` plus `onCreate` and `onUpdate` generators, and a nullable column with the same generators, validate and come back with the execution defaults intact.
+
+Test: `packages/2-sql/1-core/contract/test/execution-defaults-validation.test.ts`, three cases. Removing a generator cannot flip an "accepts" verdict, so the discriminator is the third case: a value with `kind: 'sequence'` instead of `kind: 'generator'` throws `ContractValidationError`, which shows the section is validated rather than ignored.
+
+Two facts outside the validator that the interpreter must know about: the TypeScript builder refuses to build a nullable field that has execution defaults (`packages/2-sql/2-authoring/contract-ts/src/build-contract.ts`: `cannot be nullable when executionDefaults are present`, reason `nullable-with-executionDefaults`), and the Prisma 8 PSL interpreter rejects an optional field with an `onCreate` generator (`packages/2-sql/2-authoring/contract-psl/src/psl-field-resolution.ts`, `PSL_INVALID_DEFAULT_FUNCTION_ARGUMENT`). Those are authoring-layer rules, not contract rules. The Prisma 7 interpreter builds its own contract and is not bound by them, but whoever writes it should decide on purpose whether to allow `uuid()` and `@updatedAt` on optional fields, and confirm the runtime generator path handles a nullable column.
 
 ## Item 4: implicit junction table primary key
 
@@ -37,6 +51,12 @@ Consequence for the rule table: a database built by Prisma 5 or earlier and neve
 ## Item 5
 
 Not assigned to this slice.
+
+## Item 7: lenient verify and undeclared schema
+
+**Answer: zero findings.** With `strict: false` (the `db verify` default) an undeclared table, an undeclared column on a declared table, and an undeclared foreign key from a declared table to an undeclared table produce no findings, so a contract that omits `@ignore` fields and `@@ignore` models verifies cleanly against the schema Prisma 7 still creates for them. In `schema-verify.ts` every `not-expected` issue at namespace, entity, field, or auxiliary granularity is strict-only.
+
+Test: same integration file, `item 7: lenient verify reports zero findings for an undeclared table, column, and foreign key`. It applies `"User"` (with the `@ignore`d `"legacy" TEXT`), `"Post"` (with `"legacyOwnerId" INTEGER` and `Post_legacyOwnerId_fkey`), and `"LegacyThing"` from `supported/migration.sql`, plus one foreign key not in the fixture, `Post.legacyThingId -> LegacyThing(id)`, and declares only `User(id, email)` and `Post(id, title)`. Lenient mode returns `{ ok: true, schema: { issues: [] } }`. The discriminator is the strict run on the same database, which reports exactly these eight paths: `LegacyThing`, `LegacyThing/column:id`, `LegacyThing/primary-key`, `Post/column:legacyOwnerId`, `Post/column:legacyThingId`, `Post/foreign-key:legacyOwnerId->public.User(id)`, `Post/foreign-key:legacyThingId->public.LegacyThing(id)`, and `User/column:legacy` (all under `database/public`). Note the foreign key path is keyed by columns and target, not by the constraint name, consistent with the spec's statement that foreign key names are not compared.
 
 ## Item 6: native type table
 
