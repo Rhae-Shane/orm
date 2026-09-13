@@ -46,6 +46,15 @@ Calibration threaded into every brief: `drive/calibration/failure-modes.md` F3 (
 - **Hands to:** contracts whose column defaults, generators, and index names match Prisma 7.
 - **Gates:** as dispatch 4.
 
+### Dispatch 5b: Prisma 8 default-normaliser fixes
+
+_Added after dispatch 5. Its full-schema proof stopped at five findings that are all Prisma 8 default-normaliser gaps: schema-qualified enum casts, zoneless timestamp literals, `ARRAY[...]` list defaults. Adjacent defects are fixed in this PR, each with its own commit and regression test._
+
+- **Outcome:** `supported.integration.test.ts` reports zero findings; `contract infer` gains the same recognition.
+- **Builds on:** dispatch 5.
+- **Hands to:** dispatch 8's zero-findings target.
+- **Gates:** in the brief.
+
 ### Dispatch 6: relations
 
 _Order change 2026-09-13: dispatch 6 runs before dispatch 5, which is blocked on the operator's `@updatedAt` decision. Dispatch 6 builds on dispatch 4 only._
