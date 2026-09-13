@@ -64,7 +64,45 @@ The returned client exposes `sql`, `context`, `stack`, `contract`, and `connect(
 
 ### `@internal/postgres/config`
 
-Simplified `defineConfig` that pre-wires all Postgres internals (family, target, adapter, driver, contract providers). Pass a contract path and optional db/migrations/extensions config.
+Simplified `defineConfig` that pre-wires all Postgres internals (family, target, adapter, driver, contract providers). Pass a contract path (`.prisma` or `.ts`) or a ready `ContractConfig`, and optional db/migrations/extensions config.
+
+#### `prisma7Schema(path, options?)`: adopt a Prisma 7 schema during the transition
+
+`prisma7Schema` reads a Prisma 7 `schema.prisma` as the contract source, so a project that still runs Prisma 7 can adopt Prisma 8 without a second schema file. It accepts one file or a directory of `.prisma` files (read in name order, not recursive) and produces the same `ContractConfig` as a `.prisma` path does; `contract emit` writes `contract.json` and `contract.d.ts` next to the schema unless `options.output` says otherwise.
+
+```typescript
+// prisma.config.ts
+import { defineConfig, prisma7Schema } from '@prisma/orm-postgres/config';
+
+export default defineConfig({
+  contract: prisma7Schema('prisma/schema.prisma'),
+  db: { connection: process.env['DATABASE_URL']! },
+});
+```
+
+During the transition Prisma 7 keeps owning the database and its migrations. Prisma 8 reads the schema and verifies it against what Prisma 7 built; it does not migrate. After every Prisma 7 migration, run `prisma contract emit` and then `prisma db sign` so the recorded contract matches the database again; `prisma db verify` reports nothing when they match. A database last migrated on Prisma 5 or earlier must migrate on Prisma 7 first: since Prisma 6.0.0 the implicit many-to-many junction tables carry a primary key on `(A, B)` instead of a unique index, and the source describes that shape.
+
+The source interprets every construct Prisma 7 creates in Postgres: scalars and `@db.*` native types, `@map` and `@@map`, `@@schema`, enums as native enum types (with member `@map`), `@ignore` and `@@ignore`, defaults and ORM-side generators, `@updatedAt`, `@id`, `@unique`, `@@unique`, `@@index`, explicit and implicit relations. Anything it cannot express is a hard error with the file, line, and the edit that unblocks it:
+
+| Code | What it means | The edit that unblocks it |
+|---|---|---|
+| `PRISMA7_PROVIDER_MISMATCH` | No `datasource` block, or its `provider` is not `postgresql`. | Use this source only with a Postgres schema. |
+| `PRISMA7_RELATION_MODE_UNSUPPORTED` | `relationMode = "prisma"`. | Remove it or set `relationMode = "foreignKeys"`; Prisma 8 verifies real foreign keys. |
+| `PRISMA7_VIEW_UNSUPPORTED` | A `view` block. | Remove the view; Prisma 8 has no views. |
+| `PRISMA7_UNSUPPORTED_TYPE` | `Unsupported("...")`, or an unknown type. | Remove the field or `@ignore` it. |
+| `PRISMA7_NATIVE_TYPE_UNSUPPORTED` | A `@db.*` type with no Prisma 8 codec (`Citext`, `Bit`, `VarBit`, `Xml`, `Oid`, `Money`). | Change the column type, or `@ignore` the field. |
+| `PRISMA7_ENUM_NAMESPACE_MISMATCH` | A field uses an enum declared under a different `@@schema`. | Declare the enum in the model's schema, or move the model. |
+| `PRISMA7_RELATION_UNRESOLVED` | A relation field that cannot be paired, is ambiguous, or disagrees with its foreign key fields. | Name both sides with `@relation("name")`, add the missing `fields`/`references`, or match the `?` to the fields. |
+| `PRISMA7_JUNCTION_ID_UNSUPPORTED` | An implicit many-to-many relation on a model without a single-field `@id`. | Give the model a single-field `@id`, or write the junction model out. |
+| `PRISMA7_TABLE_COLLISION` | Two models map to the same table in one schema. | Give each model its own table. |
+| `PRISMA7_UNKNOWN_DEFAULT` | A `@default` value the source cannot read. | Use a literal, an enum member, or one of `autoincrement()`, `now()`, `dbgenerated()`, `uuid()`, `ulid()`, `nanoid()`, `cuid()`. |
+| `PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED` | `@default(uuid())`, another generator, or `@updatedAt` on an optional field. | Drop the `?`; Prisma 8 cannot spell an optional generated field yet. |
+| `PRISMA7_UPDATED_AT_WITH_DEFAULT_UNSUPPORTED` | `@updatedAt` combined with `@default`. | Drop the `@default`; the generator also sets the value on create. |
+| `PRISMA7_INDEX_ARGUMENT_UNSUPPORTED` | `sort`, `length`, `ops`, or an index type Prisma 8 does not have. | Remove the argument; Prisma 8 indexes carry none. |
+| `PRISMA7_UNKNOWN_ATTRIBUTE` | An attribute Prisma 7 for Postgres does not have. | Remove it. |
+| `PRISMA7_SCHEMA_READ_FAILED` | The path could not be read. | Fix the path. |
+
+Two things `db verify` gained alongside this source benefit every Prisma 8 project: it now recognises three more default spellings introspection reports (an enum literal cast to a type in another schema, a zoneless `timestamp` literal, and an `ARRAY[...]` list default), and it now compares a schema-qualified mixed-case type name such as `audit."AuditAction"` correctly.
 
 ### `@internal/postgres/runtime`
 

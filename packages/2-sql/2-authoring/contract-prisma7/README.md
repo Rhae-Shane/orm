@@ -20,6 +20,23 @@ export default defineConfig({
 
 The package itself is target-neutral: the Postgres facade supplies the target pack, the namespace factory, the type map, and the names of the native enum entity kind and type constructor.
 
+## Rule table, in short
+
+| Prisma 7 | Contract |
+|---|---|
+| `model` | Model named verbatim; table is `@@map` or the name; column is `@map` or the field name. |
+| `enum` | Native enum type named by `@@map` or the enum name, members in order, each member's value its `@map` or its name; placed in the enum's `@@schema`. |
+| `@@schema("s")` | Namespace `s`; without it, the target's default namespace. |
+| Scalars and `@db.*` | The target's type map (`typeMap`), for example `DateTime` to `timestamp(3)` and `Json` to `jsonb`; lists are nullable array columns with no derived element check. |
+| `@default(...)` | Column defaults through the target's default function registry, literals, list literals, enum members; `uuid`, `ulid`, `nanoid`, `cuid` are execution generators (`cuid` maps to `cuid2`). |
+| `@updatedAt` | The target's `updatedAt` generator on create and update, no column default. |
+| `@id`, `@@id` | Primary key. |
+| `@unique`, `@@unique`, `@@index` | Indexes named `{table}_{columns}_key` and `{table}_{columns}_idx`, `map` overriding, `type` mapped. |
+| Explicit relations | Foreign keys with `onDelete` `restrict` (required) or `setNull` (optional) and `onUpdate` `cascade` unless given; paired through `@internal/sql-contract-psl/resolution`. |
+| Implicit many-to-many | Junction `_AToB` or `_Name`: columns `A` and `B`, primary key `(A, B)`, index `_AToB_B_index`, cascading foreign keys. |
+| `@ignore`, `@@ignore` | Omitted, together with relations over them. |
+| `view`, `Unsupported(...)`, unmapped `@db.*`, `relationMode = "prisma"`, generators on optional fields, `@updatedAt` with `@default`, index arguments | Hard errors (table below). |
+
 ## Diagnostics
 
 Codes are prefixed `PRISMA7_`:
