@@ -8,6 +8,7 @@
  * expected side is authored with Prisma 8's own TypeScript contract builder and
  * verified through the same family verify path `db verify` runs.
  */
+import { timestampTemporalColumn } from '@internal/adapter-postgres/column-types';
 import { describe, expect, it } from 'vitest';
 import {
   defineContract,
@@ -98,6 +99,22 @@ describe('Prisma 7 verification items', () => {
 
       const currentTimestamp = await runSchemaVerify(getConnectionString(), contract);
       expect(currentTimestamp).toMatchObject({ ok: true, schema: { issues: [] } });
+
+      const withoutPrecision = defineContract({
+        models: {
+          Timestamps: model('Timestamps', {
+            fields: {
+              id: field.column(int4Column).defaultSql('autoincrement()').id(),
+              createdAt: field.column(timestampTemporalColumn).defaultSql('now()'),
+            },
+          }).sql({ table: 'Timestamps' }),
+        },
+      });
+      const bareTimestamp = await runSchemaVerify(getConnectionString(), withoutPrecision);
+      expect(bareTimestamp.ok).toBe(false);
+      expect(bareTimestamp.schema.issues.map((issue) => issue.path)).toEqual([
+        ['database', 'public', 'Timestamps', 'column:createdAt'],
+      ]);
 
       await withClient(getConnectionString(), (client) =>
         client.query(
