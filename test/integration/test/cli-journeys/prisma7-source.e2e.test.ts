@@ -185,6 +185,13 @@ withTempDir(({ createTempDir }) => {
       async () => {
         const ctx = setupPrisma7Project(createTempDir, db.connectionString, { text: VIEW_SCHEMA });
 
+        const terminalRun = await runContractEmit(ctx);
+        expect(terminalRun.exitCode).toBe(2);
+        expect(stripAnsi(terminalRun.stderr)).toContain(
+          './schema.prisma:9:1 PRISMA7_VIEW_UNSUPPORTED: View "ActiveUsers" is not supported',
+        );
+        expect(stripAnsi(terminalRun.stderr)).not.toContain('return ok(Contract)');
+
         const emit = await runContractEmit(ctx, ['--json']);
         expect(emit.exitCode, `contract emit\n${output(emit)}`).toBe(2);
         expect(existsSync(join(ctx.testDir, 'contract.json'))).toBe(false);
@@ -199,6 +206,12 @@ withTempDir(({ createTempDir }) => {
             code: 'CONTRACT.SOURCE_LOAD_FAILED',
             why: 'Prisma 7 schema interpretation failed',
           },
+          diagnostics: [
+            expect.objectContaining({
+              code: 'CONTRACT.SOURCE_DIAGNOSTIC',
+              where: { path: './schema.prisma', line: 9 },
+            }),
+          ],
         });
         // The source's diagnostics ride on the error's meta, one per construct.
         const meta = (
