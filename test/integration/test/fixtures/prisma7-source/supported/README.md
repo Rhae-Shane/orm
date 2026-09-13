@@ -13,7 +13,7 @@
 - `NativeTypes.oid Int @db.Oid`
 - `NativeTypes.money Decimal @db.Money`
 
-The reference schema has no `relationMode`, so nothing else needed removing. `previewFeatures = ["multiSchema", "views"]` is kept on purpose: the spec says the interpreter ignores preview features other than `multiSchema`.
+The reference schema has no `relationMode`, so nothing else needed removing. `previewFeatures = ["multiSchema", "views"]` is kept on purpose: the interpreter ignores preview features other than `multiSchema`.
 
 Still covered: every scalar with and without `?` and as `[]`, every accepted `@db.*` type, native enums with `@@map` and member `@map` in both schemas, `@updatedAt` in all three forms, every default function and literal, `@id`, `@@id`, `@unique`, `@@unique`, `@@index` with and without `map:` and with `type: Hash`, explicit relations with omitted actions on required and optional scalars, the unnamed, named, and self-referential implicit many-to-many relations, multiSchema, `@ignore`, and `@@ignore`.
 

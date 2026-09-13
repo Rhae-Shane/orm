@@ -200,7 +200,7 @@ describe('view blocks', () => {
 
 describe('Prisma 7 spike schema', () => {
   it('parses with zero diagnostics', () => {
-    // Copied from projects/prisma7-contract-source/spike/schema.prisma.
+    // A small Prisma 7 schema with every block kind: datasource, generator, enum, view, model.
     const fixture = join(dirname(fileURLToPath(import.meta.url)), 'fixtures/prisma7-spike.prisma');
     const source = readFileSync(fixture, 'utf8');
     const result = parse(source);

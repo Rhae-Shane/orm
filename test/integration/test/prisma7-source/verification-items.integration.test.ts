@@ -1,6 +1,6 @@
 /**
- * Pins verification items 1, 2, and 7 for the Prisma 7 contract source
- * (projects/prisma7-contract-source/slices/01-postgres-source/verification-results.md).
+ * Pins three facts the Prisma 7 contract source relies on: how autoincrement()
+ * and now() defaults verify, and what lenient verify tolerates.
  *
  * The applied SQL is copied statement by statement from
  * test/integration/test/fixtures/prisma7-source/supported/migration.sql, which
