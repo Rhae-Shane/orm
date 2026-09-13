@@ -224,4 +224,26 @@ describe('resolvedDefaultsEqual raw string literal expressions', () => {
     expect(resolvedDefaultsEqual(fn('now()'), literal('now'), 'text')).toBe(false);
     expect(resolvedDefaultsEqual(fn("'a'::text"), literal('b'), 'text')).toBe(false);
   });
+
+  it('an expression that starts with a string literal but goes on is not that literal', () => {
+    expect(resolvedDefaultsEqual(fn("'a'::text || 'b'"), literal('a'), 'text')).toBe(false);
+    expect(resolvedDefaultsEqual(fn("'a'::text || 'b'::text"), literal('a'), 'text')).toBe(false);
+    expect(resolvedDefaultsEqual(fn("upper('a')"), literal('a'), 'text')).toBe(false);
+  });
+
+  it('accepts the cast type shapes Postgres reports', () => {
+    expect(resolvedDefaultsEqual(fn('\'x\'::"MyEnum"'), literal('x'), 'MyEnum')).toBe(true);
+    expect(resolvedDefaultsEqual(fn('\'x\'::sch."MyEnum"'), literal('x'), 'sch.MyEnum')).toBe(true);
+    expect(resolvedDefaultsEqual(fn('\'x\'::"my schema".t'), literal('x'), 't')).toBe(true);
+    expect(resolvedDefaultsEqual(fn("'x'::character varying(20)"), literal('x'), 'text')).toBe(
+      true,
+    );
+    expect(
+      resolvedDefaultsEqual(
+        fn("'2024-01-01 00:00:00'::timestamp without time zone"),
+        literal('2024-01-01T00:00:00.000Z'),
+        'timestamp',
+      ),
+    ).toBe(true);
+  });
 });

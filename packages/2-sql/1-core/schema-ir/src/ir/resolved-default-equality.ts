@@ -15,12 +15,16 @@ import { canonicalStringify } from '@internal/utils/canonical-stringify';
  */
 /**
  * A raw expression that is nothing but a quoted SQL string, optionally cast
- * (`'confidential'::auth.oauth_client_type`), denotes that string. The
- * introspection side may read such a default as a literal while an older
- * contract still declares it as a raw expression; comparing the string the
- * expression spells keeps both spellings equal.
+ * to one type name (`'confidential'::auth.oauth_client_type`), denotes that
+ * string. The introspection side may read such a default as a literal while
+ * an older contract still declares it as a raw expression; comparing the
+ * string the expression spells keeps both spellings equal. The cast is one
+ * optionally schema-qualified, optionally quoted type name with optional
+ * modifiers, the shape Postgres reports, so an expression that goes on after
+ * the literal (`'a'::text || 'b'`) is not a string literal.
  */
-const QUOTED_STRING_EXPRESSION = /^'((?:[^']|'')*)'(?:::.+)?$/s;
+const QUOTED_STRING_EXPRESSION =
+  /^'((?:[^']|'')*)'(?:::(?:(?:"[^"]+"|\w+)\.)?(?:"[^"]+"|[\w\s]+?)(?:\(\d+(?:,\s*\d+)?\))?)?$/;
 
 function quotedStringValue(expression: string): string | undefined {
   const match = QUOTED_STRING_EXPRESSION.exec(expression.trim());
