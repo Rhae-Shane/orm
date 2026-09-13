@@ -4,3 +4,10 @@ export {
   type ResolveFieldTypeResult,
   resolveFieldTypeDescriptor,
 } from '../psl-column-resolution';
+export {
+  applyBackrelationCandidates,
+  type FkRelationMetadata,
+  indexFkRelations,
+  type ModelBackrelationCandidate,
+  normalizeReferentialAction,
+} from '../psl-relation-resolution';

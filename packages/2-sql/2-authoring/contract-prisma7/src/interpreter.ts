@@ -50,6 +50,13 @@ import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { prisma7Diagnostic } from './diagnostics';
 import { prisma7PostgresNativeTypeMapping, prisma7ScalarMapping } from './native-types';
+import {
+  fieldListArgument,
+  lowerRelations,
+  parseRelationAttribute,
+  type RelationField,
+  type RelationModel,
+} from './relations';
 
 export interface Prisma7Document {
   readonly document: DocumentAst;
@@ -99,6 +106,17 @@ interface ModelDeclaration {
   readonly sourceId: string;
   readonly namespaceId: string;
   readonly tableName: string;
+  readonly idFields: readonly string[];
+  readonly uniqueFieldSets: readonly (readonly string[])[];
+}
+
+interface ModelBuild {
+  readonly declaration: ModelDeclaration;
+  readonly columns: Map<string, FieldNode>;
+  readonly ignoredFields: Set<string>;
+  idFields: readonly string[];
+  readonly uniqueFieldSets: (readonly string[])[];
+  readonly relationFields: RelationField[];
 }
 
 type NamespaceEntities = Map<string, Record<string, Record<string, unknown>>>;
@@ -215,13 +233,20 @@ export function interpretPrisma7Documents(
   const modelNames = new Set([...models.map((model) => model.symbol.name), ...ignoredModels]);
   const scalarColumnDescriptors = collectScalarTypeConstructors(input.authoringContributions.type);
   const composedExtensions = new Set(input.composedExtensions);
-  const modelNodes: ModelNode[] = [];
-  for (const model of models) {
-    const fields: FieldNode[] = [];
-    for (const field of Object.values(model.symbol.fields)) {
-      const node = readField({
+  const builds = new Map<string, ModelBuild>();
+  for (const declaration of models) {
+    const build: ModelBuild = {
+      declaration,
+      columns: new Map(),
+      ignoredFields: new Set(),
+      idFields: declaration.idFields,
+      uniqueFieldSets: [...declaration.uniqueFieldSets],
+      relationFields: [],
+    };
+    for (const field of Object.values(declaration.symbol.fields)) {
+      readField({
         field,
-        model,
+        build,
         modelNames,
         ignoredModels,
         enums,
@@ -231,14 +256,51 @@ export function interpretPrisma7Documents(
         input,
         diagnostics,
       });
-      if (node !== undefined) fields.push(node);
     }
+    builds.set(declaration.symbol.name, build);
+  }
+
+  const relationModels = new Map<string, RelationModel>();
+  for (const [modelName, build] of builds) {
+    relationModels.set(modelName, {
+      modelName,
+      tableName: build.declaration.tableName,
+      namespaceId: build.declaration.namespaceId,
+      sourceId: build.declaration.sourceId,
+      columns: build.columns,
+      ignoredFields: build.ignoredFields,
+      idFields: build.idFields,
+      uniqueFieldSets: build.uniqueFieldSets,
+      relationFields: build.relationFields,
+    });
+  }
+  const lowered = lowerRelations(relationModels, diagnostics);
+
+  const modelNodes: ModelNode[] = [];
+  for (const [modelName, build] of builds) {
+    const model = relationModels.get(modelName);
+    if (model === undefined) continue;
+    const id = keyColumns(model, model.idFields);
+    const uniques = model.uniqueFieldSets
+      .map((fieldNames) => keyColumns(model, fieldNames))
+      .filter((columns): columns is readonly string[] => columns !== undefined)
+      .map((columns) => ({ columns }));
+    const foreignKeys = lowered.foreignKeys.get(modelName);
+    const relations = lowered.relations.get(modelName);
     modelNodes.push({
-      modelName: model.symbol.name,
+      modelName,
       tableName: model.tableName,
       namespaceId: model.namespaceId,
-      fields,
+      fields: [...build.columns.values()],
+      ...(id !== undefined && id.length > 0 ? { id: { columns: id } } : {}),
+      ...(uniques.length > 0 ? { uniques } : {}),
+      ...(foreignKeys !== undefined ? { foreignKeys } : {}),
+      ...(relations !== undefined ? { relations } : {}),
     });
+  }
+  for (const junction of lowered.junctions) {
+    const relations = lowered.relations.get(junction.modelName);
+    modelNodes.push(relations === undefined ? junction : { ...junction, relations });
   }
 
   if (diagnostics.length > 0) {
@@ -316,6 +378,38 @@ function checkDatasource(
   }
 }
 
+function keyColumns(
+  model: RelationModel,
+  fieldNames: readonly string[],
+): readonly string[] | undefined {
+  const columns: string[] = [];
+  for (const fieldName of fieldNames) {
+    const column = model.columns.get(fieldName);
+    if (column === undefined) return undefined;
+    columns.push(column.columnName);
+  }
+  return columns;
+}
+
+function requireFieldList(
+  attribute: ResolvedAttribute,
+  owner: string,
+  sourceId: string,
+  diagnostics: ContractSourceDiagnostic[],
+): readonly string[] | undefined {
+  const fields = fieldListArgument(attribute);
+  if (fields === undefined || fields.length === 0) {
+    diagnostics.push({
+      code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
+      message: `"${owner}": attribute "@@${attribute.name}" expects a non-empty list of field names.`,
+      sourceId,
+      span: attribute.span,
+    });
+    return undefined;
+  }
+  return fields;
+}
+
 function readModelDeclaration(
   symbol: ModelSymbol,
   sourceId: string,
@@ -325,6 +419,8 @@ function readModelDeclaration(
   if (symbol.attributes.some((attribute) => attribute.name === 'ignore')) return undefined;
   let tableName = symbol.name;
   let namespaceId = defaultNamespaceId;
+  let idFields: readonly string[] = [];
+  const uniqueFieldSets: (readonly string[])[] = [];
   for (const attribute of symbol.attributes) {
     switch (attribute.name) {
       case 'map':
@@ -335,6 +431,14 @@ function readModelDeclaration(
         namespaceId =
           requireStringArgument(attribute, symbol.name, sourceId, diagnostics) ?? namespaceId;
         break;
+      case 'id':
+        idFields = requireFieldList(attribute, symbol.name, sourceId, diagnostics) ?? idFields;
+        break;
+      case 'unique': {
+        const fields = requireFieldList(attribute, symbol.name, sourceId, diagnostics);
+        if (fields !== undefined) uniqueFieldSets.push(fields);
+        break;
+      }
       default:
         diagnostics.push(
           prisma7Diagnostic(
@@ -346,7 +450,7 @@ function readModelDeclaration(
         );
     }
   }
-  return { symbol, sourceId, namespaceId, tableName };
+  return { symbol, sourceId, namespaceId, tableName, idFields, uniqueFieldSets };
 }
 
 function requireStringArgument(
@@ -495,7 +599,7 @@ function lowerNativeEnums(
 
 function readField(args: {
   readonly field: FieldSymbol;
-  readonly model: ModelDeclaration;
+  readonly build: ModelBuild;
   readonly modelNames: ReadonlySet<string>;
   readonly ignoredModels: ReadonlySet<string>;
   readonly enums: ReadonlyMap<string, EnumDeclaration>;
@@ -504,19 +608,32 @@ function readField(args: {
   readonly composedExtensions: ReadonlySet<string>;
   readonly input: InterpretPrisma7DocumentsInput;
   readonly diagnostics: ContractSourceDiagnostic[];
-}): FieldNode | undefined {
-  const { field, model, diagnostics, input } = args;
+}): void {
+  const { field, build, diagnostics, input } = args;
+  const model = build.declaration;
   const sourceId = model.sourceId;
   const label = `Field "${model.symbol.name}.${field.name}"`;
-  if (field.attributes.some((attribute) => attribute.name === 'ignore')) return undefined;
+  if (field.attributes.some((attribute) => attribute.name === 'ignore')) {
+    build.ignoredFields.add(field.name);
+    return;
+  }
+  const isRelationField =
+    args.modelNames.has(field.typeName) && field.typeConstructor === undefined;
 
   let columnName = field.name;
   let nativeType: { readonly name: string; readonly attribute: ResolvedAttribute } | undefined;
+  let relation: ResolvedAttribute | undefined;
   for (const attribute of field.attributes) {
-    if (attribute.name === 'map') {
+    if (attribute.name === 'map' && !isRelationField) {
       columnName = requireStringArgument(attribute, label, sourceId, diagnostics) ?? columnName;
-    } else if (attribute.name.startsWith('db.')) {
+    } else if (attribute.name.startsWith('db.') && !isRelationField) {
       nativeType = { name: attribute.name.slice('db.'.length), attribute };
+    } else if (attribute.name === 'id' && !isRelationField) {
+      build.idFields = [field.name];
+    } else if (attribute.name === 'unique' && !isRelationField) {
+      build.uniqueFieldSets.push([field.name]);
+    } else if (attribute.name === 'relation' && isRelationField) {
+      relation = attribute;
     } else {
       diagnostics.push(
         prisma7Diagnostic(
@@ -529,7 +646,7 @@ function readField(args: {
     }
   }
 
-  if (field.malformedType) return undefined;
+  if (field.malformedType) return;
   if (field.typeConstructor !== undefined) {
     diagnostics.push(
       prisma7Diagnostic(
@@ -539,19 +656,17 @@ function readField(args: {
         field.typeConstructor.span,
       ),
     );
-    return undefined;
+    return;
   }
-  if (args.ignoredModels.has(field.typeName)) return undefined;
-  if (args.modelNames.has(field.typeName)) {
-    diagnostics.push(
-      prisma7Diagnostic(
-        'PRISMA7_RELATION_UNRESOLVED',
-        `${label} is a relation to "${field.typeName}"; relations are not supported yet by the Prisma 7 contract source.`,
-        sourceId,
-        field.span,
-      ),
-    );
-    return undefined;
+  if (args.ignoredModels.has(field.typeName)) return;
+  if (isRelationField) {
+    const attribute =
+      relation === undefined
+        ? undefined
+        : parseRelationAttribute(relation, label, sourceId, diagnostics);
+    if (relation !== undefined && attribute === undefined) return;
+    build.relationFields.push({ field, targetModelName: field.typeName, attribute });
+    return;
   }
 
   const enumDeclaration = args.enums.get(field.typeName);
@@ -566,7 +681,7 @@ function readField(args: {
           field.span,
         ),
       );
-      return undefined;
+      return;
     }
     call = {
       path: input.nativeEnum.typeConstructor,
@@ -584,7 +699,7 @@ function readField(args: {
           field.span,
         ),
       );
-      return undefined;
+      return;
     }
     let mapping = scalar;
     let span = field.span;
@@ -602,7 +717,7 @@ function readField(args: {
             nativeType.attribute.span,
           ),
         );
-        return undefined;
+        return;
       }
       mapping = native;
       span = nativeType.attribute.span;
@@ -642,13 +757,13 @@ function readField(args: {
         ),
       );
     }
-    return undefined;
+    return;
   }
-  return {
+  build.columns.set(field.name, {
     fieldName: field.name,
     columnName,
     descriptor: resolved.descriptor,
     nullable: field.optional || field.list,
     ...(field.list ? { many: true } : {}),
-  };
+  });
 }

@@ -1,0 +1,7 @@
+[
+  {
+    "code": "PRISMA7_RELATION_UNRESOLVED",
+    "line": 13,
+    "message": "Relation field \"Post.author\" must be optional because one of its fields is optional."
+  }
+]

@@ -7,17 +7,7 @@
   {
     "code": "PRISMA7_UNKNOWN_ATTRIBUTE",
     "line": 6,
-    "message": "Field \"User.id\": attribute \"@id\" is not supported yet by the Prisma 7 contract source."
-  },
-  {
-    "code": "PRISMA7_UNKNOWN_ATTRIBUTE",
-    "line": 6,
     "message": "Field \"User.id\": attribute \"@default\" is not supported yet by the Prisma 7 contract source."
-  },
-  {
-    "code": "PRISMA7_UNKNOWN_ATTRIBUTE",
-    "line": 7,
-    "message": "Field \"User.email\": attribute \"@unique\" is not supported yet by the Prisma 7 contract source."
   },
   {
     "code": "PRISMA7_UNKNOWN_ATTRIBUTE",

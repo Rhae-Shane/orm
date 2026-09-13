@@ -5410,6 +5410,9 @@ importers:
       '@internal/sql-contract-emitter':
         specifier: workspace:8.0.0-rc.9
         version: link:../../packages/2-sql/3-tooling/emitter
+      '@internal/sql-contract-prisma7':
+        specifier: workspace:8.0.0-rc.9
+        version: link:../../packages/2-sql/2-authoring/contract-prisma7
       '@internal/sql-contract-psl':
         specifier: workspace:8.0.0-rc.9
         version: link:../../packages/2-sql/2-authoring/contract-psl
