@@ -14,6 +14,7 @@ export default defineConfig({ contract: prisma7Schema('prisma/schema.prisma') })
 - **Package** `packages/2-mongo-family/2-authoring/contract-prisma7`, shaped like the Mongo `contract-psl`. Same `prisma7Schema` factory shape and `source.load` contract as slice 1; the parser additions from slice 1 are reused.
 - **Config**: `defineConfig` in `packages/3-extensions/mongo/src/config/define-config.ts` accepts `contract: string | ContractConfig`.
 - **Provider check**: `provider` must be `mongodb`, else `PRISMA7_PROVIDER_MISMATCH`.
+- **Unknown top-level blocks in the Mongo PSL interpreter.** Found in slice 1 dispatch 3 review: `packages/2-mongo-family/2-authoring/contract-psl` keeps only `enum` blocks and silently drops every other generic block, including `view`. This slice adds a diagnostic for unknown top-level block keywords in the Mongo PSL interpreter, mirroring SQL's `PSL_UNSUPPORTED_TOP_LEVEL_BLOCK`, so a Prisma 7 `view` is never silently lost on either path.
 
 ## Rule table
 
