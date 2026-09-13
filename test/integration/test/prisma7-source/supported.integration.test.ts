@@ -56,19 +56,7 @@ function load(schemaPath: string) {
 }
 
 describe('Prisma 7 supported schema against the database Prisma 7 built', () => {
-  // Known failure, recorded on 2026-09-13: five findings remain, all on
-  // introspected defaults the Postgres default normaliser
-  // (`packages/3-targets/3-targets/postgres/src/core/default-normalizer.ts`)
-  // does not read back as literals: `audit.audit_log.action`
-  // (`'CREATE'::audit."AuditAction"`, a schema-qualified quoted enum cast),
-  // `Defaults.dateTimeLiteral` (`'2024-01-01 00:00:00'::timestamp without
-  // time zone`, a zoneless literal parsed as local time), and
-  // `Defaults.stringList`, `intList`, `enumList` (`ARRAY['a'::text, 'b'::text]`,
-  // which only the `'{...}'` array spelling is parsed as a literal). The
-  // interpreter's side is what Prisma 7 wrote; the fix belongs in the
-  // normaliser. `it.fails` flips this test red the day it passes, so the
-  // marker cannot outlive the defect.
-  it.fails(
+  it(
     'verifies with zero findings',
     async () => {
       await withDevDatabase(async ({ connectionString }) => {

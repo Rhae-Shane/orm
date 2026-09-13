@@ -8,4 +8,3 @@
 
 Everything else is byte-for-byte the supported schema. The test applies `../supported/migration.sql` unchanged, so the database is exactly what Prisma 7.10.0 built, interprets this file, and expects `db verify` to report nothing. `../supported/schema.prisma` itself is the error case: interpreting it yields `PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED` for `updatedAtOpt` and `uuidOpt` and `PRISMA7_UPDATED_AT_WITH_DEFAULT_UNSUPPORTED` for `updatedAtNow`.
 
-As of 2026-09-13 the zero-findings test is recorded as a known failure (`it.fails`): five default findings remain, all caused by introspected default spellings the Prisma 8 Postgres default normaliser does not read back as literals (a schema-qualified quoted enum cast, a zoneless `timestamp` literal, and `ARRAY[...]` list literals). See the test's comment for the exact paths.
