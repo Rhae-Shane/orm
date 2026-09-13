@@ -1,6 +1,6 @@
 # Slice 1 Definition of Done walk — 2026-09-13 (updated after dispatch 10)
 
-Walked verbatim by the orchestrator against the slice spec's checklist and the team overlay in `drive/calibration/dod.md`. Reviewer verdict on the slice: ready for a pull request (`reviews/code-review.md`, final Round notes).
+Walked verbatim by the orchestrator against the slice spec's checklist and the team overlay in `drive/calibration/dod.md`. Reviewer verdict on the slice: ready for a pull request (`reviews/code-review.md`, final Round notes), restated after dispatch 10; its two closing documentation lines landed in `5450297a61` and were checked by the orchestrator. Tip `5450297a61`, 49 commits ahead of `origin/main`, every one with both sign-offs, tree clean.
 
 ## Slice-specific items (slice spec)
 
