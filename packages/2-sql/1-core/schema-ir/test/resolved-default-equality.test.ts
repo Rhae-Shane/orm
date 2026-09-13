@@ -1,5 +1,5 @@
 import type { ColumnDefault, ColumnDefaultLiteralInputValue } from '@internal/contract/types';
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { resolvedDefaultsEqual } from '../src/ir/resolved-default-equality';
 
@@ -146,5 +146,47 @@ describe('resolvedDefaultsEqual', () => {
         resolvedDefaultsEqual(literal('9007199254740993'), literal('9007199254740993'), 'int8'),
       ).toBe(true);
     });
+  });
+});
+
+describe('resolvedDefaultsEqual zoneless timestamp literals', () => {
+  // `timestamp without time zone` defaults introspect without a zone
+  // (`'2024-01-01 00:00:00'`); the contract writes the same wall time as an
+  // ISO instant. Both are the same wall-clock value and must compare equal
+  // whatever the host timezone is, so the test pins one that is not UTC.
+  const previousTz = process.env['TZ'];
+  beforeAll(() => {
+    process.env['TZ'] = 'Etc/GMT-3';
+  });
+  afterAll(() => {
+    if (previousTz === undefined) delete process.env['TZ'];
+    else process.env['TZ'] = previousTz;
+  });
+
+  it('treats a zoneless timestamp literal as UTC under a timestamp native type', () => {
+    expect(
+      resolvedDefaultsEqual(
+        literal('2024-01-01T00:00:00.000Z'),
+        literal('2024-01-01 00:00:00'),
+        'timestamp(3)',
+      ),
+    ).toBe(true);
+  });
+
+  it('keeps a zoned literal on its own zone', () => {
+    expect(
+      resolvedDefaultsEqual(
+        literal('2024-01-01T00:00:00.000Z'),
+        literal('2024-01-01 03:00:00+03'),
+        'timestamptz',
+      ),
+    ).toBe(true);
+    expect(
+      resolvedDefaultsEqual(
+        literal('2024-01-01T00:00:00.000Z'),
+        literal('2024-01-01 00:00:00+03'),
+        'timestamptz',
+      ),
+    ).toBe(false);
   });
 });

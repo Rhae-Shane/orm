@@ -50,12 +50,26 @@ function isInt64NativeType(nativeType?: string): boolean {
   return normalized === 'int8' || normalized === 'bigint';
 }
 
+/**
+ * A timestamp spelled without a zone, as Postgres reports a `timestamp
+ * without time zone` default: `2024-01-01 00:00:00`, `2024-01-01T00:00:00.5`.
+ * `Date` would read that as host-local time, so it is pinned to UTC first —
+ * the value is a wall-clock time and the contract spells the same wall time
+ * as an ISO instant.
+ */
+const ZONELESS_TIMESTAMP = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)$/;
+
+function parseTemporal(value: string): Date {
+  const zoneless = ZONELESS_TIMESTAMP.exec(value);
+  return zoneless === null ? new Date(value) : new Date(`${zoneless[1]}T${zoneless[2]}Z`);
+}
+
 function normalizeLiteralValue(value: unknown, nativeType?: string): unknown {
   if (value instanceof Date) {
     return value.toISOString();
   }
   if (typeof value === 'string' && isTemporalNativeType(nativeType)) {
-    const parsed = new Date(value);
+    const parsed = parseTemporal(value);
     if (!Number.isNaN(parsed.getTime())) {
       return parsed.toISOString();
     }
