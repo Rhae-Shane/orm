@@ -100,6 +100,17 @@ describe('enum member attributes', () => {
     `);
   });
 
+  it('keeps the invalid-member diagnostic for an entry attribute outside an enum block', () => {
+    const result = parse('datasource db {\n  provider = "postgresql" @map("x")\n}');
+    expect(result.diagnostics.map((d) => d.code)).toEqual(['PSL_INVALID_EXTENSION_BLOCK_MEMBER']);
+    const [block] = Array.from(result.document.declarations());
+    expect(block).toBeInstanceOf(GenericBlockDeclarationAst);
+    if (!(block instanceof GenericBlockDeclarationAst)) throw new Error('unreachable');
+    for (const entry of block.entries()) {
+      expect(Array.from(entry.attributes())).toEqual([]);
+    }
+  });
+
   it('parses a bare enum block exactly as before, with no member attributes', () => {
     const source = 'enum Role {\n  ADMIN\n  USER\n}';
     const block = onlyGenericBlock(source);

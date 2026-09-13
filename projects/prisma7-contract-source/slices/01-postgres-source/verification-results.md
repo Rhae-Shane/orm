@@ -52,6 +52,10 @@ Consequence for the rule table: a database built by Prisma 5 or earlier and neve
 
 Not assigned to this slice.
 
+## Slice 2 follow-up
+
+The Mongo PSL interpreter (`packages/2-mongo-family/2-authoring/contract-psl/src/interpreter.ts`) reads only `enum` blocks from the top-level blocks and silently ignores every other unknown top-level block, including `view`. Slice 2 must add a diagnostic there so a Prisma 7 Mongo schema with a view is rejected the way the SQL interpreter rejects it (`PSL_UNSUPPORTED_TOP_LEVEL_BLOCK`).
+
 ## Item 7: lenient verify and undeclared schema
 
 **Answer: zero findings.** With `strict: false` (the `db verify` default) an undeclared table, an undeclared column on a declared table, and an undeclared foreign key from a declared table to an undeclared table produce no findings, so a contract that omits `@ignore` fields and `@@ignore` models verifies cleanly against the schema Prisma 7 still creates for them. In `schema-verify.ts` every `not-expected` issue at namespace, entity, field, or auxiliary granularity is strict-only.

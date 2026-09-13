@@ -608,7 +608,7 @@ export function parseGenericBlock(cursor: Cursor): GreenNode | undefined {
     parseIdentifier(cursor);
   }
   if (cursor.peekKind() === 'LBrace') {
-    parseBlockBody(cursor, keyword === 'view' ? parseModelMember : parseKeyValueMember);
+    parseBlockBody(cursor, genericBlockMemberParser(keyword));
   } else {
     cursor.diagnostic(
       'PSL_INVALID_DECLARATION',
@@ -695,12 +695,30 @@ function parseNamedTypeMember(cursor: Cursor): void {
 }
 
 /**
+ * `view` bodies use the model grammar; `enum` members may carry `@` attributes
+ * (Prisma 7's `USER @map("user")`); every other generic block keeps the plain
+ * `key = value` grammar.
+ */
+function genericBlockMemberParser(keyword: string): MemberParser {
+  if (keyword === 'view') return parseModelMember;
+  if (keyword === 'enum') return parseEnumMember;
+  return parseKeyValueMember;
+}
+
+/**
  * A generic-block member is either a `@@`-block attribute or a `key = value`
  * entry. The block-attribute alternative is purely syntactic — it does not judge
  * whether the attribute is valid for the block's kind.
  */
 function parseKeyValueMember(cursor: Cursor): void {
   const node = parseBlockAttribute(cursor) ?? parseKeyValue(cursor);
+  if (!node) {
+    invalidMember(cursor, 'PSL_INVALID_EXTENSION_BLOCK_MEMBER', 'Invalid block entry');
+  }
+}
+
+function parseEnumMember(cursor: Cursor): void {
+  const node = parseBlockAttribute(cursor) ?? parseKeyValue(cursor, { memberAttributes: true });
   if (!node) {
     invalidMember(cursor, 'PSL_INVALID_EXTENSION_BLOCK_MEMBER', 'Invalid block entry');
   }
@@ -752,11 +770,14 @@ export function parseNamedType(cursor: Cursor): GreenNode | undefined {
 
 /**
  * A generic-block entry is either `key = value` or a bare `key` (committing a
- * `KeyValuePair` carrying only the key), followed by any number of `@`
- * attributes (Prisma 7 enum members: `USER @map("user")`). A `key =` with no
- * following expression is flagged.
+ * `KeyValuePair` carrying only the key). With `memberAttributes` (enum blocks
+ * only) any number of `@` attributes may follow, as in Prisma 7's
+ * `USER @map("user")`. A `key =` with no following expression is flagged.
  */
-export function parseKeyValue(cursor: Cursor): GreenNode | undefined {
+export function parseKeyValue(
+  cursor: Cursor,
+  options: { readonly memberAttributes: boolean } = { memberAttributes: false },
+): GreenNode | undefined {
   if (cursor.peekKind() !== 'Ident') return undefined;
   cursor.startNode('KeyValuePair');
   parseIdentifier(cursor);
@@ -770,7 +791,7 @@ export function parseKeyValue(cursor: Cursor): GreenNode | undefined {
       );
     }
   }
-  while (cursor.peekKind() === 'At') {
+  while (options.memberAttributes && cursor.peekKind() === 'At') {
     parseAttribute(cursor);
   }
   return cursor.finishNode();
