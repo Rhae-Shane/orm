@@ -592,6 +592,10 @@ export function parseModel(cursor: Cursor): GreenNode | undefined {
  * {` with no name) routed to its dedicated parser. The generic keyword set is
  * open, so a bare identifier with no brace (e.g. `oops`) is read as an unfinished
  * custom declaration rather than unsupported content.
+ *
+ * A Prisma 7 `view` block stays a generic block (so interpreters keep rejecting
+ * the keyword) but its body uses the model-member grammar, so the field lines
+ * parse as `FieldDeclaration` nodes with spans instead of mangled entries.
  */
 export function parseGenericBlock(cursor: Cursor): GreenNode | undefined {
   if (cursor.peekKind() !== 'Ident') return undefined;
@@ -604,7 +608,7 @@ export function parseGenericBlock(cursor: Cursor): GreenNode | undefined {
     parseIdentifier(cursor);
   }
   if (cursor.peekKind() === 'LBrace') {
-    parseBlockBody(cursor, parseKeyValueMember);
+    parseBlockBody(cursor, keyword === 'view' ? parseModelMember : parseKeyValueMember);
   } else {
     cursor.diagnostic(
       'PSL_INVALID_DECLARATION',
@@ -748,8 +752,9 @@ export function parseNamedType(cursor: Cursor): GreenNode | undefined {
 
 /**
  * A generic-block entry is either `key = value` or a bare `key` (committing a
- * `KeyValuePair` carrying only the key). A `key =` with no following expression
- * is flagged.
+ * `KeyValuePair` carrying only the key), followed by any number of `@`
+ * attributes (Prisma 7 enum members: `USER @map("user")`). A `key =` with no
+ * following expression is flagged.
  */
 export function parseKeyValue(cursor: Cursor): GreenNode | undefined {
   if (cursor.peekKind() !== 'Ident') return undefined;
@@ -764,6 +769,9 @@ export function parseKeyValue(cursor: Cursor): GreenNode | undefined {
         cursor.mark(),
       );
     }
+  }
+  while (cursor.peekKind() === 'At') {
+    parseAttribute(cursor);
   }
   return cursor.finishNode();
 }
