@@ -99,13 +99,54 @@ withTempDir(({ createTempDir }) => {
         // The emitted contract carries the rules the interpreter applied, so
         // a rule regression fails here before it fails db verify.
         const contract: unknown = JSON.parse(readFileSync(contractJsonPath, 'utf-8'));
-        const publicTables = (
+        const namespaces = (
           contract as {
             storage: {
-              namespaces: Record<string, { entries: { table: Record<string, unknown> } }>;
+              namespaces: Record<
+                string,
+                {
+                  entries: {
+                    table: Record<string, unknown>;
+                    native_enum?: Record<string, unknown>;
+                  };
+                }
+              >;
             };
           }
-        ).storage.namespaces['public']?.entries.table;
+        ).storage.namespaces;
+        expect(Object.keys(namespaces).sort()).toEqual(['audit', 'public']);
+        expect(
+          Object.fromEntries(
+            Object.entries(namespaces).map(([id, namespace]) => [
+              id,
+              {
+                tables: Object.keys(namespace.entries.table).sort(),
+                enums: Object.keys(namespace.entries.native_enum ?? {}).sort(),
+              },
+            ]),
+          ),
+        ).toEqual({
+          audit: { tables: ['Composite', 'audit_log'], enums: ['AuditAction'] },
+          public: {
+            tables: [
+              'Defaults',
+              'NativeTypes',
+              'Post',
+              'Profile',
+              'Scalars',
+              'Settings',
+              'Tag',
+              'Timestamps',
+              'User',
+              '_Favorites',
+              '_Follows',
+              '_PostToTag',
+              'mapped_indexes',
+            ],
+            enums: ['user_role'],
+          },
+        });
+        const publicTables = namespaces['public']?.entries.table;
         expect(publicTables?.['_PostToTag']).toMatchObject({
           primaryKey: { columns: ['A', 'B'] },
           indexes: [expect.objectContaining({ name: '_PostToTag_B_index' })],
