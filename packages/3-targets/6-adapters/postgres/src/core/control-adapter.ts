@@ -1518,12 +1518,17 @@ function normalizeFormattedType(formattedType: string, dataType: string, udtName
   if (dataType === 'time without time zone' || udtName === 'time') {
     return formattedType.replace(' without time zone', '').trim();
   }
-  // Only dataType === 'USER-DEFINED' should ever be quoted, but this should be safe without
-  // checking that explicitly either way
-  if (formattedType.startsWith('"') && formattedType.endsWith('"')) {
-    return formattedType.slice(1, -1);
-  }
-  return formattedType;
+  // `format_type` quotes a user-defined type name that needs it (mixed case,
+  // reserved word) and schema-qualifies one outside the search path, so a
+  // mixed-case enum in another schema arrives as `audit."AuditAction"`. The
+  // contract side spells every type name unquoted (`audit.AuditAction`), so
+  // strip the quotes from each identifier segment.
+  return formattedType
+    .split('.')
+    .map((segment) =>
+      segment.startsWith('"') && segment.endsWith('"') ? segment.slice(1, -1) : segment,
+    )
+    .join('.');
 }
 
 /**
