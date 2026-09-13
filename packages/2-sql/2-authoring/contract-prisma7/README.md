@@ -35,6 +35,7 @@ Codes are prefixed `PRISMA7_`:
 | `PRISMA7_RELATION_UNRESOLVED` | A relation field that cannot be paired: no matching side, an ambiguous unnamed pair, a singular back-relation over a non-unique foreign key, a `fields`/`references` mismatch, or a relation whose optionality disagrees with its foreign key fields. |
 | `PRISMA7_JUNCTION_ID_UNSUPPORTED` | An implicit many-to-many relation on a model without a single-field `@id` (a composite id, for example). Prisma 7 forbids it too. |
 | `PRISMA7_UNKNOWN_ATTRIBUTE` | Any attribute the interpreter does not handle yet (`@default`, `@updatedAt`, `@@index`, ...). |
+| `PRISMA7_TABLE_COLLISION` | Two models map to the same table in the same schema; reported on every model in the group. |
 | `PRISMA7_SCHEMA_READ_FAILED` | The input path could not be read. |
 
 Unknown top-level blocks keep the parser's `PSL_UNSUPPORTED_TOP_LEVEL_BLOCK` code.

@@ -1,21 +1,25 @@
 [
   {
     "code": "PRISMA7_UNKNOWN_ATTRIBUTE",
+    "file": "schema.prisma",
     "line": 11,
     "message": "Model \"User\": attribute \"@@index\" is not supported yet by the Prisma 7 contract source."
   },
   {
     "code": "PRISMA7_UNKNOWN_ATTRIBUTE",
+    "file": "schema.prisma",
     "line": 6,
     "message": "Field \"User.id\": attribute \"@default\" is not supported yet by the Prisma 7 contract source."
   },
   {
     "code": "PRISMA7_UNKNOWN_ATTRIBUTE",
+    "file": "schema.prisma",
     "line": 8,
     "message": "Field \"User.createdAt\": attribute \"@default\" is not supported yet by the Prisma 7 contract source."
   },
   {
     "code": "PRISMA7_UNKNOWN_ATTRIBUTE",
+    "file": "schema.prisma",
     "line": 9,
     "message": "Field \"User.updatedAt\": attribute \"@updatedAt\" is not supported yet by the Prisma 7 contract source."
   }

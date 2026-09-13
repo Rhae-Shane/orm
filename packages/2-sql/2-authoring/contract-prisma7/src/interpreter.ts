@@ -227,6 +227,7 @@ export function interpretPrisma7Documents(
   }
 
   checkDatasource(datasources, input.documents[0]?.sourceId ?? 'schema.prisma', diagnostics);
+  reportTableCollisions(models, diagnostics);
 
   const enums = new Map<string, EnumDeclaration>();
   for (const source of enumBlocks) {
@@ -380,6 +381,34 @@ function checkDatasource(
         parameterSpan(block, 'relationMode'),
       ),
     );
+  }
+}
+
+function reportTableCollisions(
+  models: readonly ModelDeclaration[],
+  diagnostics: ContractSourceDiagnostic[],
+): void {
+  const byTable = new Map<string, ModelDeclaration[]>();
+  for (const model of models) {
+    const key = `${model.namespaceId}.${model.tableName}`;
+    const group = byTable.get(key) ?? [];
+    byTable.set(key, group);
+    group.push(model);
+  }
+  for (const group of byTable.values()) {
+    if (group.length < 2) continue;
+    const names = group.map((model) => `"${model.symbol.name}"`).join(', ');
+    for (const model of group) {
+      const mapAttribute = model.symbol.attributes.find((attribute) => attribute.name === 'map');
+      diagnostics.push(
+        prisma7Diagnostic(
+          'PRISMA7_TABLE_COLLISION',
+          `Models ${names} all map to table "${model.namespaceId}"."${model.tableName}"; each model needs its own table.`,
+          model.sourceId,
+          mapAttribute?.span ?? model.symbol.span,
+        ),
+      );
+    }
   }
 }
 

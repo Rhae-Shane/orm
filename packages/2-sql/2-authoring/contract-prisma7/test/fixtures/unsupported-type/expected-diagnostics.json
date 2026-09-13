@@ -1,6 +1,7 @@
 [
   {
     "code": "PRISMA7_UNSUPPORTED_TYPE",
+    "file": "schema.prisma",
     "line": 7,
     "message": "Field \"Post.search\" has type \"Unsupported(...)\", which has no Prisma 8 codec. Remove the field or map it to a supported type."
   }
