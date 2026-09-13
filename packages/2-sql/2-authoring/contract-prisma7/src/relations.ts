@@ -194,9 +194,8 @@ function effectiveRelationName(
   targetModelName: string,
 ): string {
   if (attribute?.name !== undefined) return attribute.name;
-  const [first, second] = [modelName, targetModelName].sort((left, right) =>
-    left.localeCompare(right),
-  );
+  const [first, second] =
+    modelName < targetModelName ? [modelName, targetModelName] : [targetModelName, modelName];
   return `${first}To${second}`;
 }
 
@@ -495,8 +494,11 @@ function singleIdColumn(
 /**
  * Prisma 7's implicit junction: table `_AToB` (or `_Name`), columns `A` and `B`
  * typed like the two ids, primary key `(A, B)`, index `_AToB_B_index`, and two
- * cascading foreign keys. `A` is the model whose name sorts first; for a
- * self-relation, the field whose name sorts first.
+ * cascading foreign keys. `A` is the model whose name is smaller in plain
+ * string order; for a self-relation, the field whose name is smaller. This is
+ * prisma-engines' rule (`psl/parser-database/src/relations.rs`,
+ * `ingest_relation`: the side with the greater model name, or field name for a
+ * self relation, is skipped so the smaller one owns `field_a`).
  */
 function synthesizeJunction(
   requester: JunctionSide,
@@ -506,8 +508,8 @@ function synthesizeJunction(
   const label = `Relation field "${requester.model.modelName}.${requester.field.field.name}"`;
   const selfRelation = requester.model === partner.model;
   const requesterFirst = selfRelation
-    ? requester.field.field.name.localeCompare(partner.field.field.name) < 0
-    : requester.model.modelName.localeCompare(partner.model.modelName) < 0;
+    ? requester.field.field.name < partner.field.field.name
+    : requester.model.modelName < partner.model.modelName;
   const [sideA, sideB] = requesterFirst ? [requester, partner] : [partner, requester];
   const name =
     requester.field.attribute?.name ?? `${sideA.model.modelName}To${sideB.model.modelName}`;

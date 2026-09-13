@@ -2,9 +2,10 @@
  * The Prisma 7 contract source's relations verify against the database Prisma
  * 7.10.0 built (`fixtures/prisma7-source/supported/migration.sql`): every foreign
  * key, every implicit junction table with its columns, primary key, and
- * `_B_index`, with zero findings on those paths. Findings on other paths come
- * from constructs the source does not interpret yet (see
- * `fixtures/prisma7-source/relations/README.md`) and are filtered out.
+ * `_B_index`. The only findings left are the unique constraints dispatch 5
+ * lowers as unique indexes (see `fixtures/prisma7-source/relations/README.md`),
+ * and the serialized contract is asserted positively so the test cannot pass
+ * on an empty contract.
  */
 import { readFileSync } from 'node:fs';
 import postgresAdapter from '@internal/adapter-postgres/control';
@@ -19,6 +20,7 @@ import postgresPackRef from '@internal/target-postgres/pack';
 import { prisma7PostgresTypeMap } from '@internal/target-postgres/prisma7-type-map';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
+import { blindCast } from '@internal/utils/casts';
 import { timeouts, withClient, withDevDatabase } from '@repo/test-utils';
 import { dirname, join } from 'pathe';
 import { describe, expect, it } from 'vitest';
@@ -47,15 +49,62 @@ function sourceContext() {
   };
 }
 
-function isRelationPath(path: readonly string[]): boolean {
-  const table = path[2] ?? '';
-  const leaf = path[path.length - 1] ?? '';
-  return (
-    table.startsWith('_') ||
-    leaf.startsWith('foreign-key:') ||
-    leaf === 'primary-key' ||
-    leaf.endsWith('_B_index')
+interface SerializedForeignKey {
+  readonly source: { readonly tableName: string; readonly columns: readonly string[] };
+  readonly target: { readonly tableName: string; readonly columns: readonly string[] };
+  readonly onDelete?: string;
+  readonly onUpdate?: string;
+}
+
+function foreignKeysOf(serialized: Record<string, unknown>, table: string): SerializedForeignKey[] {
+  const tables = blindCast<
+    Record<string, { readonly foreignKeys: readonly SerializedForeignKey[] }>,
+    'serialized Postgres contract: storage.namespaces.public.entries.table'
+  >(
+    (
+      (serialized['storage'] as Record<string, unknown>)['namespaces'] as Record<
+        string,
+        { entries: { table: Record<string, unknown> } }
+      >
+    )['public']?.entries.table,
   );
+  return [...(tables[table]?.foreignKeys ?? [])];
+}
+
+function relationsOf(serialized: Record<string, unknown>, model: string): Record<string, unknown> {
+  const models = (
+    (serialized['domain'] as Record<string, unknown>)['namespaces'] as Record<
+      string,
+      { models: Record<string, { relations: Record<string, unknown> }> }
+    >
+  )['public']?.models;
+  return models?.[model]?.relations ?? {};
+}
+
+function foreignKey(
+  columns: readonly string[],
+  targetTable: string,
+  targetColumns: readonly string[],
+  onDelete: string,
+  onUpdate: string,
+) {
+  return expect.objectContaining({
+    source: expect.objectContaining({ columns }),
+    target: expect.objectContaining({ tableName: targetTable, columns: targetColumns }),
+    onDelete,
+    onUpdate,
+  });
+}
+
+function manyToMany(through: string, parentColumn: string, childColumn: string) {
+  return expect.objectContaining({
+    cardinality: 'N:M',
+    through: expect.objectContaining({
+      table: through,
+      parentColumns: [parentColumn],
+      childColumns: [childColumn],
+    }),
+  });
 }
 
 describe('Prisma 7 relations against the database Prisma 7 built', () => {
@@ -78,10 +127,55 @@ describe('Prisma 7 relations against the database Prisma 7 built', () => {
         const serialized = new PostgresContractSerializer().serializeContract(
           loaded.value as Contract<SqlStorage>,
         );
+
+        expect(foreignKeysOf(serialized, 'Post')).toEqual([
+          foreignKey(['authorId'], 'User', ['id'], 'restrict', 'cascade'),
+          foreignKey(['editorId'], 'User', ['id'], 'setNull', 'cascade'),
+        ]);
+        expect(foreignKeysOf(serialized, 'Profile')).toEqual([
+          foreignKey(['userId'], 'User', ['id'], 'restrict', 'cascade'),
+        ]);
+        expect(foreignKeysOf(serialized, 'Settings')).toEqual([
+          foreignKey(['userId'], 'User', ['id'], 'setNull', 'cascade'),
+        ]);
+        expect(foreignKeysOf(serialized, '_PostToTag')).toEqual([
+          foreignKey(['A'], 'Post', ['id'], 'cascade', 'cascade'),
+          foreignKey(['B'], 'Tag', ['id'], 'cascade', 'cascade'),
+        ]);
+        expect(foreignKeysOf(serialized, '_Favorites')).toEqual([
+          foreignKey(['A'], 'Post', ['id'], 'cascade', 'cascade'),
+          foreignKey(['B'], 'User', ['id'], 'cascade', 'cascade'),
+        ]);
+        expect(foreignKeysOf(serialized, '_Follows')).toEqual([
+          foreignKey(['A'], 'User', ['id'], 'cascade', 'cascade'),
+          foreignKey(['B'], 'User', ['id'], 'cascade', 'cascade'),
+        ]);
+        expect(relationsOf(serialized, 'Post')).toMatchObject({
+          tags: manyToMany('_PostToTag', 'A', 'B'),
+          fans: manyToMany('_Favorites', 'A', 'B'),
+        });
+        expect(relationsOf(serialized, 'Tag')).toMatchObject({
+          posts: manyToMany('_PostToTag', 'B', 'A'),
+        });
+        expect(relationsOf(serialized, 'User')).toMatchObject({
+          favorites: manyToMany('_Favorites', 'B', 'A'),
+          followers: manyToMany('_Follows', 'A', 'B'),
+          following: manyToMany('_Follows', 'B', 'A'),
+        });
+
         const result = await runSchemaVerify(connectionString, serialized);
-        const paths = result.schema.issues.map((issue) => issue.path);
-        const relationPaths = paths.filter(isRelationPath);
-        expect(relationPaths).toEqual([]);
+        // Every finding that remains is a unique constraint: Prisma 7 creates
+        // @unique as a unique index, which dispatch 5 will lower as
+        // {table}_{cols}_key. Nothing else, so every foreign key, foreign key
+        // column, junction table, primary key, and _B_index verified clean.
+        expect(result.schema.issues.map((issue) => issue.path).sort()).toEqual([
+          ['database', 'public', 'Post', 'unique:slug'],
+          ['database', 'public', 'Post', 'unique:title,category'],
+          ['database', 'public', 'Profile', 'unique:userId'],
+          ['database', 'public', 'Settings', 'unique:userId'],
+          ['database', 'public', 'Tag', 'unique:name'],
+          ['database', 'public', 'User', 'unique:email'],
+        ]);
       });
     },
     timeouts.spinUpPpgDev,
