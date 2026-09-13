@@ -52,9 +52,9 @@ Plain scalars map to Prisma 7's Postgres storage: `String` text, `Boolean` bool,
 | `now()` | Column default (verification item 2). |
 | literal, list literal, enum member | Column default. |
 | `dbgenerated("expr")` | Raw expression column default. |
-| `uuid()`, `uuid(4)`, `uuid(7)`, `ulid()`, `nanoid(n)` | ORM-side execution generator, no column default. On optional fields: same open decision as `@updatedAt`. |
+| `uuid()`, `uuid(4)`, `uuid(7)`, `ulid()`, `nanoid(n)` | ORM-side execution generator, no column default. On optional fields: `PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED`. |
 | `cuid()`, `cuid(2)` | ORM-side `cuid2` generator. |
-| `@updatedAt` | Execution generator on create and update, column codec `pg/timestamp-temporal@1` with `typeParams.precision = 3` (item 2 showed the precision must be a type parameter), or the `@db.*` override, no storage default. **Open decision** (see `design-notes.md`): whether an optional field with `@updatedAt`, and `@default(now()) @updatedAt`, are hard errors or need a Prisma 8 PSL relaxation so the converter can print them. Dispatch 5 waits on this row. |
+| `@updatedAt` | Execution generator on create and update, column codec `pg/timestamp-temporal@1` with `typeParams.precision = 3` (item 2 showed the precision must be a type parameter), or the `@db.*` override, no storage default. On an optional field: `PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED`. With any `@default`: `PRISMA7_UPDATED_AT_WITH_DEFAULT_UNSUPPORTED`. Both because Prisma 8 PSL cannot spell the combination, so the converter could not print it (decision recorded in `design-notes.md`). |
 
 ### Keys, uniques, indexes
 
@@ -70,7 +70,7 @@ Implicit many-to-many (a list field on both sides, no junction model) becomes th
 
 ## Error catalogue
 
-`PRISMA7_PROVIDER_MISMATCH`, `PRISMA7_RELATION_MODE_UNSUPPORTED`, `PRISMA7_VIEW_UNSUPPORTED`, `PRISMA7_UNSUPPORTED_TYPE`, `PRISMA7_NATIVE_TYPE_UNSUPPORTED`, `PRISMA7_INDEX_ARGUMENT_UNSUPPORTED`, `PRISMA7_UNKNOWN_ATTRIBUTE`, `PRISMA7_UNKNOWN_DEFAULT`, `PRISMA7_RELATION_UNRESOLVED`, `PRISMA7_TABLE_COLLISION` (added in dispatch 7: two models map to the same table), `PRISMA7_JUNCTION_ID_UNSUPPORTED` (added in dispatch 6: an implicit many-to-many whose side has a composite id), `PRISMA7_ENUM_NAMESPACE_MISMATCH` (added in dispatch 4: a column may only use an enum type from its own schema, which is what the IR can express). Each has a fixture. The implementer may add codes; every added code needs a fixture and a line here.
+`PRISMA7_PROVIDER_MISMATCH`, `PRISMA7_RELATION_MODE_UNSUPPORTED`, `PRISMA7_VIEW_UNSUPPORTED`, `PRISMA7_UNSUPPORTED_TYPE`, `PRISMA7_NATIVE_TYPE_UNSUPPORTED`, `PRISMA7_INDEX_ARGUMENT_UNSUPPORTED`, `PRISMA7_UNKNOWN_ATTRIBUTE`, `PRISMA7_UNKNOWN_DEFAULT`, `PRISMA7_RELATION_UNRESOLVED`, `PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED`, `PRISMA7_UPDATED_AT_WITH_DEFAULT_UNSUPPORTED`, `PRISMA7_TABLE_COLLISION` (added in dispatch 7: two models map to the same table), `PRISMA7_JUNCTION_ID_UNSUPPORTED` (added in dispatch 6: an implicit many-to-many whose side has a composite id), `PRISMA7_ENUM_NAMESPACE_MISMATCH` (added in dispatch 4: a column may only use an enum type from its own schema, which is what the IR can express). Each has a fixture. The implementer may add codes; every added code needs a fixture and a line here.
 
 Added in dispatch 6: `PRISMA7_JUNCTION_ID_UNSUPPORTED` (an implicit many-to-many relation on a model without a single-field `@id`, which Prisma 7 forbids too; fixture `junction-composite-id`). `PRISMA7_SCHEMA_READ_FAILED` (dispatch 4) reports an unreadable input path.
 
