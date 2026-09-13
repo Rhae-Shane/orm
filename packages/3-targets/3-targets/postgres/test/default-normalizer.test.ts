@@ -432,3 +432,54 @@ describe('parsePostgresDefault enum literal casts', () => {
     });
   });
 });
+
+describe('parsePostgresDefault ARRAY[...] constructors', () => {
+  it('reads a text array constructor with per-element casts', () => {
+    expect(parsePostgresDefault("ARRAY['a'::text, 'b'::text]", 'text[]')).toEqual({
+      kind: 'literal',
+      value: ['a', 'b'],
+    });
+  });
+
+  it('reads a numeric array constructor', () => {
+    expect(parsePostgresDefault('ARRAY[1, 2]', 'integer[]')).toEqual({
+      kind: 'literal',
+      value: [1, 2],
+    });
+  });
+
+  it('reads enum element casts, quoted and schema-qualified', () => {
+    expect(parsePostgresDefault('ARRAY[\'x\'::"MyEnum"]', 'MyEnum[]')).toEqual({
+      kind: 'literal',
+      value: ['x'],
+    });
+    expect(
+      parsePostgresDefault('ARRAY[\'x\'::sch."MyEnum", \'y\'::sch."MyEnum"]', 'sch.MyEnum[]'),
+    ).toEqual({
+      kind: 'literal',
+      value: ['x', 'y'],
+    });
+  });
+
+  it('keeps commas and doubled quotes inside an element', () => {
+    expect(parsePostgresDefault("ARRAY['it''s, ok'::text, 'b'::text]", 'text[]')).toEqual({
+      kind: 'literal',
+      value: ["it's, ok", 'b'],
+    });
+  });
+
+  it('reads an empty constructor and a cast constructor', () => {
+    expect(parsePostgresDefault('ARRAY[]::text[]', 'text[]')).toEqual({
+      kind: 'literal',
+      value: [],
+    });
+    expect(parsePostgresDefault("ARRAY['a', 'b']::text[]", 'text[]')).toEqual({
+      kind: 'literal',
+      value: ['a', 'b'],
+    });
+  });
+
+  it('fails closed for an element it cannot read', () => {
+    expect(parsePostgresDefault('ARRAY[now()]', 'timestamptz[]')?.kind).toBe('function');
+  });
+});

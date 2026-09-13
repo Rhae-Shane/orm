@@ -33,6 +33,13 @@ const STRING_LITERAL_PATTERN =
 const ARRAY_LITERAL_PATTERN = /^'(\{.*\})'(?:::.+\[\])?$/;
 
 /**
+ * Matches the constructor spelling Postgres reports for a default written as
+ * `ARRAY[...]`: `ARRAY['a'::text, 'b'::text]`, `ARRAY[1, 2]`, `ARRAY[]::text[]`.
+ * The element list is captured in group 1; the outer cast is optional.
+ */
+const ARRAY_CONSTRUCTOR_PATTERN = /^ARRAY\[(.*?)\](?:::\S+\[\])?$/is;
+
+/**
  * Returns the canonical expression for a timestamp default function, or undefined
  * if the expression is not a recognized timestamp default.
  *
@@ -168,6 +175,56 @@ function parseArrayLiteralBody(body: string): readonly JsonValue[] | undefined {
 }
 
 /**
+ * Splits an `ARRAY[...]` element list on the commas outside single quotes. A
+ * doubled quote inside an element is a literal quote, so it never closes one.
+ */
+function splitConstructorElements(body: string): readonly string[] {
+  const elements: string[] = [];
+  let current = '';
+  let quoted = false;
+  for (const char of body) {
+    if (char === "'") quoted = !quoted;
+    if (char === ',' && !quoted) {
+      elements.push(current);
+      current = '';
+      continue;
+    }
+    current += char;
+  }
+  elements.push(current);
+  return elements.map((element) => element.trim());
+}
+
+/**
+ * Reads one `ARRAY[...]` element: a quoted string (with an optional cast, read
+ * by the same pattern as a scalar default), a number, a boolean, or NULL.
+ * Anything else, such as a function call, means the constructor is not a
+ * literal and the caller keeps the raw expression.
+ */
+function parseConstructorElement(element: string): JsonValue | undefined {
+  if (NULL_PATTERN.test(element)) return null;
+  if (TRUE_PATTERN.test(element)) return true;
+  if (FALSE_PATTERN.test(element)) return false;
+  if (NUMERIC_PATTERN.test(element)) {
+    const parsed = Number(element);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  const stringMatch = element.match(STRING_LITERAL_PATTERN);
+  return stringMatch?.[1] === undefined ? undefined : stringMatch[1].replace(/''/g, "'");
+}
+
+function parseArrayConstructor(body: string): readonly JsonValue[] | undefined {
+  if (body.trim() === '') return [];
+  const values: JsonValue[] = [];
+  for (const element of splitConstructorElements(body)) {
+    const value = parseConstructorElement(element);
+    if (value === undefined) return undefined;
+    values.push(value);
+  }
+  return values;
+}
+
+/**
  * Parses a raw Postgres column default expression into a normalized ColumnDefault.
  * This enables semantic comparison between contract defaults and introspected schema defaults.
  *
@@ -195,6 +252,13 @@ export function parsePostgresDefault(
     const arrayMatch = trimmed.match(ARRAY_LITERAL_PATTERN);
     if (arrayMatch?.[1] !== undefined) {
       const parsed = parseArrayLiteralBody(arrayMatch[1]);
+      if (parsed !== undefined) {
+        return { kind: 'literal', value: parsed };
+      }
+    }
+    const constructorMatch = trimmed.match(ARRAY_CONSTRUCTOR_PATTERN);
+    if (constructorMatch?.[1] !== undefined) {
+      const parsed = parseArrayConstructor(constructorMatch[1]);
       if (parsed !== undefined) {
         return { kind: 'literal', value: parsed };
       }
