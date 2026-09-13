@@ -28,3 +28,17 @@ Notes on the run:
 - `prisma validate` accepts the schema with one warning: `Preview feature "multiSchema" is deprecated. The functionality can be used without specifying it as a preview feature.` The schema keeps `previewFeatures = ["multiSchema", "views"]` because the slice spec says the interpreter must ignore preview features other than `multiSchema`.
 - Prisma 7 rejected no construct in the schema. Nothing was removed.
 - The `view UserSummary` block produces no SQL. Prisma Migrate does not create views.
+
+## Applying `migration.sql` to a clean database
+
+The `NativeTypes.citext` column needs the `citext` extension. Run `CREATE EXTENSION IF NOT EXISTS citext;` before applying the script, or `CREATE TABLE "NativeTypes"` fails with `type "citext" does not exist`.
+
+## Ground truth only
+
+This directory records what Prisma 7 does. It is not the input for the zero-findings end-to-end proof (`contract emit`, `db sign`, `db verify`), because the slice spec makes eight constructs in this schema hard errors for the interpreter:
+
+- `view UserSummary` (`PRISMA7_VIEW_UNSUPPORTED`)
+- `Post.search Unsupported("tsvector")` (`PRISMA7_UNSUPPORTED_TYPE`)
+- `@db.Citext`, `@db.Bit(8)`, `@db.VarBit(8)`, `@db.Xml`, `@db.Oid`, `@db.Money` on `NativeTypes` (`PRISMA7_NATIVE_TYPE_UNSUPPORTED`)
+
+Use `../supported/` for the end-to-end proof. It is this schema with those eight constructs removed and nothing else changed.

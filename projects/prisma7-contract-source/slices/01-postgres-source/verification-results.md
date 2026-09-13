@@ -28,6 +28,8 @@ ALTER TABLE "_PostToTag" ADD CONSTRAINT "_PostToTag_A_fkey" FOREIGN KEY ("A") RE
 ALTER TABLE "_PostToTag" ADD CONSTRAINT "_PostToTag_B_fkey" FOREIGN KEY ("B") REFERENCES "Tag"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ```
 
+The primary key constraint is named `"_PostToTag_AB_pkey"` (quoted above): the junction table name, then `_AB_pkey`. The slice spec's Relations rule says to leave key names to Prisma 8, and that stays correct for verification: `db verify` compares primary keys by column tuple only and ignores the name (`packages/2-sql/1-core/schema-ir/src/ir/primary-key.ts` documents `name` as a database-assigned label that verification does not compare). The name matters only for what the converter prints for cutover, when Prisma 8 takes over the schema and must not rename the constraint.
+
 The named relation `@relation("Favorites")` between `User` and `Post` produces `"_Favorites"` with `"_Favorites_AB_pkey"`, `"_Favorites_B_index"`, `"A"` referencing `"Post"("id")` and `"B"` referencing `"User"("id")` (the models in alphabetical order, not declaration order). The self-referential `@relation("Follows")` produces `"_Follows"` with both columns referencing `"User"("id")`.
 
 Consequence for the rule table: a database built by Prisma 5 or earlier and never migrated on Prisma 6+ still has `_AB_unique` and no primary key, so `db verify` reports a missing primary key. The interpreter targets the Prisma 6+ shape and the docs must say to migrate on Prisma 7 first.
