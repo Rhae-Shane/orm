@@ -52,9 +52,9 @@ Plain scalars map to Prisma 7's Postgres storage: `String` text, `Boolean` bool,
 | `now()` | Column default (verification item 2). |
 | literal, list literal, enum member | Column default. |
 | `dbgenerated("expr")` | Raw expression column default. |
-| `uuid()`, `uuid(4)`, `uuid(7)`, `ulid()`, `nanoid(n)` | ORM-side execution generator, no column default. Allowed on optional fields (verification item 3). |
+| `uuid()`, `uuid(4)`, `uuid(7)`, `ulid()`, `nanoid(n)` | ORM-side execution generator, no column default. On optional fields: same open decision as `@updatedAt`. |
 | `cuid()`, `cuid(2)` | ORM-side `cuid2` generator. |
-| `@updatedAt` | Execution generator on create and update, column `timestamp(3)` or the `@db.*` override, no storage default. Allowed on optional fields and alongside `@default(now())` (verification item 3). |
+| `@updatedAt` | Execution generator on create and update, column codec `pg/timestamp-temporal@1` with `typeParams.precision = 3` (item 2 showed the precision must be a type parameter), or the `@db.*` override, no storage default. **Open decision** (see `design-notes.md`): whether an optional field with `@updatedAt`, and `@default(now()) @updatedAt`, are hard errors or need a Prisma 8 PSL relaxation so the converter can print them. Dispatch 5 waits on this row. |
 
 ### Keys, uniques, indexes
 
