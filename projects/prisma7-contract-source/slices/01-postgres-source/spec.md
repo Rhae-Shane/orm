@@ -58,7 +58,7 @@ Plain scalars map to Prisma 7's Postgres storage: `String` text, `Boolean` bool,
 
 ### Keys, uniques, indexes
 
-`@id`, `@@id`, `@unique`, `@@unique`, `@@index` map directly. Prisma 7 creates `@unique` and `@@unique` as unique **indexes** named `{table}_{cols}_key`, not unique constraints (dispatch 6 saw `unique:*` findings when they were lowered as constraints), so they lower to unique indexes with those names. Plain index names are the `map` argument if given, else `{table}_{col1}_{col2}_idx`. Index `type:` maps to Prisma 8's index type. Sort order and length arguments map where Prisma 8 has them; otherwise `PRISMA7_INDEX_ARGUMENT_UNSUPPORTED`.
+`@id`, `@@id`, `@unique`, `@@unique`, `@@index` map directly. Prisma 7 creates `@unique` and `@@unique` as unique **indexes** named `{table}_{cols}_key`, not unique constraints (dispatch 6 saw `unique:*` findings when they were lowered as constraints), so they lower to unique indexes with those names. Plain index names are the `map` argument if given, else `{table}_{col1}_{col2}_idx`. Both patterns use the mapped column names when a field has `@map` (derived from Prisma 7's naming rule; proven by the `supported` fixture once it carries an index over a mapped column, dispatch 5 round 2). Index `type:` maps to Prisma 8's index type. Sort order and length arguments map where Prisma 8 has them; otherwise `PRISMA7_INDEX_ARGUMENT_UNSUPPORTED`.
 
 ### Relations
 

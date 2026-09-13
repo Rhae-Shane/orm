@@ -104,6 +104,7 @@ Recorded so they are not lost; each becomes its own project when scheduled.
 - A `pg/opaque` codec carrying the native type name, which also repairs `contract infer` emitting `Unsupported(...)` that nothing reads back.
 - A cuid v1 generator, if mapping `cuid()` to cuid2 turns out to matter.
 - Referential-action emulation on Mongo.
+- `Bytes` and `DateTime` literal defaults are carried as the raw SQL literal Prisma 7 writes (`'\x68656c6c6f'`, `'2024-01-01 00:00:00 +00:00'`), the raw-expression form the schema IR already models, because their codec JSON forms are not what introspection reads back. Verification is exact; the cost is that the converter (slice 3) prints them as `dbgenerated("...")` rather than `@default("...")`. Recorded by dispatch 5's review.
 - Cross-schema enum references: Prisma 7 lets a table in one `@@schema` use an enum declared in another; the SQL contract resolves enum references only within the column's own namespace (`psl-field-resolution.ts:171`), so the Prisma 7 source rejects it with `PRISMA7_ENUM_NAMESPACE_MISMATCH`.
 - Not deferred, assigned to slice 2: the Mongo PSL interpreter silently ignores unknown top-level blocks (`view` included); slice 2 adds the diagnostic.
 
