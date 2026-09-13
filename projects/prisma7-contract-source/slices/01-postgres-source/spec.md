@@ -34,7 +34,7 @@ prisma db sign         # verifies against the Prisma 7 database, records the mar
 | `enum` | Postgres native enum type. Type name is the enum's `@@map` or its name verbatim. Members in declared order; each member's storage value is its `@map` or its name. Fields typed by the enum use the native enum codec. |
 | `view` | `PRISMA7_VIEW_UNSUPPORTED`. |
 | `@@schema("s")` | The model's namespace is `s`. Without multiSchema, every model is in `public`. |
-| `@@ignore` | Model omitted from the contract. Relation fields on other models that point at it are omitted too. |
+| `@@ignore` | Model omitted from the contract. Relation fields on other models that point at it are omitted too. Prisma 7 still creates the table, its columns, and its foreign keys (verified in `reference/migration.sql`), so this relies on lenient `db verify` tolerating extra schema; verification item 7 pins that. |
 
 ### Naming
 
@@ -42,7 +42,7 @@ Table name is `@@map` or the model name verbatim. Column name is `@map` or the f
 
 ### Field types
 
-Plain scalars map to Prisma 7's Postgres storage: `String` text, `Boolean` bool, `Int` int4, `BigInt` int8, `Float` float8, `Decimal` numeric(65,30), `DateTime` timestamp(3), `Json` jsonb, `Bytes` bytea. `@db.X(args)` overrides with the Prisma 7 native type table (verification item 6; a test pins every row). Lists are array types. `Unsupported("...")` is `PRISMA7_UNSUPPORTED_TYPE`. Native types with no Prisma 8 codec (`Money`, `Bit`, `VarBit`, `Xml`, `Oid`, `Citext`, and any other unmapped type) are `PRISMA7_NATIVE_TYPE_UNSUPPORTED`.
+Plain scalars map to Prisma 7's Postgres storage: `String` text, `Boolean` bool, `Int` int4, `BigInt` int8, `Float` float8, `Decimal` numeric(65,30), `DateTime` timestamp(3), `Json` jsonb, `Bytes` bytea. `@db.X(args)` overrides with the Prisma 7 native type table (verification item 6; a test pins every row). Lists are array types and their columns are nullable, because Prisma 7 emits `Type[]` columns without `NOT NULL` (see `reference/migration.sql`). `Unsupported("...")` is `PRISMA7_UNSUPPORTED_TYPE`. Native types with no Prisma 8 codec (`Money`, `Bit`, `VarBit`, `Xml`, `Oid`, `Citext`, and any other unmapped type) are `PRISMA7_NATIVE_TYPE_UNSUPPORTED`.
 
 ### Defaults
 
@@ -64,7 +64,7 @@ Plain scalars map to Prisma 7's Postgres storage: `String` text, `Boolean` bool,
 
 Explicit relations map directly, keeping relation names. `onDelete` defaults to `Restrict` for required and `SetNull` for optional relations; `onUpdate` defaults to `Cascade`. Both are always set explicitly.
 
-Implicit many-to-many (a list field on both sides, no junction model) becomes the junction model Prisma 7 creates: table `_AToB` with `A` and `B` the model names in alphabetical order, or `_RelationName` when the relation is named; columns `A` and `B` typed as the two ids; primary key `(A, B)`; index `_AToB_B_index` on `B`; two foreign keys with `Cascade` on both actions; two back-relation list fields. The junction model's key is `AToB`. Verification item 4 pins the Prisma 7 version that introduced the primary key; the docs say older databases must migrate first.
+Implicit many-to-many (a list field on both sides, no junction model) becomes the junction model Prisma 7 creates: table `_AToB` with `A` and `B` the model names in alphabetical order, or `_RelationName` when the relation is named; columns `A` and `B` typed as the two ids; primary key `(A, B)`; index `_AToB_B_index` on `B`; two foreign keys with `Cascade` on both actions; two back-relation list fields. The junction model's key is `AToB`. Prisma 6.0.0 introduced the primary key (item 4, resolved); databases last migrated on Prisma 5 or earlier still carry `_AB_unique` and must be migrated on Prisma 7 first. The docs say so.
 
 `@ignore` fields are omitted. Relation fields whose scalar was ignored are omitted too.
 
@@ -77,7 +77,7 @@ Implicit many-to-many (a list field on both sides, no junction model) becomes th
 | Case | Disposition |
 |---|---|
 | A model `@@map`ped to the same table as another | `PRISMA7_TABLE_COLLISION`, both spans. |
-| Enum inside a `@@schema` namespace | Verify whether native enums are namespaced; if not, `PRISMA7_ENUM_NAMESPACE_UNSUPPORTED`. |
+| Enum inside a `@@schema` namespace | Prisma 7 creates the type in that schema (`CREATE TYPE "audit"."AuditAction"`); the native enum entity is placed in the same namespace. |
 | `@default(ENUM_MEMBER)` on a native enum field | Column default with the member's storage value. Test pins it. |
 | `@db.Timestamptz(n)` with `@updatedAt` | Generators as above, column `timestamptz(n)`. |
 | Self-referential implicit many-to-many | Junction `_RelationName` is required by Prisma 7; use it. |
@@ -89,7 +89,7 @@ Implicit many-to-many (a list field on both sides, no junction model) becomes th
 Inherits `drive/calibration/dod.md`. Slice-specific:
 
 - [ ] Every rule row and every error code has a fixture under the package's `test/fixtures/` that runs through `parse()` and the interpreter.
-- [ ] Verification items 1, 2, 3, 4, and 6 each have a test committed before the dependent rule.
+- [ ] Verification items 1, 2, 3, 4, 6, and 7 each have a test or a quoted fixture committed before the dependent rule.
 - [ ] End-to-end proof: a fixture `schema.prisma` and the `migration.sql` Prisma 7 generated for it (README says how), applied with `pg` against `withDevDatabase`, then `contract emit`, `db sign`, `db verify` with zero findings. Covers: every scalar, `@db.*` overrides, native enum, implicit many-to-many, `@updatedAt`, multiSchema.
 - [ ] `architecture.config.json` lists the new package; `pnpm lint:deps` clean.
 - [ ] No dependency on `prisma`, `@prisma/prisma7`, `@prisma/get-dmmf`, `@prisma/prisma-schema-wasm`.

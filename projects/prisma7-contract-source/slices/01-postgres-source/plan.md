@@ -11,7 +11,7 @@ Calibration threaded into every brief: `drive/calibration/failure-modes.md` F3 (
 
 - **Outcome:** A committed fixture directory holds a Prisma 7 schema exercising every scalar, every Postgres `@db.*` native type Prisma 7 documents, native enums with `@map`s, `@updatedAt`, every default function, explicit relations with and without actions, an implicit many-to-many, and `multiSchema`; beside it the exact SQL Prisma 7.10.0 generates for that schema, and a README recording the command that produced it.
 - **Builds on:** nothing.
-- **Hands to:** the Prisma 7 native type table as data (verification item 6), the implicit junction shape at 7.10.0 (verification item 4), and the reference SQL later dispatches apply to PGlite.
+- **Hands to:** the Prisma 7 native type table as data (verification item 6), the implicit junction shape at 7.10.0 (verification item 4), the `reference/` SQL as ground truth, and the `supported/` SQL that dispatches 2 and 8 apply to PGlite.
 - **Focus:** generate with `pnpm dlx prisma@7.10.0 migrate diff --from-empty --to-schema-datamodel <schema> --script` from a scratch directory under `wip/` (outside the workspace globs, so the lockfile is untouched). Commit only the schema, the SQL, and the README under `test/integration/test/fixtures/prisma7-source/`. Also record, from the Prisma changelog, the version that switched implicit junctions from a unique index to a primary key.
 - **Gates:** the SQL file exists and contains a `CREATE TABLE "_"` junction; `rg -n "prisma@|@prisma/" pnpm-lock.yaml` shows no new Prisma 7 entries; README present.
 
@@ -63,7 +63,7 @@ Calibration threaded into every brief: `drive/calibration/failure-modes.md` F3 (
 
 ### Dispatch 8: end-to-end proof
 
-- **Outcome:** An integration test applies dispatch 1's SQL to `withDevDatabase`, configures a fixture app with `prisma7Schema`, and runs `contract emit`, `db sign`, and `db verify` through `runOnEngine` with zero findings.
+- **Outcome:** An integration test applies the `supported/` fixture's SQL (dispatch 1, round 2: the reference schema minus every hard-error construct) to `withDevDatabase`, configures a fixture app with `prisma7Schema`, and runs `contract emit`, `db sign`, and `db verify` through `runOnEngine` with zero findings.
 - **Builds on:** dispatch 7.
 - **Hands to:** the slice's definition-of-done evidence.
 - **Focus:** `test/integration/test/cli-journeys/` following `infer-roundtrip-fidelity.e2e.test.ts`; `journey-test-helpers.ts` gets `runContract...` helpers only if missing.

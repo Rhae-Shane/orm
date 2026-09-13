@@ -89,9 +89,10 @@ Each is resolved by a test inside the slice that depends on it, before the depen
 1. `autoincrement()` lowering versus Prisma 7's sequence default (slice 1).
 2. `now()` default equality against Prisma 7's `CURRENT_TIMESTAMP` (slice 1).
 3. Contract validator acceptance of a column default together with execution generators, and of generators on nullable columns (slice 1).
-4. The Prisma 7 version at which the implicit junction gained a primary key (slice 1).
+4. The version at which the implicit junction gained a primary key (slice 1). Resolved by dispatch 1: Prisma 6.0.0; 7.10.0 emits `_AToB_AB_pkey`.
 5. Whether Mongo verify compares index names (slice 2).
-6. The exact Prisma 7 Postgres native type table (slice 1).
+6. The exact Prisma 7 Postgres native type table (slice 1). Resolved by dispatch 1: `test/integration/test/fixtures/prisma7-source/reference/migration.sql`.
+7. Whether lenient `db verify` tolerates an extra table, an extra column, and an extra foreign key, which `@ignore` and `@@ignore` rely on because Prisma 7 still creates that schema (slice 1).
 
 ## Deferred gaps
 

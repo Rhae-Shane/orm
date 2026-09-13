@@ -23,7 +23,7 @@ A contract source is a `ContractConfig` whose `source.load` returns a family con
 
 - `cuid()` maps to the cuid2 generator. Prisma 7's `cuid()` is cuid v1, which Prisma 8 does not ship; the column type is identical and ids are opaque.
 - `@updatedAt` becomes on-create and on-update generators with column `timestamp(3)`, allowed on optional fields and alongside `@default(now())`, because the contract permits both and only the PSL spelling forbids them.
-- Implicit many-to-many relations become the junction model Prisma 7 creates, with a `(A, B)` primary key. Older databases that have the unique-index form must migrate first.
+- Implicit many-to-many relations become the junction model Prisma 7 creates, with a `(A, B)` primary key. Databases last migrated on Prisma 5 or earlier have a unique index instead (Prisma 6.0.0 made the change) and must migrate on Prisma 7 first.
 - Constraint names are set only where `db verify` compares them: indexes and check constraints.
 - `defineConfig` accepts a `ContractConfig` for `contract`, and `prisma7Schema(path)` returns one. Detection by file content was rejected as magic.
 
