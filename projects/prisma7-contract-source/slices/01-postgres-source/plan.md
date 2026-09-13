@@ -53,12 +53,12 @@ _Order change 2026-09-13: dispatch 6 runs before dispatch 5, which is blocked on
 - **Outcome:** Explicit relations carry Prisma 7's effective actions; implicit many-to-many relations produce the junction model from dispatch 1's SQL; back-relations resolve through the existing pairing code, decoupled from `FieldSymbol`.
 - **Builds on:** dispatch 4.
 - **Hands to:** the relation rows of the rule table; dispatch 5 completes it.
-- **Focus:** `packages/2-sql/2-authoring/contract-psl/src/psl-relation-resolution.ts` (replace `FieldSymbol` on `ModelBackrelationCandidate` with a structural type; the PSL interpreter's tests must not change), then the Prisma 7 relation rules.
+- **Focus:** the Prisma 7 relation rules on top of `contract-psl`'s exported pairing functions. _Amended after the dispatch: the planned `FieldSymbol` decoupling was dropped; every candidate the Prisma 7 source builds is a real parsed symbol, and the alternative needed a parser signature change. Keys (`@id`, `@@id`, `@unique`, `@@unique`) were read in this dispatch because one-to-one detection and junction column types need them._
 - **Gates:** as dispatch 4 plus `pnpm --filter @internal/sql-contract-psl test`.
 
-### Dispatch 7: error catalogue, edge cases, multi-file
+### Dispatch 7: error catalogue, edge cases, multi-file, and the enum verify fix
 
-- **Outcome:** Every code in the spec's error catalogue and every row of its edge-case table has a fixture; a directory input reads every `.prisma` file; the provider check runs once over the merged document.
+- **Outcome:** Every code in the spec's error catalogue and every row of its edge-case table has a fixture; a directory input reads every `.prisma` file; the provider check runs once over the merged document; `db verify` normalises schema-qualified native enum types (Prisma 8 defect found by dispatch 6, fixed here with a regression test).
 - **Builds on:** dispatch 6.
 - **Hands to:** the fixture corpus slice 3 round-trips.
 - **Gates:** as dispatch 4.

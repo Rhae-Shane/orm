@@ -58,7 +58,7 @@ Plain scalars map to Prisma 7's Postgres storage: `String` text, `Boolean` bool,
 
 ### Keys, uniques, indexes
 
-`@id`, `@@id`, `@unique`, `@@unique`, `@@index` map directly. Index names are Prisma 7's effective names: the `map` argument if given, else `{table}_{col1}_{col2}_idx` for indexes and `{table}_{cols}_key` for unique indexes. Index `type:` maps to Prisma 8's index type. Sort order and length arguments map where Prisma 8 has them; otherwise `PRISMA7_INDEX_ARGUMENT_UNSUPPORTED`.
+`@id`, `@@id`, `@unique`, `@@unique`, `@@index` map directly. Prisma 7 creates `@unique` and `@@unique` as unique **indexes** named `{table}_{cols}_key`, not unique constraints (dispatch 6 saw `unique:*` findings when they were lowered as constraints), so they lower to unique indexes with those names. Plain index names are the `map` argument if given, else `{table}_{col1}_{col2}_idx`. Index `type:` maps to Prisma 8's index type. Sort order and length arguments map where Prisma 8 has them; otherwise `PRISMA7_INDEX_ARGUMENT_UNSUPPORTED`.
 
 ### Relations
 
@@ -70,7 +70,7 @@ Implicit many-to-many (a list field on both sides, no junction model) becomes th
 
 ## Error catalogue
 
-`PRISMA7_PROVIDER_MISMATCH`, `PRISMA7_RELATION_MODE_UNSUPPORTED`, `PRISMA7_VIEW_UNSUPPORTED`, `PRISMA7_UNSUPPORTED_TYPE`, `PRISMA7_NATIVE_TYPE_UNSUPPORTED`, `PRISMA7_INDEX_ARGUMENT_UNSUPPORTED`, `PRISMA7_UNKNOWN_ATTRIBUTE`, `PRISMA7_UNKNOWN_DEFAULT`, `PRISMA7_RELATION_UNRESOLVED`, `PRISMA7_ENUM_NAMESPACE_MISMATCH` (added in dispatch 4: a column may only use an enum type from its own schema, which is what the IR can express). Each has a fixture. The implementer may add codes; every added code needs a fixture and a line here.
+`PRISMA7_PROVIDER_MISMATCH`, `PRISMA7_RELATION_MODE_UNSUPPORTED`, `PRISMA7_VIEW_UNSUPPORTED`, `PRISMA7_UNSUPPORTED_TYPE`, `PRISMA7_NATIVE_TYPE_UNSUPPORTED`, `PRISMA7_INDEX_ARGUMENT_UNSUPPORTED`, `PRISMA7_UNKNOWN_ATTRIBUTE`, `PRISMA7_UNKNOWN_DEFAULT`, `PRISMA7_RELATION_UNRESOLVED`, `PRISMA7_JUNCTION_ID_UNSUPPORTED` (added in dispatch 6: an implicit many-to-many whose side has a composite id), `PRISMA7_ENUM_NAMESPACE_MISMATCH` (added in dispatch 4: a column may only use an enum type from its own schema, which is what the IR can express). Each has a fixture. The implementer may add codes; every added code needs a fixture and a line here.
 
 Added in dispatch 6: `PRISMA7_JUNCTION_ID_UNSUPPORTED` (an implicit many-to-many relation on a model without a single-field `@id`, which Prisma 7 forbids too; fixture `junction-composite-id`). `PRISMA7_SCHEMA_READ_FAILED` (dispatch 4) reports an unreadable input path.
 
@@ -82,7 +82,7 @@ Added in dispatch 6: `PRISMA7_JUNCTION_ID_UNSUPPORTED` (an implicit many-to-many
 | Enum inside a `@@schema` namespace | Prisma 7 creates the type in that schema (`CREATE TYPE "audit"."AuditAction"`); the native enum entity is placed in the same namespace. |
 | `@default(ENUM_MEMBER)` on a native enum field | Column default with the member's storage value. Test pins it. |
 | `@db.Timestamptz(n)` with `@updatedAt` | Generators as above, column `timestamptz(n)`. |
-| Self-referential implicit many-to-many | Junction `_RelationName` is required by Prisma 7; use it. |
+| Self-referential implicit many-to-many | Junction `_RelationName` is required by Prisma 7; use it. Column `A` is taken by the list field whose name sorts first (documented assumption; verify does not compare it, the ORM's side naming does). |
 | Multi-file directory with a `datasource` in one file | The provider check runs once across the merged document. |
 | `previewFeatures` other than `multiSchema` | Ignored. |
 
