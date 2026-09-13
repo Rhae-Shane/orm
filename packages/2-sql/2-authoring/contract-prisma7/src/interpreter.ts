@@ -49,7 +49,11 @@ import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { prisma7Diagnostic } from './diagnostics';
-import { prisma7PostgresNativeTypeMapping, prisma7ScalarMapping } from './native-types';
+import {
+  type Prisma7TypeMap,
+  prisma7NativeTypeMapping,
+  prisma7ScalarMapping,
+} from './native-types';
 import {
   fieldListArgument,
   lowerRelations,
@@ -73,6 +77,7 @@ export interface InterpretPrisma7DocumentsInput {
     readonly entityKind: string;
     readonly typeConstructor: readonly string[];
   };
+  readonly typeMap: Prisma7TypeMap;
   readonly authoringContributions: AssembledAuthoringContributions;
   readonly codecLookup: CodecLookup;
   readonly composedExtensions: readonly string[];
@@ -689,7 +694,7 @@ function readField(args: {
       span: field.span,
     };
   } else {
-    const scalar = prisma7ScalarMapping(field.typeName);
+    const scalar = prisma7ScalarMapping(input.typeMap, field.typeName);
     if (scalar === undefined) {
       diagnostics.push(
         prisma7Diagnostic(
@@ -704,7 +709,8 @@ function readField(args: {
     let mapping = scalar;
     let span = field.span;
     if (nativeType !== undefined) {
-      const native = prisma7PostgresNativeTypeMapping(
+      const native = prisma7NativeTypeMapping(
+        input.typeMap,
         nativeType.name,
         nativeType.attribute.args.map((arg) => arg.value),
       );

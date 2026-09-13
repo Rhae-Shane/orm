@@ -5,6 +5,7 @@ import sql from '@internal/family-sql/control';
 import { createControlStack } from '@internal/framework-components/control';
 import postgres from '@internal/target-postgres/control';
 import postgresPackRef from '@internal/target-postgres/pack';
+import { prisma7PostgresTypeMap } from '@internal/target-postgres/prisma7-type-map';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import type { Prisma7SchemaOptions } from '../src/provider';
 
@@ -33,4 +34,5 @@ export const postgresPrisma7Options: Prisma7SchemaOptions = {
   target: postgresPackRef,
   createNamespace: postgresCreateNamespace,
   nativeEnum: { entityKind: 'native_enum', typeConstructor: ['pg', 'enum'] },
+  typeMap: prisma7PostgresTypeMap,
 };

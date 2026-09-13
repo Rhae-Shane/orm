@@ -12,6 +12,7 @@ import { notOk, ok } from '@internal/utils/result';
 import { basename, extname, join } from 'pathe';
 import { prisma7Diagnostic } from './diagnostics';
 import { interpretPrisma7Documents, type Prisma7Document } from './interpreter';
+import type { Prisma7TypeMap } from './native-types';
 
 export interface Prisma7SchemaOptions {
   readonly output?: string;
@@ -27,6 +28,8 @@ export interface Prisma7SchemaOptions {
     readonly entityKind: string;
     readonly typeConstructor: readonly string[];
   };
+  /** The target's table of what Prisma 7 creates for each scalar and `@db.*` type. */
+  readonly typeMap: Prisma7TypeMap;
 }
 
 function defaultOutputFromSchemaPath(schemaPath: string): string {
@@ -116,6 +119,7 @@ export function prisma7Schema(schemaPath: string, options: Prisma7SchemaOptions)
           target: options.target,
           createNamespace: options.createNamespace,
           nativeEnum: options.nativeEnum,
+          typeMap: options.typeMap,
           authoringContributions: context.authoringContributions,
           codecLookup: context.codecLookup,
           composedExtensions: context.composedExtensions,

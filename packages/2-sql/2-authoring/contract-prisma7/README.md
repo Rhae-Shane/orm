@@ -6,7 +6,7 @@ Reads a Prisma 7 `schema.prisma` as a Prisma 8 contract source for the SQL famil
 
 - `prisma7Schema(path, options)` returns a `ContractConfig` (format `prisma7`) whose `source.load` reads the input, parses every `.prisma` file with `@internal/psl-parser`, and runs the Prisma 7 interpreter. A file input reads that file; a directory input reads every `.prisma` file directly under it, sorted by name (not recursive).
 - The interpreter turns the Prisma 7 dialect into a validated SQL contract using the same lowering helpers as `@internal/sql-contract-psl`: models, columns, native types, namespaces (`@@schema`), and native enums. Every construct it does not support is a diagnostic with a span; nothing is changed silently.
-- The Prisma 7 to Postgres native type table (`src/native-types.ts`) is derived from what `prisma@7.10.0` creates, recorded in `projects/prisma7-contract-source/slices/01-postgres-source/verification-results.md` (item 6).
+- `src/native-types.ts` holds only the mapping mechanism. The table of what Prisma 7 creates for each scalar and `@db.*` type is target knowledge: the Postgres one is `prisma7PostgresTypeMap` in `@internal/target-postgres/prisma7-type-map`, derived from what `prisma@7.10.0` creates (`projects/prisma7-contract-source/slices/01-postgres-source/verification-results.md`, item 6), and the facade passes it in as `typeMap`.
 
 ## Usage
 
@@ -18,7 +18,7 @@ export default defineConfig({
 });
 ```
 
-The package itself is target-neutral: the Postgres facade supplies the target pack, the namespace factory, and the names of the native enum entity kind and type constructor.
+The package itself is target-neutral: the Postgres facade supplies the target pack, the namespace factory, the type map, and the names of the native enum entity kind and type constructor.
 
 ## Diagnostics
 

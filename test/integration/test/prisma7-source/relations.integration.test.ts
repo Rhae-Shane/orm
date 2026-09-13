@@ -16,6 +16,7 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import { prisma7Schema } from '@internal/sql-contract-prisma7/provider';
 import postgres from '@internal/target-postgres/control';
 import postgresPackRef from '@internal/target-postgres/pack';
+import { prisma7PostgresTypeMap } from '@internal/target-postgres/prisma7-type-map';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { timeouts, withClient, withDevDatabase } from '@repo/test-utils';
@@ -68,6 +69,7 @@ describe('Prisma 7 relations against the database Prisma 7 built', () => {
           target: postgresPackRef,
           createNamespace: postgresCreateNamespace,
           nativeEnum: { entityKind: 'native_enum', typeConstructor: ['pg', 'enum'] },
+          typeMap: prisma7PostgresTypeMap,
         });
         const loaded = await config.source.load(sourceContext());
         expect(loaded.ok).toBe(true);

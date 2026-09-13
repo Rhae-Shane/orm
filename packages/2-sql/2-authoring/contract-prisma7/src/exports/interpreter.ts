@@ -4,3 +4,4 @@ export {
   interpretPrisma7Documents,
   type Prisma7Document,
 } from '../interpreter';
+export type { Prisma7TypeMap, Prisma7TypeMapping } from '../native-types';

@@ -21,10 +21,14 @@ function expectedPath(caseName: string, file: string): string {
 }
 
 function compareOrWrite(path: string, actual: unknown): void {
-  const rendered = `${JSON.stringify(actual, null, 2)}\n`;
-  if (update || !existsSync(path)) {
-    writeFileSync(path, rendered);
+  if (update) {
+    writeFileSync(path, `${JSON.stringify(actual, null, 2)}\n`);
     return;
+  }
+  if (!existsSync(path)) {
+    throw new Error(
+      `Missing expected file ${path}. Review the output, then run with UPDATE_PRISMA7_FIXTURES=1 to write it.`,
+    );
   }
   expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual(actual);
 }
@@ -36,7 +40,35 @@ const cases = readdirSync(fixturesDir, { withFileTypes: true })
 
 describe('Prisma 7 fixtures', () => {
   it('has a case per rule row', () => {
-    expect(cases.length).toBeGreaterThan(0);
+    expect(cases).toEqual([
+      'enum-namespace-mismatch',
+      'enum-native',
+      'explicit-relations',
+      'ignore',
+      'implicit-many-to-many',
+      'junction-composite-id',
+      'keys',
+      'multi-schema',
+      'naming',
+      'native-type-rejected-bit',
+      'native-type-rejected-citext',
+      'native-type-rejected-money',
+      'native-type-rejected-oid',
+      'native-type-rejected-varbit',
+      'native-type-rejected-xml',
+      'native-types-accepted',
+      'provider-mismatch',
+      'provider-missing',
+      'relation-ambiguous',
+      'relation-mode',
+      'relation-nullability',
+      'relation-unresolved',
+      'relations-ignored',
+      'scalars',
+      'unknown-attribute',
+      'unsupported-type',
+      'view',
+    ]);
   });
 
   for (const caseName of cases) {
