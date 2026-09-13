@@ -13,7 +13,10 @@ import {
 } from '@internal/framework-components/authoring';
 import type { CodecLookup } from '@internal/framework-components/codec';
 import type { TargetPackRef } from '@internal/framework-components/components';
-import type { AssembledAuthoringContributions } from '@internal/framework-components/control';
+import type {
+  AssembledAuthoringContributions,
+  ControlMutationDefaults,
+} from '@internal/framework-components/control';
 import type {
   BlockSymbol,
   FieldSymbol,
@@ -48,14 +51,15 @@ import {
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
+import { lowerPrisma7Default } from './defaults';
 import { prisma7Diagnostic } from './diagnostics';
+import { type IndexAttribute, indexNode, parseIndexAttribute } from './indexes';
 import {
   type Prisma7TypeMap,
   prisma7NativeTypeMapping,
   prisma7ScalarMapping,
 } from './native-types';
 import {
-  fieldListArgument,
   lowerRelations,
   parseRelationAttribute,
   type RelationField,
@@ -78,6 +82,8 @@ export interface InterpretPrisma7DocumentsInput {
     readonly typeConstructor: readonly string[];
   };
   readonly typeMap: Prisma7TypeMap;
+  readonly updatedAt: { readonly generatorId: string };
+  readonly controlMutationDefaults: ControlMutationDefaults;
   readonly authoringContributions: AssembledAuthoringContributions;
   readonly codecLookup: CodecLookup;
   readonly composedExtensions: readonly string[];
@@ -112,7 +118,8 @@ interface ModelDeclaration {
   readonly namespaceId: string;
   readonly tableName: string;
   readonly idFields: readonly string[];
-  readonly uniqueFieldSets: readonly (readonly string[])[];
+  readonly uniqueIndexes: readonly IndexAttribute[];
+  readonly indexes: readonly IndexAttribute[];
 }
 
 interface ModelBuild {
@@ -120,7 +127,7 @@ interface ModelBuild {
   readonly columns: Map<string, FieldNode>;
   readonly ignoredFields: Set<string>;
   idFields: readonly string[];
-  readonly uniqueFieldSets: (readonly string[])[];
+  readonly uniqueIndexes: IndexAttribute[];
   readonly relationFields: RelationField[];
 }
 
@@ -246,7 +253,7 @@ export function interpretPrisma7Documents(
       columns: new Map(),
       ignoredFields: new Set(),
       idFields: declaration.idFields,
-      uniqueFieldSets: [...declaration.uniqueFieldSets],
+      uniqueIndexes: [...declaration.uniqueIndexes],
       relationFields: [],
     };
     for (const field of Object.values(declaration.symbol.fields)) {
@@ -276,7 +283,9 @@ export function interpretPrisma7Documents(
       columns: build.columns,
       ignoredFields: build.ignoredFields,
       idFields: build.idFields,
-      uniqueFieldSets: build.uniqueFieldSets,
+      uniqueFieldSets: build.uniqueIndexes.flatMap((index) =>
+        index.fields === undefined ? [] : [index.fields],
+      ),
       relationFields: build.relationFields,
     });
   }
@@ -287,10 +296,25 @@ export function interpretPrisma7Documents(
     const model = relationModels.get(modelName);
     if (model === undefined) continue;
     const id = keyColumns(model, model.idFields);
-    const uniques = model.uniqueFieldSets
-      .map((fieldNames) => keyColumns(model, fieldNames))
-      .filter((columns): columns is readonly string[] => columns !== undefined)
-      .map((columns) => ({ columns }));
+    const indexes = [
+      ...build.uniqueIndexes.map((attribute) => ({ attribute, unique: true })),
+      ...build.declaration.indexes.map((attribute) => ({ attribute, unique: false })),
+    ].flatMap(({ attribute, unique }) => {
+      const columns =
+        attribute.fields === undefined ? undefined : keyColumns(model, attribute.fields);
+      if (columns === undefined) {
+        diagnostics.push(
+          prisma7Diagnostic(
+            'PRISMA7_INDEX_ARGUMENT_UNSUPPORTED',
+            `Model "${modelName}": an index names a field that is not a scalar column of the model.`,
+            model.sourceId,
+            attribute.span,
+          ),
+        );
+        return [];
+      }
+      return [indexNode(model.tableName, columns, attribute, unique)];
+    });
     const foreignKeys = lowered.foreignKeys.get(modelName);
     const relations = lowered.relations.get(modelName);
     modelNodes.push({
@@ -299,7 +323,7 @@ export function interpretPrisma7Documents(
       namespaceId: model.namespaceId,
       fields: [...build.columns.values()],
       ...(id !== undefined && id.length > 0 ? { id: { columns: id } } : {}),
-      ...(uniques.length > 0 ? { uniques } : {}),
+      ...(indexes.length > 0 ? { indexes } : {}),
       ...(foreignKeys !== undefined ? { foreignKeys } : {}),
       ...(relations !== undefined ? { relations } : {}),
     });
@@ -425,25 +449,6 @@ function keyColumns(
   return columns;
 }
 
-function requireFieldList(
-  attribute: ResolvedAttribute,
-  owner: string,
-  sourceId: string,
-  diagnostics: ContractSourceDiagnostic[],
-): readonly string[] | undefined {
-  const fields = fieldListArgument(attribute);
-  if (fields === undefined || fields.length === 0) {
-    diagnostics.push({
-      code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
-      message: `"${owner}": attribute "@@${attribute.name}" expects a non-empty list of field names.`,
-      sourceId,
-      span: attribute.span,
-    });
-    return undefined;
-  }
-  return fields;
-}
-
 function readModelDeclaration(
   symbol: ModelSymbol,
   sourceId: string,
@@ -454,7 +459,8 @@ function readModelDeclaration(
   let tableName = symbol.name;
   let namespaceId = defaultNamespaceId;
   let idFields: readonly string[] = [];
-  const uniqueFieldSets: (readonly string[])[] = [];
+  const uniqueIndexes: IndexAttribute[] = [];
+  const indexes: IndexAttribute[] = [];
   for (const attribute of symbol.attributes) {
     switch (attribute.name) {
       case 'map':
@@ -465,12 +471,19 @@ function readModelDeclaration(
         namespaceId =
           requireStringArgument(attribute, symbol.name, sourceId, diagnostics) ?? namespaceId;
         break;
-      case 'id':
-        idFields = requireFieldList(attribute, symbol.name, sourceId, diagnostics) ?? idFields;
+      case 'id': {
+        const parsed = parseIndexAttribute(attribute, symbol.name, sourceId, diagnostics);
+        if (parsed?.fields !== undefined) idFields = parsed.fields;
         break;
+      }
       case 'unique': {
-        const fields = requireFieldList(attribute, symbol.name, sourceId, diagnostics);
-        if (fields !== undefined) uniqueFieldSets.push(fields);
+        const parsed = parseIndexAttribute(attribute, symbol.name, sourceId, diagnostics);
+        if (parsed?.fields !== undefined) uniqueIndexes.push(parsed);
+        break;
+      }
+      case 'index': {
+        const parsed = parseIndexAttribute(attribute, symbol.name, sourceId, diagnostics);
+        if (parsed?.fields !== undefined) indexes.push(parsed);
         break;
       }
       default:
@@ -484,7 +497,7 @@ function readModelDeclaration(
         );
     }
   }
-  return { symbol, sourceId, namespaceId, tableName, idFields, uniqueFieldSets };
+  return { symbol, sourceId, namespaceId, tableName, idFields, uniqueIndexes, indexes };
 }
 
 function requireStringArgument(
@@ -657,15 +670,24 @@ function readField(args: {
   let columnName = field.name;
   let nativeType: { readonly name: string; readonly attribute: ResolvedAttribute } | undefined;
   let relation: ResolvedAttribute | undefined;
+  let defaultAttribute: ResolvedAttribute | undefined;
+  let updatedAt: ResolvedAttribute | undefined;
   for (const attribute of field.attributes) {
     if (attribute.name === 'map' && !isRelationField) {
       columnName = requireStringArgument(attribute, label, sourceId, diagnostics) ?? columnName;
     } else if (attribute.name.startsWith('db.') && !isRelationField) {
       nativeType = { name: attribute.name.slice('db.'.length), attribute };
     } else if (attribute.name === 'id' && !isRelationField) {
-      build.idFields = [field.name];
+      if (parseIndexAttribute(attribute, label, sourceId, diagnostics) !== undefined) {
+        build.idFields = [field.name];
+      }
     } else if (attribute.name === 'unique' && !isRelationField) {
-      build.uniqueFieldSets.push([field.name]);
+      const parsed = parseIndexAttribute(attribute, label, sourceId, diagnostics);
+      if (parsed !== undefined) build.uniqueIndexes.push({ ...parsed, fields: [field.name] });
+    } else if (attribute.name === 'default' && !isRelationField) {
+      defaultAttribute = attribute;
+    } else if (attribute.name === 'updatedAt' && !isRelationField) {
+      updatedAt = attribute;
     } else if (attribute.name === 'relation' && isRelationField) {
       relation = attribute;
     } else {
@@ -794,11 +816,65 @@ function readField(args: {
     }
     return;
   }
+  if (updatedAt !== undefined && defaultAttribute !== undefined) {
+    diagnostics.push(
+      prisma7Diagnostic(
+        'PRISMA7_UPDATED_AT_WITH_DEFAULT_UNSUPPORTED',
+        `${label} combines @updatedAt with @default. Prisma 8 cannot spell a column that is both generated on every write and has a storage default yet; drop the @default (the generator sets the value on create too).`,
+        sourceId,
+        defaultAttribute.span,
+      ),
+    );
+    return;
+  }
+  const lowered =
+    defaultAttribute === undefined
+      ? undefined
+      : lowerPrisma7Default({
+          attribute: defaultAttribute,
+          field,
+          modelName: model.symbol.name,
+          nativeType: resolved.descriptor.nativeType,
+          codecId: resolved.descriptor.codecId,
+          enumMembers:
+            enumDeclaration === undefined
+              ? undefined
+              : new Map(enumDeclaration.members.map((member) => [member.name, member.value])),
+          controlMutationDefaults: input.controlMutationDefaults,
+          sourceId,
+          diagnostics,
+        });
+  if (defaultAttribute !== undefined && lowered === undefined) return;
+  const updatedAtGenerator =
+    updatedAt === undefined
+      ? undefined
+      : { kind: 'generator' as const, id: input.updatedAt.generatorId };
+  const generator = updatedAtGenerator ?? lowered?.onCreate;
+  if (generator !== undefined && field.optional) {
+    diagnostics.push(
+      prisma7Diagnostic(
+        'PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED',
+        `${label} is optional but its value is generated by the ORM (${updatedAt !== undefined ? '@updatedAt' : `@default(${generator.id})`}). Prisma 8 cannot spell an optional generated field yet; drop the "?".`,
+        sourceId,
+        (updatedAt ?? defaultAttribute)?.span ?? field.span,
+      ),
+    );
+    return;
+  }
+  const executionDefaults =
+    updatedAtGenerator !== undefined
+      ? { onCreate: updatedAtGenerator, onUpdate: updatedAtGenerator }
+      : generator !== undefined
+        ? { onCreate: generator }
+        : undefined;
   build.columns.set(field.name, {
     fieldName: field.name,
     columnName,
     descriptor: resolved.descriptor,
     nullable: field.optional || field.list,
-    ...(field.list ? { many: true } : {}),
+    // Prisma 7 creates no CHECK constraint on list columns; Prisma 8 would derive one.
+    ...(field.list ? { many: true, noCheck: ['elementNotNull' as const] } : {}),
+    ...ifDefined('default', lowered?.storage),
+    ...ifDefined('executionDefaults', executionDefaults),
   });
 }

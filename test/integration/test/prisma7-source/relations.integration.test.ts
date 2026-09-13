@@ -2,10 +2,8 @@
  * The Prisma 7 contract source's relations verify against the database Prisma
  * 7.10.0 built (`fixtures/prisma7-source/supported/migration.sql`): every foreign
  * key, every implicit junction table with its columns, primary key, and
- * `_B_index`. The only findings left are the unique constraints dispatch 5
- * lowers as unique indexes (see `fixtures/prisma7-source/relations/README.md`),
- * and the serialized contract is asserted positively so the test cannot pass
- * on an empty contract.
+ * `_B_index`, with zero findings; the serialized contract is asserted
+ * positively so the test cannot pass on an empty contract.
  */
 import { readFileSync } from 'node:fs';
 import postgresAdapter from '@internal/adapter-postgres/control';
@@ -15,7 +13,7 @@ import sql from '@internal/family-sql/control';
 import { createControlStack } from '@internal/framework-components/control';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { prisma7Schema } from '@internal/sql-contract-prisma7/provider';
-import postgres from '@internal/target-postgres/control';
+import postgres, { INSTANT_NOW_GENERATOR_ID } from '@internal/target-postgres/control';
 import postgresPackRef from '@internal/target-postgres/pack';
 import { prisma7PostgresTypeMap } from '@internal/target-postgres/prisma7-type-map';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
@@ -119,6 +117,7 @@ describe('Prisma 7 relations against the database Prisma 7 built', () => {
           createNamespace: postgresCreateNamespace,
           nativeEnum: { entityKind: 'native_enum', typeConstructor: ['pg', 'enum'] },
           typeMap: prisma7PostgresTypeMap,
+          updatedAt: { generatorId: INSTANT_NOW_GENERATOR_ID },
         });
         const loaded = await config.source.load(sourceContext());
         expect(loaded.ok).toBe(true);
@@ -164,18 +163,9 @@ describe('Prisma 7 relations against the database Prisma 7 built', () => {
         });
 
         const result = await runSchemaVerify(connectionString, serialized);
-        // Every finding that remains is a unique constraint: Prisma 7 creates
-        // @unique as a unique index, which dispatch 5 will lower as
-        // {table}_{cols}_key. Nothing else, so every foreign key, foreign key
-        // column, junction table, primary key, and _B_index verified clean.
-        expect(result.schema.issues.map((issue) => issue.path).sort()).toEqual([
-          ['database', 'public', 'Post', 'unique:slug'],
-          ['database', 'public', 'Post', 'unique:title,category'],
-          ['database', 'public', 'Profile', 'unique:userId'],
-          ['database', 'public', 'Settings', 'unique:userId'],
-          ['database', 'public', 'Tag', 'unique:name'],
-          ['database', 'public', 'User', 'unique:email'],
-        ]);
+        // Every foreign key, foreign key column, junction table, primary key,
+        // index, and unique index verified clean; nothing else is declared.
+        expect(result.schema.issues.map((issue) => issue.path)).toEqual([]);
       });
     },
     timeouts.spinUpPpgDev,

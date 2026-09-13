@@ -264,7 +264,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "3988bb510f8ddae5cb979db0e1d2941e036a319d84d5ed2a68c45e74e27567ed",
+    "storageHash": "fefc8400804555be7dc85d039e93e7b634c9dcf085b2151ffc77a7ead77ebdbb",
     "namespaces": {
       "public": {
         "id": "public",
@@ -284,12 +284,14 @@
                   "nullable": false
                 }
               },
-              "uniques": [
+              "uniques": [],
+              "indexes": [
                 {
+                  "name": "User_email_key",
+                  "unique": true,
                   "columns": ["email"]
                 }
               ],
-              "indexes": [],
               "foreignKeys": [],
               "primaryKey": {
                 "columns": ["id"]
@@ -362,12 +364,14 @@
                   "nullable": false
                 }
               },
-              "uniques": [
+              "uniques": [],
+              "indexes": [
                 {
+                  "name": "Profile_userId_key",
+                  "unique": true,
                   "columns": ["userId"]
                 }
               ],
-              "indexes": [],
               "foreignKeys": [
                 {
                   "source": {
@@ -401,12 +405,14 @@
                   "nullable": true
                 }
               },
-              "uniques": [
+              "uniques": [],
+              "indexes": [
                 {
+                  "name": "Settings_userId_key",
+                  "unique": true,
                   "columns": ["userId"]
                 }
               ],
-              "indexes": [],
               "foreignKeys": [
                 {
                   "source": {

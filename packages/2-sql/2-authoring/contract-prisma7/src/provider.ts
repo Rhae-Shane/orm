@@ -30,6 +30,8 @@ export interface Prisma7SchemaOptions {
   };
   /** The target's table of what Prisma 7 creates for each scalar and `@db.*` type. */
   readonly typeMap: Prisma7TypeMap;
+  /** The execution generator `@updatedAt` lowers to on create and update (Postgres: the one `temporal.updatedAt()` uses). */
+  readonly updatedAt: { readonly generatorId: string };
 }
 
 function defaultOutputFromSchemaPath(schemaPath: string): string {
@@ -120,6 +122,8 @@ export function prisma7Schema(schemaPath: string, options: Prisma7SchemaOptions)
           createNamespace: options.createNamespace,
           nativeEnum: options.nativeEnum,
           typeMap: options.typeMap,
+          updatedAt: options.updatedAt,
+          controlMutationDefaults: context.controlMutationDefaults,
           authoringContributions: context.authoringContributions,
           codecLookup: context.codecLookup,
           composedExtensions: context.composedExtensions,

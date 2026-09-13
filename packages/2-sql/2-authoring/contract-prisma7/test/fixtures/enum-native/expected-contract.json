@@ -123,7 +123,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "1982425f4a68bd554c0bd9749ecb8e830510f9988f8817d574a1bf8441f70b34",
+    "storageHash": "04748a101ddf3b3bbb74bad44bca6250540a5e2a963c370f75ed862b7504a52f",
     "namespaces": {
       "audit": {
         "id": "audit",
@@ -217,6 +217,7 @@
                   "codecId": "pg/enum@1",
                   "nullable": true,
                   "many": true,
+                  "noCheck": ["elementNotNull"],
                   "typeParams": {
                     "typeName": "user_role"
                   },
@@ -230,14 +231,7 @@
               },
               "uniques": [],
               "indexes": [],
-              "foreignKeys": [],
-              "checks": [
-                {
-                  "name": "User_roleList_elem_not_null_45a90edd",
-                  "expression": "array_position(\"roleList\", NULL) IS NULL",
-                  "prefix": "User_roleList_elem_not_null"
-                }
-              ]
+              "foreignKeys": []
             }
           },
           "native_enum": {

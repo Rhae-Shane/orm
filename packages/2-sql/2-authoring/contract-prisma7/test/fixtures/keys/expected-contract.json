@@ -106,7 +106,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "e4c120457fb180868110b2ce1742db5420326aed787f7cf69ebe72a229f70c08",
+    "storageHash": "c5dbbd7ad232483113a86dc19f23bcea3de078c6d1f41c25b605ce294de4c982",
     "namespaces": {
       "public": {
         "id": "public",
@@ -126,12 +126,14 @@
                   "nullable": false
                 }
               },
-              "uniques": [
+              "uniques": [],
+              "indexes": [
                 {
+                  "name": "Composite_b_col_a_key",
+                  "unique": true,
                   "columns": ["b_col", "a"]
                 }
               ],
-              "indexes": [],
               "foreignKeys": [],
               "primaryKey": {
                 "columns": ["a", "b_col"]
@@ -160,15 +162,19 @@
                   "nullable": false
                 }
               },
-              "uniques": [
+              "uniques": [],
+              "indexes": [
                 {
+                  "name": "Single_x_y_key",
+                  "unique": true,
                   "columns": ["x", "y"]
                 },
                 {
+                  "name": "Single_code_key",
+                  "unique": true,
                   "columns": ["code"]
                 }
               ],
-              "indexes": [],
               "foreignKeys": [],
               "primaryKey": {
                 "columns": ["pk"]

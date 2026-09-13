@@ -34,8 +34,12 @@ Codes are prefixed `PRISMA7_`:
 | `PRISMA7_ENUM_NAMESPACE_MISMATCH` | A field uses an enum declared in a different `@@schema`; a Postgres enum type lives in one schema and Prisma 8 columns reference the enum of their own namespace. |
 | `PRISMA7_RELATION_UNRESOLVED` | A relation field that cannot be paired: no matching side, an ambiguous unnamed pair, a singular back-relation over a non-unique foreign key, a `fields`/`references` mismatch, or a relation whose optionality disagrees with its foreign key fields. |
 | `PRISMA7_JUNCTION_ID_UNSUPPORTED` | An implicit many-to-many relation on a model without a single-field `@id` (a composite id, for example). Prisma 7 forbids it too. |
-| `PRISMA7_UNKNOWN_ATTRIBUTE` | Any attribute the interpreter does not handle yet (`@default`, `@updatedAt`, `@@index`, ...). |
+| `PRISMA7_UNKNOWN_ATTRIBUTE` | An attribute Prisma 7 for Postgres does not have, or one this source does not read (`@@fulltext`, `@shardKey`, ...). |
 | `PRISMA7_TABLE_COLLISION` | Two models map to the same table in the same schema; reported on every model in the group. |
+| `PRISMA7_UNKNOWN_DEFAULT` | A `@default` value this source cannot read: an unknown function, an enum member on a non-enum field, a non-member, or a malformed JSON or base64 literal. |
+| `PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED` | An ORM-side generator or `@updatedAt` on an optional field. |
+| `PRISMA7_UPDATED_AT_WITH_DEFAULT_UNSUPPORTED` | `@updatedAt` combined with `@default`. |
+| `PRISMA7_INDEX_ARGUMENT_UNSUPPORTED` | An index argument Prisma 8 cannot carry (`sort`, `length`, `ops`, an unknown type) or a field that is not a column. |
 | `PRISMA7_SCHEMA_READ_FAILED` | The input path could not be read. |
 
 Unknown top-level blocks keep the parser's `PSL_UNSUPPORTED_TOP_LEVEL_BLOCK` code.
@@ -46,9 +50,17 @@ Explicit relations keep their fields, references, and actions; an omitted `onDel
 
 `@id`, `@@id`, `@unique`, and `@@unique` are read because relations depend on them (one-to-one detection, junction column types) and become the primary key and unique constraints.
 
+## Defaults, generators, `@updatedAt`, and indexes
+
+`@default(autoincrement())` and `@default(now())` become column defaults through the target's default function registry (`context.controlMutationDefaults`), as do `dbgenerated("expr")` (a raw expression) and the ORM-side generators `uuid()`, `uuid(4)`, `uuid(7)`, `ulid()`, `nanoid()`, `nanoid(n)`, `cuid()`, and `cuid(2)`, which become execution generators on create with no column default; `cuid()` maps to `cuid2` by decision. Literals of every scalar, list literals, and enum members (the member's mapped storage value) become literal defaults; `BigInt` literals keep their exact text, `Json` literals are parsed, and `Bytes` and `DateTime` literals are carried as the SQL literal Prisma 7 writes. `@updatedAt` becomes the target's `updatedAt` generator on create and update with no column default. List columns decline the element-not-null check Prisma 8 would otherwise derive, because Prisma 7 creates none.
+
+By decision (option (a)), a generator or `@updatedAt` on an optional field is `PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED` and `@updatedAt` combined with `@default` is `PRISMA7_UPDATED_AT_WITH_DEFAULT_UNSUPPORTED`; Prisma 8 cannot spell either yet.
+
+`@unique` and `@@unique` become unique indexes named `{table}_{columns}_key` and `@@index` becomes an index named `{table}_{columns}_idx`, `map` overriding either (`name` on `@@unique` is the client-side name and is ignored). `type: Hash` and the other Prisma 8 index types map through; field arguments such as `sort` and `length`, and `ops`, are `PRISMA7_INDEX_ARGUMENT_UNSUPPORTED` because Prisma 8 indexes carry none.
+
 ## Not yet covered
 
-Defaults, `@updatedAt`, and `@@index` fail loudly with `PRISMA7_UNKNOWN_ATTRIBUTE` until they are implemented. Enum names are checked for duplicates within one file only.
+Enum names are checked for duplicates within one file only.
 
 ## Tests
 

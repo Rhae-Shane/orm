@@ -1,8 +1,0 @@
-datasource db {
-  provider = "postgresql"
-}
-
-model Timestamps {
-  id        Int      @id
-  updatedAt DateTime @updatedAt @db.Timestamptz(6)
-}

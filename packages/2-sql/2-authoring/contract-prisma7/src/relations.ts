@@ -143,14 +143,6 @@ export function parseRelationAttribute(
   return { name, fields, references, onDelete, onUpdate, span: attribute.span };
 }
 
-/** `@@id([a, b])`, `@@unique([a, b])`, or the `fields:` spelling of either. */
-export function fieldListArgument(attribute: ResolvedAttribute): readonly string[] | undefined {
-  const arg =
-    attribute.args.find((candidate) => candidate.kind === 'positional') ??
-    attribute.args.find((candidate) => candidate.name === 'fields');
-  return identifierNames(arg?.expression);
-}
-
 function columnNames(
   model: RelationModel,
   fieldNames: readonly string[],

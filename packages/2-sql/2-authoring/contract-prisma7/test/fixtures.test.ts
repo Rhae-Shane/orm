@@ -17,16 +17,6 @@ interface ExpectedDiagnostic {
   readonly message: string;
 }
 
-/**
- * Cases that stay red until the Prisma 7 source interprets defaults and
- * `@updatedAt` (dispatch 5). They still run, so the day they pass the entry
- * here is removed and an expected contract is recorded.
- */
-const todoUntilDefaults: ReadonlySet<string> = new Set([
-  'enum-default-member',
-  'updated-at-timestamptz',
-]);
-
 function expectedPath(caseName: string, file: string): string {
   return join(fixturesDir, caseName, file);
 }
@@ -52,12 +42,17 @@ const cases = readdirSync(fixturesDir, { withFileTypes: true })
 describe('Prisma 7 fixtures', () => {
   it('has a case per rule row', () => {
     expect(cases).toEqual([
+      'defaults',
       'enum-default-member',
       'enum-namespace-mismatch',
       'enum-native',
       'explicit-relations',
+      'generator-optional',
+      'generators',
       'ignore',
       'implicit-many-to-many',
+      'index-argument-unsupported',
+      'indexes',
       'junction-composite-id',
       'keys',
       'multi-file',
@@ -82,15 +77,17 @@ describe('Prisma 7 fixtures', () => {
       'scalars',
       'table-collision',
       'unknown-attribute',
+      'unknown-default',
       'unsupported-type',
-      'updated-at-timestamptz',
+      'updated-at',
+      'updated-at-optional',
+      'updated-at-with-default',
       'view',
     ]);
   });
 
   for (const caseName of cases) {
-    const run = todoUntilDefaults.has(caseName) ? it.todo : it;
-    run(caseName, async () => {
+    it(caseName, async () => {
       const directory = join(fixturesDir, caseName, 'schema');
       const schemaPath = existsSync(directory)
         ? directory

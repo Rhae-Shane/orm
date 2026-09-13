@@ -280,7 +280,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "0d7cebe5848e3d040ddcb09144a3380cf6f2df200fb5771df5f5c65b0da80401",
+    "storageHash": "16b0a06641ceb4dac48d5cfe7cfea331d4db2abdb32522fbc8c98c62adee7aea",
     "namespaces": {
       "public": {
         "id": "public",
@@ -416,6 +416,7 @@
                   "codecId": "sql/varchar@1",
                   "nullable": true,
                   "many": true,
+                  "noCheck": ["elementNotNull"],
                   "typeParams": {
                     "length": 32
                   }
@@ -431,14 +432,7 @@
               },
               "uniques": [],
               "indexes": [],
-              "foreignKeys": [],
-              "checks": [
-                {
-                  "name": "NativeTypes_varCharList_elem_not_null_0482d112",
-                  "expression": "array_position(\"varCharList\", NULL) IS NULL",
-                  "prefix": "NativeTypes_varCharList_elem_not_null"
-                }
-              ]
+              "foreignKeys": []
             }
           }
         }

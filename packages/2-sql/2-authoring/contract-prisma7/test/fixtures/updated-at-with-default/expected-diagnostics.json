@@ -1,0 +1,8 @@
+[
+  {
+    "code": "PRISMA7_UPDATED_AT_WITH_DEFAULT_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 7,
+    "message": "Field \"Timestamps.updatedAtNow\" combines @updatedAt with @default. Prisma 8 cannot spell a column that is both generated on every write and has a storage default yet; drop the @default (the generator sets the value on create too)."
+  }
+]
