@@ -1,6 +1,6 @@
 /**
  * The user-facing journey for the Prisma 7 contract source: a project whose
- * `prisma.config.ts` points `@prisma/orm-postgres/config`'s `defineConfig` at
+ * `prisma.config.ts` points `defineConfig` from the Postgres config entry at
  * `prisma7Schema('./schema.prisma')` runs `contract emit`, `db sign`, and
  * `db verify` through the real command family against a database built by the
  * SQL Prisma 7.10.0 generated, with exit 0 and zero findings. A schema with a
