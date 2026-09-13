@@ -16,7 +16,14 @@ const NULL_PATTERN = /^NULL(?:::.+)?$/i;
 const TRUE_PATTERN = /^true$/i;
 const FALSE_PATTERN = /^false$/i;
 const NUMERIC_PATTERN = /^-?\d+(\.\d+)?$/;
-const STRING_LITERAL_PATTERN = /^'((?:[^']|'')*)'(?:::(?:"[^"]+"|[\w\s]+)(?:\(\d+\))?)?$/;
+/**
+ * A quoted SQL string with an optional `::type` cast. The type may be a
+ * multi-word builtin (`timestamp without time zone`), a quoted identifier
+ * (`"AuditAction"`), or either of those qualified by a (possibly quoted)
+ * schema (`audit."AuditAction"`, `"my schema".t`), with optional modifiers.
+ */
+const STRING_LITERAL_PATTERN =
+  /^'((?:[^']|'')*)'(?:::(?:(?:"[^"]+"|\w+)\.)?(?:"[^"]+"|[\w\s]+)(?:\(\d+\))?)?$/;
 
 /**
  * Matches a Postgres array literal default of the form `'{...}'::elemtype[]`.

@@ -397,11 +397,38 @@ describe('postgresResolveDefault', () => {
     });
   });
 
-  it('keeps an enum-cast literal a function (unqualified cast type defeats the string-literal pattern)', () => {
+  it('resolves a literal cast to a schema-qualified enum type to the literal', () => {
     const expression = "'confidential'::auth.oauth_client_type";
     expect(postgresResolveDefault({ kind: 'function', expression }, 'oauth_client_type')).toEqual({
-      kind: 'function',
-      expression,
+      kind: 'literal',
+      value: 'confidential',
+    });
+  });
+});
+
+describe('parsePostgresDefault enum literal casts', () => {
+  it('reads a literal cast to a schema-qualified quoted enum type', () => {
+    expect(parsePostgresDefault('\'CREATE\'::audit."AuditAction"', 'audit.AuditAction')).toEqual({
+      kind: 'literal',
+      value: 'CREATE',
+    });
+  });
+
+  it('reads a literal cast to a schema-qualified unquoted enum type', () => {
+    expect(parsePostgresDefault("'user'::auth.user_role", 'auth.user_role')).toEqual({
+      kind: 'literal',
+      value: 'user',
+    });
+  });
+
+  it('still reads the unqualified quoted and bare spellings', () => {
+    expect(parsePostgresDefault('\'CREATE\'::"AuditAction"', 'AuditAction')).toEqual({
+      kind: 'literal',
+      value: 'CREATE',
+    });
+    expect(parsePostgresDefault("'user'::user_role", 'user_role')).toEqual({
+      kind: 'literal',
+      value: 'user',
     });
   });
 });
