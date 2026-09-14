@@ -29,6 +29,12 @@ One stack of three slices. Slice 1 lands the parser additions, the config change
    - **Hands to:** the cutover path; project close-out.
    - **Focus:** a contract-to-PSL hook on the Postgres and Mongo target descriptors, `packages/1-framework/3-tooling/cli/src/orm/contract/convert.ts`, CLI README.
 
+4. **Slice `04-prisma7-adoption-example`** — Linear: TML-____ (added 2026-09-14 at the operator's request)
+   - **Outcome:** `examples/prisma7-adoption` shows a Prisma 7 project migrating on Prisma 7 while Prisma 8 adopts, signs, verifies, and queries the same database through `prisma7Schema`; its test runs the whole story in CI.
+   - **Builds on:** slice 1.
+   - **Hands to:** the worked example the upgrade docs point at; the binary-name collision between the two CLIs surfaced for the docs.
+   - **Focus:** `examples/prisma7-adoption`, CI wiring, workspace policy entries for Prisma 7 if needed. Runs in parallel with slices 2 and 3.
+
 ## Dependencies (external)
 
 - None. The parser and the contract-source extension point already exist on `main`.

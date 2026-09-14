@@ -50,7 +50,7 @@ writes the same contract as Prisma 8 PSL. The user switches `contract:` to that 
 
 1. **Hard errors, never warnings.** Every Prisma 7 construct is either expressible in the family contract or rejected with a diagnostic that names the construct, points at its span, and states the fix or that the construct is not yet supported. The interpreter never changes behaviour silently. Diagnostics use the existing `PslDiagnostic` shape with codes prefixed `PRISMA7_`.
 2. **Fidelity is defined by `db verify`.** The interpreter must produce a contract that `db sign` verifies with zero findings, in lenient mode, against the database Prisma 7 built. `db verify` (`packages/2-sql/9-family/src/core/diff/schema-verify.ts`) compares: column native type string and nullability (never the codec); column defaults structurally; primary key columns but not the name; foreign key `onDelete` and `onUpdate` with `noAction` equal to absent, but not the name; unique constraints by columns, not the name; indexes by name plus uniqueness, type, and columns; check constraints by name; native enums by type name and ordered member list. Consequences: reproduce Prisma 7's default index names, always set both referential actions explicitly, keep enum member order, and leave key, foreign key, and unique names to Prisma 8.
-3. **No Prisma 7 packages.** No package in the repo depends on `prisma`, `@prisma/prisma7`, `@prisma/get-dmmf`, or `@prisma/prisma-schema-wasm`. Parsing uses `@internal/psl-parser`.
+3. **No Prisma 7 packages in the product.** No framework, family, target, or extension package depends on `prisma`, `@prisma/prisma7`, `@prisma/get-dmmf`, or `@prisma/prisma-schema-wasm`. Parsing uses `@internal/psl-parser`.
 4. **Layering.** Family-specific rules live in the family authoring packages (`packages/2-sql/2-authoring/contract-prisma7`, `packages/2-mongo-family/2-authoring/contract-prisma7`). The Prisma 7 source is a `ContractConfig`, and `defineConfig` in both `@prisma/orm-postgres/config` and `@prisma/orm-mongo/config` accepts `contract: string | ContractConfig`. Nothing family-specific enters `packages/1-framework`.
 5. **Round trip is a hash equality.** For every fixture, interpreting the Prisma 7 file and interpreting the converted Prisma 8 file produce the same contract hashes, so the signed marker survives cutover.
 6. **Multi-file schemas.** A directory path reads every `.prisma` file in it, matching Prisma 7's multi-file layout.
@@ -79,7 +79,7 @@ Inherits `drive/calibration/dod.md`. Project-specific:
 - The Postgres and Mongo end-to-end proofs emit, sign, and verify with zero findings in lenient mode against databases shaped by Prisma 7 migrations.
 - For every fixture, `hash(interpret(prisma7)) === hash(interpret(convert(prisma7)))`.
 - A schema using any unsupported construct fails emit with one diagnostic per construct and no partial output.
-- No package depends on `prisma`, `@prisma/prisma7`, `@prisma/get-dmmf`, or `@prisma/prisma-schema-wasm`.
+- No framework, family, target, or extension package depends on `prisma`, `@prisma/prisma7`, `@prisma/get-dmmf`, or `@prisma/prisma-schema-wasm`. The adoption example app (slice 4) intentionally installs Prisma 7, because showing both side by side is its purpose.
 - CLI README documents `contract convert` and the config reference documents `prisma7Schema`.
 
 ## Plan-time verification items
