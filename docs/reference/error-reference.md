@@ -111,6 +111,10 @@ During `prisma orm init`, `--authoring` and `--schema-path` disagree on file ext
 
 During `prisma orm init`, the `prisma contract emit` step failed after a successful dependency install. Scaffolded files and installed dependencies remain on disk; the user fixes the contract file and re-runs the emit command. `init` completes with this as a finding and exits 5. Payload: `filesWritten`, `cause`.
 
+### CLI.INIT_FLAG_CONFLICT
+
+`prisma orm init --from-prisma7-schema <path>` was combined with `--schema-path` or `--authoring`. The first names an existing Prisma 7 schema as the contract source; the other two describe a starter schema to write, so the pair contradicts itself. Raised before anything is read or written. Maps to init exit code 2 (PRECONDITION). Payload: `flags` (the two kebab-case flag names).
+
 ### CLI.INIT_INSTALL_FAILED
 
 During `prisma orm init`, dependency installation failed and the pnpm-to-npm fallback either did not apply or also failed. Files scaffolded before the install step are already on disk; the next actions carry the install command that was attempted and the emit that was waiting on it. `init` completes with this as a finding and exits 4. Payload: `filesWritten`, plus `install` (the attempted command, the manager, its exit code and the tail of its stderr).
@@ -134,6 +138,22 @@ A flag passed to `prisma orm init` has a value outside its allowed set (for exam
 ### CLI.INIT_MISSING_FLAGS
 
 `prisma orm init` ran non-interactively (e.g. `--yes`, or stdin is not a TTY) but one or more required inputs (`--target`, `--authoring`, `--schema-path`) were not supplied as flags. Every missing flag is listed so scripts and agents can react without parsing English. Maps to init exit code 2 (PRECONDITION). Payload: `missingFlags`.
+
+### CLI.INIT_PRISMA7_CONFIG_COLLISION
+
+On the Prisma 7 path of `prisma orm init`, `prisma.config.*` evaluated as a Prisma 7 config (no `$prismaConfig` marker) while a `prisma7.config.*` also exists. Init renames the Prisma 7 config to `prisma7.config.*` so Prisma 8 can write its own, and cannot rename onto an existing file. Nothing is written. Maps to init exit code 2 (PRECONDITION). Payload: `prismaConfigPath`, `prisma7ConfigPath`.
+
+### CLI.INIT_PRISMA7_MONGO_UNSUPPORTED
+
+On the Prisma 7 path of `prisma orm init`, the schema's `datasource` block declares `provider = "mongodb"`. Using a Prisma 7 schema as the contract source is available for PostgreSQL first; MongoDB support follows. `--target` is not consulted here only when absent: passing `--target` skips the provider check. Nothing is written. Maps to init exit code 2 (PRECONDITION). Payload: `schemaPath`, `provider`.
+
+### CLI.INIT_PRISMA7_PROVIDER_UNSUPPORTED
+
+On the Prisma 7 path of `prisma orm init`, the schema's `datasource` block declares a provider Prisma 8 has no target for (or no string provider at all). The supported list is in the payload. Passing `--target` skips this check. Nothing is written. Maps to init exit code 2 (PRECONDITION). Payload: `schemaPath`, `provider` (`null` when not a string literal), `supported`.
+
+### CLI.INIT_PRISMA7_SCHEMA_INVALID
+
+The path `prisma orm init` was asked to use as a Prisma 7 schema (`--from-prisma7-schema`, or the path the interactive question named) does not exist, or neither it nor any `.prisma` file under it has a `datasource` block. Nothing is written. Maps to init exit code 2 (PRECONDITION). Payload: `schemaPath`, `reason` (`absent` or `no-datasource`).
 
 ### CLI.INIT_PROBE_FAILED
 
