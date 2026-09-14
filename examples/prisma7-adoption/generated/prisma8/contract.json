@@ -75,8 +75,12 @@
                 "cardinality": "N:1",
                 "nullable": false,
                 "on": {
-                  "localFields": ["authorId"],
-                  "targetFields": ["id"]
+                  "localFields": [
+                    "authorId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
                 },
                 "to": {
                   "model": "User",
@@ -86,15 +90,25 @@
               "tags": {
                 "cardinality": "N:M",
                 "on": {
-                  "localFields": ["id"],
-                  "targetFields": ["A"]
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "A"
+                  ]
                 },
                 "through": {
-                  "childColumns": ["B"],
+                  "childColumns": [
+                    "B"
+                  ],
                   "namespaceId": "public",
-                  "parentColumns": ["A"],
+                  "parentColumns": [
+                    "A"
+                  ],
                   "table": "_PostToTag",
-                  "targetColumns": ["id"]
+                  "targetColumns": [
+                    "id"
+                  ]
                 },
                 "to": {
                   "model": "Tag",
@@ -149,8 +163,12 @@
                 "cardinality": "N:1",
                 "nullable": false,
                 "on": {
-                  "localFields": ["A"],
-                  "targetFields": ["id"]
+                  "localFields": [
+                    "A"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
                 },
                 "to": {
                   "model": "Post",
@@ -161,8 +179,12 @@
                 "cardinality": "N:1",
                 "nullable": false,
                 "on": {
-                  "localFields": ["B"],
-                  "targetFields": ["id"]
+                  "localFields": [
+                    "B"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
                 },
                 "to": {
                   "model": "Tag",
@@ -204,15 +226,25 @@
               "posts": {
                 "cardinality": "N:M",
                 "on": {
-                  "localFields": ["id"],
-                  "targetFields": ["B"]
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "B"
+                  ]
                 },
                 "through": {
-                  "childColumns": ["A"],
+                  "childColumns": [
+                    "A"
+                  ],
                   "namespaceId": "public",
-                  "parentColumns": ["B"],
+                  "parentColumns": [
+                    "B"
+                  ],
                   "table": "_PostToTag",
-                  "targetColumns": ["id"]
+                  "targetColumns": [
+                    "id"
+                  ]
                 },
                 "to": {
                   "model": "Post",
@@ -291,8 +323,12 @@
               "posts": {
                 "cardinality": "1:N",
                 "on": {
-                  "localFields": ["id"],
-                  "targetFields": ["authorId"]
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "authorId"
+                  ]
                 },
                 "to": {
                   "model": "Post",
@@ -336,7 +372,10 @@
           "native_enum": {
             "Role": {
               "kind": "postgres-enum",
-              "members": ["USER", "ADMIN"],
+              "members": [
+                "USER",
+                "ADMIN"
+              ],
               "typeName": "Role"
             }
           },
@@ -391,12 +430,16 @@
                   "onDelete": "restrict",
                   "onUpdate": "cascade",
                   "source": {
-                    "columns": ["authorId"],
+                    "columns": [
+                      "authorId"
+                    ],
                     "namespaceId": "public",
                     "tableName": "Post"
                   },
                   "target": {
-                    "columns": ["id"],
+                    "columns": [
+                      "id"
+                    ],
                     "namespaceId": "public",
                     "tableName": "User"
                   }
@@ -404,7 +447,9 @@
               ],
               "indexes": [],
               "primaryKey": {
-                "columns": ["id"]
+                "columns": [
+                  "id"
+                ]
               },
               "uniques": []
             },
@@ -428,13 +473,17 @@
               "foreignKeys": [],
               "indexes": [
                 {
-                  "columns": ["name"],
+                  "columns": [
+                    "name"
+                  ],
                   "name": "Tag_name_key",
                   "unique": true
                 }
               ],
               "primaryKey": {
-                "columns": ["id"]
+                "columns": [
+                  "id"
+                ]
               },
               "uniques": []
             },
@@ -501,13 +550,17 @@
               "foreignKeys": [],
               "indexes": [
                 {
-                  "columns": ["email"],
+                  "columns": [
+                    "email"
+                  ],
                   "name": "User_email_key",
                   "unique": true
                 }
               ],
               "primaryKey": {
-                "columns": ["id"]
+                "columns": [
+                  "id"
+                ]
               },
               "uniques": []
             },
@@ -529,12 +582,16 @@
                   "onDelete": "cascade",
                   "onUpdate": "cascade",
                   "source": {
-                    "columns": ["A"],
+                    "columns": [
+                      "A"
+                    ],
                     "namespaceId": "public",
                     "tableName": "_PostToTag"
                   },
                   "target": {
-                    "columns": ["id"],
+                    "columns": [
+                      "id"
+                    ],
                     "namespaceId": "public",
                     "tableName": "Post"
                   }
@@ -543,12 +600,16 @@
                   "onDelete": "cascade",
                   "onUpdate": "cascade",
                   "source": {
-                    "columns": ["B"],
+                    "columns": [
+                      "B"
+                    ],
                     "namespaceId": "public",
                     "tableName": "_PostToTag"
                   },
                   "target": {
-                    "columns": ["id"],
+                    "columns": [
+                      "id"
+                    ],
                     "namespaceId": "public",
                     "tableName": "Tag"
                   }
@@ -556,13 +617,18 @@
               ],
               "indexes": [
                 {
-                  "columns": ["B"],
+                  "columns": [
+                    "B"
+                  ],
                   "name": "_PostToTag_B_index",
                   "unique": false
                 }
               ],
               "primaryKey": {
-                "columns": ["A", "B"]
+                "columns": [
+                  "A",
+                  "B"
+                ]
               },
               "uniques": []
             }
@@ -570,7 +636,10 @@
           "valueSet": {
             "Role": {
               "kind": "valueSet",
-              "values": ["USER", "ADMIN"]
+              "values": [
+                "USER",
+                "ADMIN"
+              ]
             }
           }
         },
@@ -581,16 +650,16 @@
     "storageHash": "8a3bf4f3a5f417a5be8a3c3f1fd5047d9bcee0bc6b9901c90cda00c4550f3282"
   },
   "execution": {
-    "executionHash": "14e6d6f0d66d8f1a82243484a4fe672446b7c62ebe08482b19f2838e655b0502",
+    "executionHash": "0d9fcbcd5529858c5171d48708abcb520d161d3bd7d76429f974d64d6adc54d5",
     "mutations": {
       "defaults": [
         {
           "onCreate": {
-            "id": "instantNow",
+            "id": "plainDateTimeNow",
             "kind": "generator"
           },
           "onUpdate": {
-            "id": "instantNow",
+            "id": "plainDateTimeNow",
             "kind": "generator"
           },
           "ref": {

@@ -3,25 +3,12 @@
 // To regenerate, run: prisma contract emit
 import type { QueryOperationTypes as PgAdapterQueryOps } from '@prisma/orm-postgres/adapter/operation-types';
 import type {
-  Contract as ContractType,
-  ExecutionHashBase,
-  NamespaceId,
-  ProfileHashBase,
-  StorageHashBase,
-} from '@prisma/orm-postgres/contract/types';
-
-import type {
-  ContractWithTypeMaps,
-  RelationKeys,
-  TypeMaps as TypeMapsType,
-} from '@prisma/orm-postgres/family-contract/types';
-import type {
   Bit,
   Char,
+  CodecTypes as PgTypes,
   Interval,
   JsonValue,
   Numeric,
-  CodecTypes as PgTypes,
   Time,
   TimeString,
   Timestamp,
@@ -33,10 +20,23 @@ import type {
   Varchar,
 } from '@prisma/orm-postgres/target/codec-types';
 
+import type {
+  ContractWithTypeMaps,
+  RelationKeys,
+  TypeMaps as TypeMapsType,
+} from '@prisma/orm-postgres/family-contract/types';
+import type {
+  Contract as ContractType,
+  ExecutionHashBase,
+  NamespaceId,
+  ProfileHashBase,
+  StorageHashBase,
+} from '@prisma/orm-postgres/contract/types';
+
 export type StorageHash =
   StorageHashBase<'8a3bf4f3a5f417a5be8a3c3f1fd5047d9bcee0bc6b9901c90cda00c4550f3282'>;
 export type ExecutionHash =
-  ExecutionHashBase<'14e6d6f0d66d8f1a82243484a4fe672446b7c62ebe08482b19f2838e655b0502'>;
+  ExecutionHashBase<'0d9fcbcd5529858c5171d48708abcb520d161d3bd7d76429f974d64d6adc54d5'>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
 
@@ -880,8 +880,8 @@ type ContractBase = Omit<
             readonly table: 'User';
             readonly column: 'updatedAt';
           };
-          readonly onCreate: { readonly kind: 'generator'; readonly id: 'instantNow' };
-          readonly onUpdate: { readonly kind: 'generator'; readonly id: 'instantNow' };
+          readonly onCreate: { readonly kind: 'generator'; readonly id: 'plainDateTimeNow' };
+          readonly onUpdate: { readonly kind: 'generator'; readonly id: 'plainDateTimeNow' };
         },
       ];
     };

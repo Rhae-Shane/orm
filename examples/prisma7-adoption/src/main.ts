@@ -1,7 +1,8 @@
 /**
  * The routes that moved to Prisma 8: the same rows Prisma 7 wrote, read and
  * written through `db.orm.public.<Model>`, with the tags reached through the
- * `_PostToTag` junction Prisma 7 created.
+ * `_PostToTag` junction Prisma 7 created, and `updatedAt` set by Prisma 8's own
+ * generator on update.
  */
 import { db, prisma } from './db';
 
@@ -32,6 +33,13 @@ const created = await db.orm.public.Post.include('tags').create({
 });
 console.log(
   `Created post ${created.id} through Prisma 8, tagged ${created.tags.map((tag) => tag.name).join(', ')}`,
+);
+
+const renamed = await db.orm.public.User.where({ id: alice.id }).update({
+  name: `Alice (renamed by Prisma 8 at ${new Date().toISOString()})`,
+});
+console.log(
+  `updatedAt advanced: ${alice.updatedAt.toString()} -> ${renamed?.updatedAt.toString()}`,
 );
 
 await prisma.$disconnect();
