@@ -110,6 +110,7 @@ Recorded so they are not lost; each becomes its own project when scheduled.
 
 ## References
 
+- The public upgrade guides: [PostgreSQL, 7 to 8](https://www.prisma.io/docs/guides/upgrade-prisma-orm/postgresql) and [MongoDB, 6 to 8](https://www.prisma.io/docs/guides/upgrade-prisma-orm/mongodb). The Postgres guide's phase 2 (`contract infer` plus hand edits) is what the Prisma 7 source replaces; its phase 4 is the cutover routine slice 3 must fit.
 - `design-notes.md` for alternatives considered.
 - `spike/` for the parser experiment.
 - `slices/01-postgres-source/spec.md`, `slices/02-mongo-source/spec.md`, `slices/03-contract-to-psl-and-convert/spec.md`.

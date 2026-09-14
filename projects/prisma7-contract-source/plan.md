@@ -32,8 +32,8 @@ One stack of three slices. Slice 1 lands the parser additions, the config change
 4. **Slice `04-prisma7-adoption-example`** — Linear: TML-____ (added 2026-09-14 at the operator's request)
    - **Outcome:** `examples/prisma7-adoption` shows a Prisma 7 project migrating on Prisma 7 while Prisma 8 adopts, signs, verifies, and queries the same database through `prisma7Schema`; its test runs the whole story in CI.
    - **Builds on:** slice 1.
-   - **Hands to:** the worked example the upgrade docs point at; the binary-name collision between the two CLIs surfaced for the docs.
-   - **Focus:** `examples/prisma7-adoption`, CI wiring, workspace policy entries for Prisma 7 if needed. Runs in parallel with slices 2 and 3.
+   - **Hands to:** the worked example the upgrade guide's phase 2 can point at instead of `contract infer` plus hand edits.
+   - **Focus:** `examples/prisma7-adoption` following the public guide (`@prisma/prisma7`, `prisma7` binary, `prisma7.config.ts`; Prisma 8 from the workspace), CI wiring, workspace policy entries for the Prisma 7 packages if needed. Runs in parallel with slices 2 and 3.
 
 ## Dependencies (external)
 
