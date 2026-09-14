@@ -1,6 +1,5 @@
 import { blindCast } from '@internal/utils/casts';
 
-const PRISMA7_CONFIG_SPECIFIER = 'prisma/config';
 const PRISMA7_PACKAGE_CONFIG_SPECIFIER = '@prisma/prisma7/config';
 
 /**
@@ -18,17 +17,18 @@ export function rewritePrisma7ConfigImport(content: string): {
   return { content: rewritten, found: rewritten !== content };
 }
 
-export { PRISMA7_CONFIG_SPECIFIER };
-
 const RUNNER = String.raw`(?:pnpm|npx|yarn|bunx?)(?:\s+(?:exec|dlx|x))?`;
+
+const ENV_ASSIGNMENTS = String.raw`(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*`;
 
 /**
  * `prisma` at command position: the start of the script, after a shell
- * operator, or after a package-manager runner. Followed by whitespace or the
- * end, so `prisma7`, `prisma@7`, and `prisma-erd` are left alone.
+ * operator, after `--`, or after a package-manager runner, with any run of
+ * `NAME=value` assignments in between. Followed by whitespace or the end, so
+ * `prisma7`, `prisma@7`, and `prisma-erd` are left alone.
  */
 const PRISMA_AT_COMMAND_POSITION = new RegExp(
-  String.raw`(^|&&|\|\||;|\||\b${RUNNER})(\s*)prisma(?=\s|$)`,
+  String.raw`(^|&&|\|\||;|\||--|\b${RUNNER})(\s*${ENV_ASSIGNMENTS})prisma(?=\s|$)`,
   'g',
 );
 

@@ -281,6 +281,22 @@ describe('the Prisma 7 scaffold', () => {
       expect(hashTree(projectDir)).toBe(before);
     });
 
+    it('names the completed rename when a later write fails', () => {
+      copyFixture();
+      writeFileSync(join(projectDir, 'src'), 'a file where the directory should go', 'utf-8');
+
+      expect(() => scaffold({ sideBySide: PLAN })).toThrow(
+        expect.objectContaining({
+          code: 'CLI.INIT_WRITE_FAILED',
+          meta: expect.objectContaining({
+            filesWritten: ['prisma.config.ts'],
+            filesRenamed: [{ from: 'prisma.config.ts', to: 'prisma7.config.ts' }],
+          }),
+        }),
+      );
+      expect(existsSync(join(projectDir, 'prisma7.config.ts'))).toBe(true);
+    });
+
     it('renames nothing when the plan has no rename', () => {
       copyFixture();
       rmSync(join(projectDir, 'prisma.config.ts'));
@@ -301,6 +317,17 @@ describe('the Prisma 7 scaffold', () => {
       ['after the npm runner', 'np' + 'x prisma migrate deploy', 'np' + 'x prisma7 migrate deploy'],
       ['after yarn', 'yarn prisma generate', 'yarn prisma7 generate'],
       ['after bun', 'bun prisma generate', 'bun prisma7 generate'],
+      ['after --', 'dotenv -e .env -- prisma migrate dev', 'dotenv -e .env -- prisma7 migrate dev'],
+      [
+        'after an environment assignment',
+        'NODE_OPTIONS=--max-old-space-size=4096 prisma studio',
+        'NODE_OPTIONS=--max-old-space-size=4096 prisma7 studio',
+      ],
+      [
+        'after several environment assignments',
+        'A=1 B=two prisma generate',
+        'A=1 B=two prisma7 generate',
+      ],
       [
         'twice in one script',
         'prisma generate && prisma migrate dev',

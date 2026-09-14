@@ -267,12 +267,23 @@ export function errorInitWriteFailed(options: {
   readonly path: string;
   readonly cause: string;
   readonly filesWritten: readonly string[];
+  readonly filesRenamed: readonly { readonly from: string; readonly to: string }[];
 }): CliStructuredError {
+  const renamed = options.filesRenamed.map((entry) => `${entry.from} → ${entry.to}`);
+  const renamedNote =
+    renamed.length === 0
+      ? ''
+      : ` Before the failure this run renamed ${renamed.join(', ')}; that rename stays, and a re-run writes the missing files beside it.`;
   return new CliStructuredError('CLI.INIT_WRITE_FAILED', `Failed to write ${options.path}`, {
-    why: `\`${options.path}\` could not be written: ${options.cause}`,
+    why: `\`${options.path}\` could not be written: ${options.cause}${renamedNote}`,
     fix: 'Fix what stopped the write — a directory sitting where the file goes, permissions, a full disk — then run `prisma orm init` again. Interactive runs ask before replacing the files this run already wrote (listed in `meta.filesWritten`); non-interactive runs grant that consent with `--confirm <directory name>`.',
     docsUrl: docsUrlFor('CLI.INIT_WRITE_FAILED'),
-    meta: { path: options.path, cause: options.cause, filesWritten: options.filesWritten },
+    meta: {
+      path: options.path,
+      cause: options.cause,
+      filesWritten: options.filesWritten,
+      filesRenamed: options.filesRenamed,
+    },
   });
 }
 

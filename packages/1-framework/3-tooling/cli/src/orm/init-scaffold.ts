@@ -471,6 +471,7 @@ export function scaffoldProject(ctx: {
         path: rename.to,
         cause: error instanceof Error ? error.message : String(error),
         filesWritten,
+        filesRenamed,
       });
     }
     filesRenamed.push({ from: rename.from, to: rename.to });
@@ -486,6 +487,7 @@ export function scaffoldProject(ctx: {
         path: file.path,
         cause: error instanceof Error ? error.message : String(error),
         filesWritten,
+        filesRenamed,
       });
     }
     filesWritten.push(file.path);

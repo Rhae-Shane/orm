@@ -408,6 +408,27 @@ describe('init installs', () => {
       timeouts.coldTransformImport,
     );
 
+    it.each([
+      ['never declared @prisma/client', {}],
+      ['declares @prisma/client through the workspace', { '@prisma/client': 'workspace:*' }],
+    ])(
+      'does not add @prisma/client when the project %s',
+      async (_case, dependencies) => {
+        writePrisma7Project({
+          name: 'app',
+          devDependencies: { prisma: '^7.4.0' },
+          dependencies,
+        });
+
+        const run = await harness().run(prisma7Argv(), { cwd: projectDir });
+
+        expect(run.exitCode).toBe(0);
+        expect(calls[0]?.args).toEqual(['add', '@prisma/orm-postgres', 'dotenv']);
+        expect(calls[1]?.args).toContain('@prisma/prisma7@7');
+      },
+      timeouts.coldTransformImport,
+    );
+
     it(
       'installs only the usual packages when @prisma/prisma7 is already declared',
       async () => {

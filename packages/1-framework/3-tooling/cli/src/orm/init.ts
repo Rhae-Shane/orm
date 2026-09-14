@@ -154,7 +154,9 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         movePackages?.clientVersion === undefined
           ? undefined
           : versionMajor(movePackages.clientVersion);
-      const moveClient = movePackages !== null && (clientMajor === undefined || clientMajor < 7);
+      // A client the project never declared, or one it links through a
+      // workspace or catalog, is left alone: only a declared major below 7 moves.
+      const moveClient = movePackages !== null && clientMajor !== undefined && clientMajor < 7;
       const deps = [
         targetPackageName(inputs.target, scaffold.resolveImportSpecifier),
         'dotenv',
