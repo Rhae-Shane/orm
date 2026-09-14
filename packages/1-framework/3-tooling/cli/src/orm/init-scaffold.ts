@@ -176,15 +176,28 @@ function planScaffold(ctx: {
     : `./${inputs.schemaPath}`;
   const runPrefix = formatRunCommand(packageManager, 'prisma', '').trimEnd();
 
+  // On the Prisma 7 path the schema is the user's and a Prisma 7 config
+  // awaiting its rename must not be overwritten; the Prisma 7 scaffold writes
+  // its own config after the rename.
+  const writesStarter = inputs.contractSource.kind === 'starter';
+  const writesConfig = inputs.sideBySide?.renameConfig == null;
   const files: FileEntry[] = [
-    {
-      path: inputs.schemaPath,
-      content: starterSchema(inputs.target, inputs.authoring, resolveImportSpecifier),
-    },
-    {
-      path: CONFIG_FILE,
-      content: configFile(inputs.target, configContractPath, resolveImportSpecifier),
-    },
+    ...(writesStarter
+      ? [
+          {
+            path: inputs.schemaPath,
+            content: starterSchema(inputs.target, inputs.authoring, resolveImportSpecifier),
+          },
+        ]
+      : []),
+    ...(writesConfig
+      ? [
+          {
+            path: CONFIG_FILE,
+            content: configFile(inputs.target, configContractPath, resolveImportSpecifier),
+          },
+        ]
+      : []),
     { path: join(schemaDir, 'db.ts'), content: dbFile(inputs.target, resolveImportSpecifier) },
     {
       path: QUICK_REFERENCE_FILE,

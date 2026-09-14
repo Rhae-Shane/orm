@@ -1,12 +1,22 @@
 import { existsSync, readFileSync } from 'node:fs';
 import type { PromptSurface } from '@prisma/cli-engine';
-import { basename, join } from 'pathe';
+import { basename, extname, join } from 'pathe';
 import {
+  errorInitFlagConflict,
   errorInitMissingFlags,
+  errorInitPrisma7ConfigCollision,
+  errorInitPrisma7MongoUnsupported,
+  errorInitPrisma7ProviderUnsupported,
+  errorInitPrisma7SchemaInvalid,
   errorInitStrictProbeWithoutProbe,
   errorInitUserAborted,
 } from '../commands/init/errors';
 import { resolveAuthoring, resolveTarget, validateSchemaPath } from '../commands/init/input-values';
+import {
+  detectPrisma7Project,
+  type Prisma7Detection,
+  type Prisma7SchemaDetection,
+} from '../commands/init/prisma7-detect';
 import {
   type AuthoringId,
   defaultSchemaPath,
@@ -27,13 +37,47 @@ export interface InitFlagValues {
   readonly strictProbe: boolean;
   readonly skipInstall: boolean;
   readonly keepPreviousFacade: boolean;
+  readonly fromPrisma7Schema: string | undefined;
+}
+
+/**
+ * Where the contract comes from: a starter schema init writes, or an existing
+ * Prisma 7 schema init points the config at. `targetSource` records whether
+ * the target came from `--target` or from the schema's `datasource` provider.
+ */
+export type InitContractSource =
+  | { readonly kind: 'starter'; readonly authoring: AuthoringId; readonly schemaPath: string }
+  | {
+      readonly kind: 'prisma7-schema';
+      readonly schemaPath: string;
+      readonly provider: string | undefined;
+      readonly targetSource: 'flag' | 'provider';
+    };
+
+/**
+ * The edits to files init did not write, agreed to under the consent token:
+ * the Prisma 7 config to rename to `prisma7.config.<extension>`, and the
+ * package moves (`@prisma/prisma7` in, `prisma` to 8, `@prisma/client` kept at
+ * the Prisma 7 CLI's version). Each half is `null` when it does not apply.
+ */
+export interface Prisma7SideBySidePlan {
+  readonly renameConfig: { readonly from: string; readonly extension: string } | null;
+  readonly movePackages: {
+    readonly cliVersion: string;
+    readonly clientVersion: string | undefined;
+  } | null;
 }
 
 /** Every decision the scaffold phase operates on. */
 export interface ResolvedInitInputs {
   readonly target: TargetId;
+  /** `psl` on the Prisma 7 path: the schema is PSL, and no starter is written. */
   readonly authoring: AuthoringId;
   readonly schemaPath: string;
+  readonly contractSource: InitContractSource;
+  readonly sideBySide: Prisma7SideBySidePlan | null;
+  /** What detection could not do; reported, never fatal. */
+  readonly warnings: readonly string[];
   readonly install: boolean;
   readonly writeEnv: boolean;
   readonly probeDb: boolean;
@@ -167,6 +211,200 @@ async function resolveRemovePreviousFacade(ctx: {
   return remove ? facade : null;
 }
 
+const PRISMA7_SCHEMA_FLAG = 'from-prisma7-schema';
+const PRISMA7_CONFIG_STEM = 'prisma.config.';
+const SIDE_BY_SIDE_QUESTION =
+  'Prisma 7 is installed as `prisma`. Keep it as @prisma/prisma7 (binary prisma7) and move `prisma` to Prisma 8?';
+
+/** Init's own files on the Prisma 7 path; the Prisma 7 schema is never among them. */
+const PRISMA7_PATH_GENERATED_FILES = ['src/prisma/db.ts', 'prisma-8.md'] as const;
+
+/**
+ * `--from-prisma7-schema` names the contract source; `--schema-path` and
+ * `--authoring` describe a starter schema to write. Both at once is a
+ * contradiction, refused before anything is read.
+ */
+function rejectFlagConflict(flags: InitFlagValues): void {
+  if (flags.fromPrisma7Schema === undefined) {
+    return;
+  }
+  if (flags.schemaPath !== undefined) {
+    throw errorInitFlagConflict({ flags: [PRISMA7_SCHEMA_FLAG, 'schema-path'] });
+  }
+  if (flags.authoring !== undefined) {
+    throw errorInitFlagConflict({ flags: [PRISMA7_SCHEMA_FLAG, 'authoring'] });
+  }
+}
+
+function prisma7Question(detection: Prisma7Detection): string {
+  return `${detection.schema.path} is a Prisma 7 schema. Use it as the Prisma 8 contract source?`;
+}
+
+/**
+ * The Prisma 7 path is entered by the flag or by an explicit yes. The question
+ * declares no default on purpose: a session that cannot ask (`--yes`, no
+ * terminal) must run init as today rather than have the engine answer for the
+ * user, so the engine's "cannot ask" is read as a no.
+ */
+async function choosePrisma7Path(ctx: {
+  readonly flags: InitFlagValues;
+  readonly prompt: PromptSurface;
+  readonly detection: Prisma7Detection;
+}): Promise<boolean> {
+  if (ctx.flags.fromPrisma7Schema !== undefined) {
+    return true;
+  }
+  const { config, schema } = ctx.detection;
+  const found =
+    config.kind === 'prisma7' || config.kind === 'collision' || schema.kind === 'datasource';
+  if (!found) {
+    return false;
+  }
+  try {
+    return await ctx.prompt.confirm(prisma7Question(ctx.detection));
+  } catch (error) {
+    if (isPromptRequired(error)) {
+      return false;
+    }
+    throw error;
+  }
+}
+
+function targetFromProvider(
+  schema: Extract<Prisma7SchemaDetection, { readonly kind: 'datasource' }>,
+): TargetId {
+  switch (schema.provider) {
+    case 'postgresql':
+    case 'postgres':
+      return 'postgres';
+    case 'mongodb':
+      throw errorInitPrisma7MongoUnsupported({ schemaPath: schema.path });
+    default:
+      throw errorInitPrisma7ProviderUnsupported({
+        schemaPath: schema.path,
+        provider: schema.provider,
+      });
+  }
+}
+
+function sideBySidePlan(detection: Prisma7Detection): Prisma7SideBySidePlan | null {
+  const { config, cli } = detection;
+  const renameConfig =
+    config.kind === 'prisma7' && config.path.startsWith(PRISMA7_CONFIG_STEM)
+      ? { from: config.path, extension: extname(config.path).slice(1) }
+      : null;
+  const movePackages =
+    cli.kind === 'earlier' ? { cliVersion: cli.version, clientVersion: cli.clientVersion } : null;
+  if (renameConfig === null && movePackages === null) {
+    return null;
+  }
+  return { renameConfig, movePackages };
+}
+
+function sideBySideQuestion(plan: Prisma7SideBySidePlan): string {
+  if (plan.movePackages !== null || plan.renameConfig === null) {
+    return SIDE_BY_SIDE_QUESTION;
+  }
+  const { from, extension } = plan.renameConfig;
+  return `${from} is a Prisma 7 config. Rename it to prisma7.config.${extension} so Prisma 8 can write its own?`;
+}
+
+async function requireReinitConsent(ctx: {
+  readonly cwd: string;
+  readonly prompt: PromptSurface;
+  readonly replaced: readonly string[];
+}): Promise<boolean> {
+  if (ctx.replaced.length === 0) {
+    return false;
+  }
+  const granted = await ctx.prompt.consent(consentQuestion(ctx.replaced), {
+    token: consentToken(ctx.cwd),
+  });
+  if (!granted) {
+    throw errorInitUserAborted();
+  }
+  return true;
+}
+
+async function askWriteEnv(flags: InitFlagValues, prompt: PromptSurface): Promise<boolean> {
+  return (
+    flags.writeEnv ||
+    (await prompt.confirm('Also write a .env file from .env.example? (gitignored)', {
+      default: false,
+    }))
+  );
+}
+
+/**
+ * The Prisma 7 path: every refusal comes before any consent, so a schema init
+ * cannot use costs no typed token. `prisma.config.ts` counts as a file to
+ * replace only when it is init's own (or cannot be told apart); a Prisma 7
+ * config there is renamed under the side-by-side consent instead.
+ */
+async function resolvePrisma7Inputs(ctx: {
+  readonly cwd: string;
+  readonly flags: InitFlagValues;
+  readonly prompt: PromptSurface;
+  readonly detection: Prisma7Detection;
+  readonly flagTarget: TargetId | undefined;
+}): Promise<ResolvedInitInputs> {
+  const { cwd, flags, prompt, detection, flagTarget } = ctx;
+  const { config, schema } = detection;
+  if (config.kind === 'collision') {
+    throw errorInitPrisma7ConfigCollision(config);
+  }
+  if (schema.kind !== 'datasource') {
+    throw errorInitPrisma7SchemaInvalid({ schemaPath: schema.path, reason: schema.kind });
+  }
+  const target = flagTarget ?? targetFromProvider(schema);
+
+  const configIsInitsOwn = config.kind === 'prisma8' || config.kind === 'unreadable';
+  const replaced = [
+    ...(configIsInitsOwn ? ['prisma.config.ts'] : []),
+    ...PRISMA7_PATH_GENERATED_FILES,
+  ].filter((relative) => existsSync(join(cwd, relative)));
+  const reinit = await requireReinitConsent({ cwd, prompt, replaced });
+
+  const sideBySide = sideBySidePlan(detection);
+  if (sideBySide !== null) {
+    const granted = await prompt.consent(sideBySideQuestion(sideBySide), {
+      token: consentToken(cwd),
+    });
+    if (!granted) {
+      throw errorInitUserAborted();
+    }
+  }
+
+  const writeEnv = await askWriteEnv(flags, prompt);
+  const removePreviousFacade = await resolveRemovePreviousFacade({
+    cwd,
+    target,
+    reinit,
+    keepPreviousFacade: flags.keepPreviousFacade,
+    prompt,
+  });
+
+  return {
+    target,
+    authoring: 'psl',
+    schemaPath: schema.path,
+    contractSource: {
+      kind: 'prisma7-schema',
+      schemaPath: schema.path,
+      provider: schema.provider,
+      targetSource: flagTarget === undefined ? 'provider' : 'flag',
+    },
+    sideBySide,
+    warnings: detection.warnings,
+    install: !flags.skipInstall,
+    writeEnv,
+    probeDb: flags.probeDb,
+    strictProbe: flags.strictProbe,
+    reinit,
+    removePreviousFacade,
+  };
+}
+
 /**
  * Resolves every input from the flags and, where a flag is absent, from the
  * engine's prompt surface.
@@ -187,9 +425,22 @@ export async function resolveInitInputs(ctx: {
   if (flags.strictProbe && !flags.probeDb) {
     throw errorInitStrictProbeWithoutProbe();
   }
+  rejectFlagConflict(flags);
 
   const flagTarget = resolveTarget(flags.target);
   const flagAuthoring = resolveAuthoring(flags.authoring);
+
+  // Detection evaluates the user's config, so it runs only when its answer can
+  // matter: the flag names a schema, or no starter flag has settled the source.
+  const mayAdoptPrisma7 =
+    flags.fromPrisma7Schema !== undefined ||
+    (flagAuthoring === undefined && flags.schemaPath === undefined);
+  if (mayAdoptPrisma7) {
+    const detection = await detectPrisma7Project({ cwd, schemaPath: flags.fromPrisma7Schema });
+    if (await choosePrisma7Path({ flags, prompt, detection })) {
+      return resolvePrisma7Inputs({ cwd, flags, prompt, detection, flagTarget });
+    }
+  }
 
   let target: TargetId;
   let authoring: AuthoringId;
@@ -218,19 +469,9 @@ export async function resolveInitInputs(ctx: {
   const replaced = generatedFilesInitReplaces(schemaPath).filter((relative) =>
     existsSync(join(cwd, relative)),
   );
-  const reinit = replaced.length > 0;
-  if (reinit) {
-    const granted = await prompt.consent(consentQuestion(replaced), { token: consentToken(cwd) });
-    if (!granted) {
-      throw errorInitUserAborted();
-    }
-  }
+  const reinit = await requireReinitConsent({ cwd, prompt, replaced });
 
-  const writeEnv =
-    flags.writeEnv ||
-    (await prompt.confirm('Also write a .env file from .env.example? (gitignored)', {
-      default: false,
-    }));
+  const writeEnv = await askWriteEnv(flags, prompt);
 
   const removePreviousFacade = await resolveRemovePreviousFacade({
     cwd,
@@ -244,6 +485,9 @@ export async function resolveInitInputs(ctx: {
     target,
     authoring,
     schemaPath,
+    contractSource: { kind: 'starter', authoring, schemaPath },
+    sideBySide: null,
+    warnings: [],
     install: !flags.skipInstall,
     writeEnv,
     probeDb: flags.probeDb,

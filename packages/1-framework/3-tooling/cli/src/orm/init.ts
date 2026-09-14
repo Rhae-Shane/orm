@@ -71,7 +71,10 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         'and emits the contract. Gets you from zero to typed queries in one step.\n' +
         '\n' +
         'Run it interactively for a guided setup, or supply --target and --authoring\n' +
-        'for a fully scriptable run (CI, AI coding agents, automation).',
+        'for a fully scriptable run (CI, AI coding agents, automation).\n' +
+        '\n' +
+        'In a Prisma 7 project, pass --from-prisma7-schema (or answer yes when asked)\n' +
+        'to use the existing schema.prisma as the contract source.',
       examples: [
         'orm init',
         // biome-ignore lint/plugin/no-family-vocabulary: names a target on purpose — user-facing help showing what to pass to --target
@@ -81,6 +84,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         'orm init --skip-install',
         // biome-ignore lint/plugin/no-family-vocabulary: names a target on purpose — user-facing help showing what to pass to --target
         'orm init --target postgres --keep-previous-facade',
+        'orm init --from-prisma7-schema prisma/schema.prisma --confirm my-app',
       ],
     },
     args: {
@@ -109,6 +113,10 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         keepPreviousFacade: flag.boolean({
           brief: 'Keep the previous target package in package.json when switching targets',
         }),
+        fromPrisma7Schema: flag.string({
+          brief: 'Use an existing Prisma 7 schema.prisma as the contract source',
+          placeholder: 'path',
+        }),
       },
     },
     exitCodes: INIT_EXIT_CODES,
@@ -125,6 +133,9 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         flags: args.flags,
         prompt: ctx.prompt,
       });
+      for (const warning of inputs.warnings) {
+        warn(warning);
+      }
 
       const packageManager = await resolveScaffoldPackageManager({ cwd: ctx.cwd, env: ctx.env });
       const scaffold = scaffoldProject({ cwd: ctx.cwd, inputs, packageManager });
