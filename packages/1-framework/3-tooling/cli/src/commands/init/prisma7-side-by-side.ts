@@ -44,7 +44,7 @@ export function rewritePrismaBinary(script: string): string {
 export function rewritePrismaScripts(
   manifest: string,
   keepNames: readonly string[],
-): string | null {
+): { readonly content: string; readonly names: readonly string[] } | null {
   const parsed = blindCast<
     Record<string, unknown>,
     'JSON.parse returns unknown; package.json is a JSON object so its top level is a string-keyed record'
@@ -54,18 +54,20 @@ export function rewritePrismaScripts(
     return null;
   }
   const kept = new Set(keepNames);
-  let changed = false;
+  const names: string[] = [];
   const next: Record<string, unknown> = {};
   for (const [name, command] of Object.entries(scripts)) {
     const rewritten =
       typeof command === 'string' && !kept.has(name) ? rewritePrismaBinary(command) : command;
-    changed ||= rewritten !== command;
+    if (rewritten !== command) {
+      names.push(name);
+    }
     next[name] = rewritten;
   }
-  if (!changed) {
+  if (names.length === 0) {
     return null;
   }
   parsed['scripts'] = next;
   const trailingNewline = manifest.endsWith('\n') ? '\n' : '';
-  return `${JSON.stringify(parsed, null, 2)}${trailingNewline}`;
+  return { content: `${JSON.stringify(parsed, null, 2)}${trailingNewline}`, names };
 }

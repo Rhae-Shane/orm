@@ -126,6 +126,8 @@ export interface ScaffoldOutcome {
   readonly filesDeleted: string[];
   /** The Prisma 7 config moved out of Prisma 8's way, when the side-by-side plan asked for it. */
   readonly filesRenamed: { readonly from: string; readonly to: string }[];
+  /** `package.json` scripts now invoking `prisma7` instead of `prisma`. */
+  readonly scriptsRewritten: readonly string[];
   readonly warnings: readonly string[];
   readonly notes: readonly string[];
   /** The project already pins `@types/node` itself, so the install leaves it alone. */
@@ -182,6 +184,7 @@ function hasProjectManifest(cwd: string): boolean {
 
 interface ScaffoldPlan {
   readonly renames: readonly RenameEntry[];
+  readonly scriptsRewritten: readonly string[];
   readonly files: readonly FileEntry[];
   readonly filesToDelete: readonly string[];
   readonly dirsToDelete: readonly string[];
@@ -328,6 +331,7 @@ function planScaffold(ctx: {
   const manifestExisted = existsSync(manifestPath);
   const synthesiseManifest = !manifestExisted && !hasProjectManifest(cwd);
   let parsedManifest: Record<string, unknown> | null = null;
+  let scriptsRewritten: readonly string[] = [];
   if (manifestExisted || synthesiseManifest) {
     const raw = manifestExisted
       ? readFileSync(manifestPath, 'utf-8')
@@ -356,7 +360,8 @@ function planScaffold(ctx: {
         REQUIRED_SCRIPTS.map((script) => script.name),
       );
       if (next !== null) {
-        working = next;
+        working = next.content;
+        scriptsRewritten = next.names;
         changed = true;
       }
     }
@@ -406,6 +411,7 @@ function planScaffold(ctx: {
 
   return {
     renames,
+    scriptsRewritten,
     files,
     filesToDelete,
     dirsToDelete,
@@ -523,6 +529,7 @@ export function scaffoldProject(ctx: {
     filesWritten,
     filesDeleted,
     filesRenamed,
+    scriptsRewritten: plan.scriptsRewritten,
     warnings: plan.warnings,
     notes,
     hasTypesNode: plan.hasTypesNode,

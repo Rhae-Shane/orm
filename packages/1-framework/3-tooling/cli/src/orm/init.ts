@@ -179,6 +179,13 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         ...(movePackages !== null ? ['@prisma/prisma7@7'] : []),
       ];
 
+      const packagesMoved = [
+        ...(moveClient ? ['@prisma/client@7'] : []),
+        ...(movePackages !== null ? ['@prisma/prisma7@7'] : []),
+      ];
+      const adoptsPrisma7 = inputs.contractSource.kind === 'prisma7-schema';
+      const prisma7Steps = adoptsPrisma7 ? { packagesMoved, clientMoved: moveClient } : null;
+
       const findings: Diagnostic[] = [];
       const extraActions: NextAction[] = [];
       let packagesInstalled: InstallStatus = 'skipped';
@@ -189,22 +196,32 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         const document: InitOutput = {
           ok: true,
           target: inputs.target === 'mongo' ? 'mongodb' : 'postgres',
-          authoring: inputs.authoring,
+          authoring: adoptsPrisma7 ? 'prisma7' : inputs.authoring,
           schemaPath: inputs.schemaPath,
           filesWritten: scaffold.filesWritten,
           filesDeleted: scaffold.filesDeleted,
+          filesRenamed: scaffold.filesRenamed,
           packagesInstalled: {
             status: packagesInstalled,
             deps: installed ? deps : [],
             devDeps: installed ? devDeps : [],
           },
           contractEmitted,
+          prisma7: adoptsPrisma7
+            ? {
+                schemaPath: inputs.schemaPath,
+                configRenamedTo: scaffold.filesRenamed[0]?.to ?? null,
+                scriptsRewritten: [...scaffold.scriptsRewritten],
+                packagesMoved,
+              }
+            : null,
           nextSteps: buildNextSteps({
             target: inputs.target === 'mongo' ? 'mongodb' : 'postgres',
             packagesInstalled,
             contractEmitted,
             emitCommand: EMIT_COMMAND,
             schemaPath: inputs.schemaPath,
+            prisma7: prisma7Steps,
           }),
           warnings,
         };
@@ -235,6 +252,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
                 ...buildInitNextActions({
                   contractEmitted,
                   schemaPath: inputs.schemaPath,
+                  prisma7: prisma7Steps,
                 }),
               ],
             }),
