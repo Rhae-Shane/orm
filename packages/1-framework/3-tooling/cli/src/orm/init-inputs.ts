@@ -5,6 +5,7 @@ import {
   errorInitFlagConflict,
   errorInitMissingFlags,
   errorInitPrisma7ConfigCollision,
+  errorInitPrisma7ConfigUnreadable,
   errorInitPrisma7MongoUnsupported,
   errorInitPrisma7ProviderUnsupported,
   errorInitPrisma7SchemaInvalid,
@@ -236,8 +237,17 @@ function rejectFlagConflict(flags: InitFlagValues): void {
   }
 }
 
+/**
+ * True only for what detection actually saw: a schema with a `datasource`
+ * block is called one; otherwise the question is about the config, and the
+ * path is only what it declares.
+ */
 function prisma7Question(detection: Prisma7Detection): string {
-  return `${detection.schema.path} is a Prisma 7 schema. Use it as the Prisma 8 contract source?`;
+  const { config, schema } = detection;
+  if (schema.kind === 'datasource' || config.kind !== 'prisma7') {
+    return `${schema.path} is a Prisma 7 schema. Use it as the Prisma 8 contract source?`;
+  }
+  return `${config.path} is a Prisma 7 config. Use the schema it declares (${schema.path}) as the Prisma 8 contract source?`;
 }
 
 /**
@@ -302,11 +312,14 @@ function sideBySidePlan(detection: Prisma7Detection): Prisma7SideBySidePlan | nu
 }
 
 function sideBySideQuestion(plan: Prisma7SideBySidePlan): string {
-  if (plan.movePackages !== null || plan.renameConfig === null) {
+  const { renameConfig, movePackages } = plan;
+  if (movePackages === null && renameConfig !== null) {
+    return `${renameConfig.from} is a Prisma 7 config. Rename it to prisma7.config.${renameConfig.extension} so Prisma 8 can write its own?`;
+  }
+  if (renameConfig === null) {
     return SIDE_BY_SIDE_QUESTION;
   }
-  const { from, extension } = plan.renameConfig;
-  return `${from} is a Prisma 7 config. Rename it to prisma7.config.${extension} so Prisma 8 can write its own?`;
+  return `${SIDE_BY_SIDE_QUESTION.slice(0, -1)}, and rename ${renameConfig.from} to prisma7.config.${renameConfig.extension}?`;
 }
 
 async function requireReinitConsent(ctx: {
@@ -336,10 +349,11 @@ async function askWriteEnv(flags: InitFlagValues, prompt: PromptSurface): Promis
 }
 
 /**
- * The Prisma 7 path: every refusal comes before any consent, so a schema init
- * cannot use costs no typed token. `prisma.config.ts` counts as a file to
- * replace only when it is init's own (or cannot be told apart); a Prisma 7
- * config there is renamed under the side-by-side consent instead.
+ * The Prisma 7 path: every refusal comes before any consent, so a run that is
+ * going to refuse never asks the user to type the consent token.
+ * `prisma.config.ts` counts as a file to replace only when it is init's own; a
+ * Prisma 7 config there is renamed under the side-by-side consent, and one
+ * that cannot be told apart is refused rather than overwritten.
  */
 async function resolvePrisma7Inputs(ctx: {
   readonly cwd: string;
@@ -353,14 +367,16 @@ async function resolvePrisma7Inputs(ctx: {
   if (config.kind === 'collision') {
     throw errorInitPrisma7ConfigCollision(config);
   }
+  if (config.kind === 'unreadable') {
+    throw errorInitPrisma7ConfigUnreadable(config);
+  }
   if (schema.kind !== 'datasource') {
     throw errorInitPrisma7SchemaInvalid({ schemaPath: schema.path, reason: schema.kind });
   }
   const target = flagTarget ?? targetFromProvider(schema);
 
-  const configIsInitsOwn = config.kind === 'prisma8' || config.kind === 'unreadable';
   const replaced = [
-    ...(configIsInitsOwn ? ['prisma.config.ts'] : []),
+    ...(config.kind === 'prisma8' ? ['prisma.config.ts'] : []),
     ...PRISMA7_PATH_GENERATED_FILES,
   ].filter((relative) => existsSync(join(cwd, relative)));
   const reinit = await requireReinitConsent({ cwd, prompt, replaced });

@@ -143,9 +143,13 @@ A flag passed to `prisma orm init` has a value outside its allowed set (for exam
 
 On the Prisma 7 path of `prisma orm init`, `prisma.config.*` evaluated as a Prisma 7 config (no `$prismaConfig` marker) while a `prisma7.config.*` also exists. Init renames the Prisma 7 config to `prisma7.config.*` so Prisma 8 can write its own, and cannot rename onto an existing file. Nothing is written. Maps to init exit code 2 (PRECONDITION). Payload: `prismaConfigPath`, `prisma7ConfigPath`.
 
+### CLI.INIT_PRISMA7_CONFIG_UNREADABLE
+
+On the Prisma 7 path of `prisma orm init`, `prisma.config.*` exists but failed to evaluate (typically a Prisma 7 config importing `prisma/config` in a checkout whose dependencies are not installed). Init cannot tell whether the file is Prisma 7's, to rename, or its own, to replace, so it refuses rather than overwrite it. The fix is to install the project's dependencies so the config evaluates, or rename it to `prisma7.config.<ext>` by hand. The normal path is unaffected: without the flag or a yes to the Prisma 7 question, the file is treated as it is today. Nothing is written. Maps to init exit code 2 (PRECONDITION). Payload: `path`, `why`.
+
 ### CLI.INIT_PRISMA7_MONGO_UNSUPPORTED
 
-On the Prisma 7 path of `prisma orm init`, the schema's `datasource` block declares `provider = "mongodb"`. Using a Prisma 7 schema as the contract source is available for PostgreSQL first; MongoDB support follows. `--target` is not consulted here only when absent: passing `--target` skips the provider check. Nothing is written. Maps to init exit code 2 (PRECONDITION). Payload: `schemaPath`, `provider`.
+On the Prisma 7 path of `prisma orm init`, the schema's `datasource` block declares `provider = "mongodb"`. Using a Prisma 7 schema as the contract source is available for PostgreSQL first; MongoDB support follows. The provider is checked only when `--target` is absent; passing `--target` skips this check. Nothing is written. Maps to init exit code 2 (PRECONDITION). Payload: `schemaPath`, `provider`.
 
 ### CLI.INIT_PRISMA7_PROVIDER_UNSUPPORTED
 

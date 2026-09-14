@@ -368,3 +368,25 @@ export function errorInitPrisma7ConfigCollision(options: {
     },
   });
 }
+
+/**
+ * `prisma.config.*` exists but did not evaluate, so init cannot tell whether
+ * it is Prisma 7's (to rename) or its own (to replace). Refused rather than
+ * guessed: replacing a Prisma 7 config would destroy the user's file.
+ */
+export function errorInitPrisma7ConfigUnreadable(options: {
+  readonly path: string;
+  readonly why: string;
+}): CliStructuredError {
+  const extension = options.path.slice(options.path.lastIndexOf('.') + 1);
+  return new CliStructuredError(
+    'CLI.INIT_PRISMA7_CONFIG_UNREADABLE',
+    `Could not evaluate ${options.path}`,
+    {
+      why: `\`${options.path}\` failed to evaluate, so init cannot tell whether it is a Prisma 7 config to rename or a Prisma 8 config to replace: ${options.why}`,
+      fix: `Install the project's dependencies so \`${options.path}\` can be evaluated (a Prisma 7 config imports \`prisma/config\`), or rename it to \`prisma7.config.${extension}\` by hand, then re-run \`prisma orm init\`.`,
+      docsUrl: docsUrlFor('CLI.INIT_PRISMA7_CONFIG_UNREADABLE'),
+      meta: { path: options.path, why: options.why },
+    },
+  );
+}

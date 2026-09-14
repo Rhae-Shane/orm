@@ -186,9 +186,10 @@ describe(
         });
       });
 
-      it('refuses a mongodb provider until the Mongo source exists', async () => {
+      it('refuses a mongodb provider until the Mongo source exists, before any consent', async () => {
         writePrisma7Schema('mongodb');
-        const { prompt } = scriptedPrompt();
+        writeManifest({ name: 'app', devDependencies: { prisma: '^7.3.0' } });
+        const { prompt, calls } = scriptedPrompt();
 
         await expect(
           resolveInitInputs({
@@ -200,6 +201,7 @@ describe(
           code: 'CLI.INIT_PRISMA7_MONGO_UNSUPPORTED',
           meta: { schemaPath: 'prisma/schema.prisma' },
         });
+        expect(calls).toEqual([]);
       });
 
       it('refuses any other provider and lists the supported ones', async () => {
@@ -259,20 +261,26 @@ describe(
         });
       });
 
-      it('forwards a config evaluation failure as a warning', async () => {
+      it('refuses a prisma.config.ts it could not evaluate rather than replace it', async () => {
         writePrisma7Schema();
         writeProjectFile('prisma.config.ts', "throw new Error('config module exploded');\n");
-        const { prompt } = scriptedPrompt({
-          ['Re-initializing replaces prisma.config.ts with a fresh scaffold, losing anything you wrote in it.']: true,
-        });
+        writeManifest({ name: 'app', devDependencies: { prisma: '^7.3.0' } });
+        const { prompt, calls } = scriptedPrompt();
 
-        const inputs = await resolveInitInputs({
-          cwd: projectDir,
-          flags: flags({ ...NO_FLAGS, fromPrisma7Schema: 'prisma/schema.prisma' }),
-          prompt,
+        await expect(
+          resolveInitInputs({
+            cwd: projectDir,
+            flags: flags({ ...NO_FLAGS, fromPrisma7Schema: 'prisma/schema.prisma' }),
+            prompt,
+          }),
+        ).rejects.toMatchObject({
+          code: 'CLI.INIT_PRISMA7_CONFIG_UNREADABLE',
+          meta: {
+            path: 'prisma.config.ts',
+            why: expect.stringContaining('config module exploded'),
+          },
         });
-
-        expect(inputs.warnings).toEqual([expect.stringContaining('config module exploded')]);
+        expect(calls).toEqual([]);
       });
     });
 
@@ -291,7 +299,7 @@ describe(
       it('is asked when only a Prisma 7 config is found, naming the path it declares', async () => {
         writeProjectFile('prisma.config.ts', "export default { schema: 'db/schema.prisma' };\n");
         const { prompt, calls } = scriptedPrompt({
-          'db/schema.prisma is a Prisma 7 schema. Use it as the Prisma 8 contract source?': false,
+          'prisma.config.ts is a Prisma 7 config. Use the schema it declares (db/schema.prisma) as the Prisma 8 contract source?': false,
           'What database are you using?': 'postgres',
           'How do you want to write your schema?': 'psl',
           'Re-initializing replaces prisma.config.ts with a fresh scaffold, losing anything you wrote in it.': true,
@@ -300,7 +308,7 @@ describe(
         await resolveInitInputs({ cwd: projectDir, flags: flags(NO_FLAGS), prompt });
 
         expect(calls[0]?.question).toBe(
-          'db/schema.prisma is a Prisma 7 schema. Use it as the Prisma 8 contract source?',
+          'prisma.config.ts is a Prisma 7 config. Use the schema it declares (db/schema.prisma) as the Prisma 8 contract source?',
         );
       });
 
@@ -381,16 +389,13 @@ describe(
           devDependencies: { prisma: '^7.3.0' },
           dependencies: { '@prisma/client': '^7.3.0' },
         });
-        const { prompt, calls } = scriptedPrompt({ [SIDE_BY_SIDE_QUESTION]: true });
+        const question = `${SIDE_BY_SIDE_QUESTION.slice(0, -1)}, and rename prisma.config.ts to prisma7.config.ts?`;
+        const { prompt, calls } = scriptedPrompt({ [question]: true });
 
         const inputs = await resolveInitInputs({ cwd: projectDir, flags: prisma7Flags(), prompt });
 
         expect(calls.filter((call) => call.kind === 'consent')).toEqual([
-          {
-            kind: 'consent',
-            question: SIDE_BY_SIDE_QUESTION,
-            opts: { token: basename(projectDir) },
-          },
+          { kind: 'consent', question, opts: { token: basename(projectDir) } },
         ]);
         expect(inputs.sideBySide).toEqual({
           renameConfig: { from: 'prisma.config.ts', extension: 'ts' },
