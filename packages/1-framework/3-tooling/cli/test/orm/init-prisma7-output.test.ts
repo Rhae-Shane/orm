@@ -107,7 +107,7 @@ describe('the Prisma 7 result document', () => {
           '1. Set DATABASE_URL in your environment (export it or add it to .env).',
           '2. Install the project dependencies with your package manager (this run skipped them), including @prisma/prisma7@7.',
           '3. Emit the contract: `prisma contract emit`',
-          '4. Adopt your existing database: `prisma db sign` reads it, verifies it against the contract, and records the marker. It writes nothing else.',
+          '4. Adopt your existing database: `prisma db sign` verifies it against the contract and records the signing marker and the `db` ref. It makes no change to the database schema.',
           '5. Move your routes one at a time to the Prisma 8 client in src/prisma/db.ts.',
           '6. After each `prisma7 migrate dev`, run `prisma contract emit` and then `prisma db sign`.',
           '7. When the last route has moved, follow section 4 (cutover) of the "Prisma ORM 7 to 8 (PostgreSQL)" upgrade guide.',
@@ -156,7 +156,7 @@ describe('the Prisma 7 result document', () => {
       });
       expect(nextSteps(run)).toEqual([
         '1. Set DATABASE_URL in your environment (export it or add it to .env).',
-        '2. Adopt your existing database: `prisma db sign` reads it, verifies it against the contract, and records the marker. It writes nothing else.',
+        '2. Adopt your existing database: `prisma db sign` verifies it against the contract and records the signing marker and the `db` ref. It makes no change to the database schema.',
         '3. Move your routes one at a time to the Prisma 8 client in src/prisma/db.ts.',
         '4. After each `prisma7 migrate dev`, run `prisma contract emit` and then `prisma db sign`.',
         '5. Run `prisma7 generate` so the Prisma 7 client matches the Prisma 7 CLI.',

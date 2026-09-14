@@ -136,7 +136,7 @@ export function buildNextSteps(options: {
 
 export const PRISMA7_UPGRADE_GUIDE_TITLE = 'Prisma ORM 7 to 8 (PostgreSQL)';
 export const DB_SIGN_STEP =
-  'Adopt your existing database: `prisma db sign` reads it, verifies it against the contract, and records the marker. It writes nothing else.';
+  'Adopt your existing database: `prisma db sign` verifies it against the contract and records the signing marker and the `db` ref. It makes no change to the database schema.';
 export const PRISMA7_ROUTES_STEP =
   'Move your routes one at a time to the Prisma 8 client in src/prisma/db.ts.';
 export const PRISMA7_LOOP_STEP =
