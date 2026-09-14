@@ -12,6 +12,7 @@ import {
   InitOutputSchema,
   type InstallStatus,
 } from '../commands/init/output';
+import { versionMajor } from '../commands/init/prisma7-detect';
 import { type ProbeOutcome, probeServerVersion } from '../commands/init/probe-db';
 import { targetPackageName } from '../commands/init/templates/code-templates';
 import { MIN_SERVER_VERSION } from '../commands/init/templates/env';
@@ -146,7 +147,19 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         ctx.report({ kind: 'message', severity: 'info', text: note });
       }
 
-      const deps = [targetPackageName(inputs.target, scaffold.resolveImportSpecifier), 'dotenv'];
+      // Prisma 7 requires CLI and client at the same version, so when the CLI
+      // moves aside as @prisma/prisma7 a client below the 7 line moves with it.
+      const movePackages = inputs.sideBySide?.movePackages ?? null;
+      const clientMajor =
+        movePackages?.clientVersion === undefined
+          ? undefined
+          : versionMajor(movePackages.clientVersion);
+      const moveClient = movePackages !== null && (clientMajor === undefined || clientMajor < 7);
+      const deps = [
+        targetPackageName(inputs.target, scaffold.resolveImportSpecifier),
+        'dotenv',
+        ...(moveClient ? ['@prisma/client@7'] : []),
+      ];
       // The CLI the scaffolded scripts run is `prisma`, the unified CLI's
       // published name, whose v8 line publishes under the `latest` dist-tag (the
       // standalone shim is no longer published). It is the package that
@@ -159,7 +172,10 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
       // Node's ambient types present; a project that already pins @types/node
       // keeps its own major.
       const cliDevDeps = ['prisma@latest'];
-      const devDeps: string[] = scaffold.hasTypesNode ? cliDevDeps : [...cliDevDeps, '@types/node'];
+      const devDeps: string[] = [
+        ...(scaffold.hasTypesNode ? cliDevDeps : [...cliDevDeps, '@types/node']),
+        ...(movePackages !== null ? ['@prisma/prisma7@7'] : []),
+      ];
 
       const findings: Diagnostic[] = [];
       const extraActions: NextAction[] = [];

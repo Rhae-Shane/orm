@@ -187,7 +187,8 @@ function installedVersion(cwd: string, name: string): string | undefined {
   return typeof version === 'string' ? version : undefined;
 }
 
-function majorOf(range: string): number | undefined {
+/** The major of a version or range (`^7.3.0`, `7.4.1`, `>=6`); `undefined` when it cannot be read. */
+export function versionMajor(range: string): number | undefined {
   const match = /^\s*[\^~>=<v]*\s*(\d+)(?:\.|$|\s|-)/.exec(range);
   return match?.[1] === undefined ? undefined : Number(match[1]);
 }
@@ -206,7 +207,7 @@ function detectCli(cwd: string): Prisma7CliDetection {
   }
   const installed = installedVersion(cwd, 'prisma');
   const version = installed ?? declared;
-  const major = majorOf(version);
+  const major = versionMajor(version);
   if (major === undefined || major >= 8) {
     return { kind: 'none' };
   }

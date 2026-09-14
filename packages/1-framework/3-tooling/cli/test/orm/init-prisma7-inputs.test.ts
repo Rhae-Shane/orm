@@ -261,6 +261,21 @@ describe(
         });
       });
 
+      it('carries an unreadable prisma7.config.ts as a warning, since init never writes it', async () => {
+        writePrisma7Schema();
+        writeProjectFile('prisma7.config.ts', "import 'a-package-that-is-not-installed';\n");
+        const { prompt } = scriptedPrompt();
+
+        const inputs = await resolveInitInputs({
+          cwd: projectDir,
+          flags: flags({ ...NO_FLAGS, fromPrisma7Schema: 'prisma/schema.prisma' }),
+          prompt,
+        });
+
+        expect(inputs.warnings).toEqual([expect.stringContaining('prisma7.config.ts')]);
+        expect(inputs.sideBySide).toBeNull();
+      });
+
       it('refuses a prisma.config.ts it could not evaluate rather than replace it', async () => {
         writePrisma7Schema();
         writeProjectFile('prisma.config.ts', "throw new Error('config module exploded');\n");

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createTestCli } from '@prisma/cli-engine/testing';
 import { timeouts } from '@repo/test-utils';
 import { basename, dirname, join } from 'pathe';
@@ -70,7 +70,9 @@ describe('init on a Prisma 7 project', () => {
           schemaPath: 'prisma/schema.prisma',
         });
         expect(readProjectFile('prisma/schema.prisma')).toBe(PRISMA7_SCHEMA);
+        expect(readdirSync(join(projectDir, 'prisma'))).toEqual(['schema.prisma']);
         expect(existsSync(join(projectDir, 'prisma.config.ts'))).toBe(true);
+        expect(existsSync(join(projectDir, 'src/prisma/db.ts'))).toBe(true);
       },
       timeouts.coldTransformImport,
     );
@@ -279,7 +281,7 @@ describe('init on a Prisma 7 project', () => {
     );
 
     it(
-      'never overwrites the Prisma 7 config it was asked to keep',
+      'renames the Prisma 7 config it was asked to keep and writes its own in its place',
       async () => {
         writeProjectFile('prisma.config.ts', PRISMA7_CONFIG);
 
@@ -289,7 +291,8 @@ describe('init on a Prisma 7 project', () => {
         );
 
         expect(run.exitCode).toBe(0);
-        expect(readProjectFile('prisma.config.ts')).toBe(PRISMA7_CONFIG);
+        expect(readProjectFile('prisma7.config.ts')).toBe(PRISMA7_CONFIG);
+        expect(readProjectFile('prisma.config.ts')).toContain('prisma7Schema(');
         expect(readProjectFile('prisma/schema.prisma')).toBe(PRISMA7_SCHEMA);
       },
       timeouts.coldTransformImport,

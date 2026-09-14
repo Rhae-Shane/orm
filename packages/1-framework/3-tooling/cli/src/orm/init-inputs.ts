@@ -26,7 +26,11 @@ import {
   targetLabel,
   targetPackageName,
 } from '../commands/init/templates/code-templates';
-import { generatedFilesInitReplaces } from './init-scaffold';
+import {
+  CONFIG_FILE,
+  generatedFilesInitReplaces,
+  generatedFilesPrisma7PathReplaces,
+} from './init-scaffold';
 
 /** The flag values `init` reads, after the engine has parsed them. */
 export interface InitFlagValues {
@@ -217,9 +221,6 @@ const PRISMA7_CONFIG_STEM = 'prisma.config.';
 const SIDE_BY_SIDE_QUESTION =
   'Prisma 7 is installed as `prisma`. Keep it as @prisma/prisma7 (binary prisma7) and move `prisma` to Prisma 8?';
 
-/** Init's own files on the Prisma 7 path; the Prisma 7 schema is never among them. */
-const PRISMA7_PATH_GENERATED_FILES = ['src/prisma/db.ts', 'prisma-8.md'] as const;
-
 /**
  * `--from-prisma7-schema` names the contract source; `--schema-path` and
  * `--authoring` describe a starter schema to write. Both at once is a
@@ -367,7 +368,10 @@ async function resolvePrisma7Inputs(ctx: {
   if (config.kind === 'collision') {
     throw errorInitPrisma7ConfigCollision(config);
   }
-  if (config.kind === 'unreadable') {
+  // Only prisma.config.* is at stake: init writes that name, and cannot tell
+  // an unreadable Prisma 7 config to rename from its own to replace. An
+  // unreadable prisma7.config.* is never written to, so it is only a warning.
+  if (config.kind === 'unreadable' && config.path.startsWith(PRISMA7_CONFIG_STEM)) {
     throw errorInitPrisma7ConfigUnreadable(config);
   }
   if (schema.kind !== 'datasource') {
@@ -375,10 +379,10 @@ async function resolvePrisma7Inputs(ctx: {
   }
   const target = flagTarget ?? targetFromProvider(schema);
 
-  const replaced = [
-    ...(config.kind === 'prisma8' ? ['prisma.config.ts'] : []),
-    ...PRISMA7_PATH_GENERATED_FILES,
-  ].filter((relative) => existsSync(join(cwd, relative)));
+  const replaced = generatedFilesPrisma7PathReplaces().filter(
+    (relative) =>
+      (relative !== CONFIG_FILE || config.kind === 'prisma8') && existsSync(join(cwd, relative)),
+  );
   const reinit = await requireReinitConsent({ cwd, prompt, replaced });
 
   const sideBySide = sideBySidePlan(detection);
