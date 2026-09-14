@@ -19,8 +19,8 @@ Pick the facade that matches your deployment lifecycle. The asymmetry is intenti
 
 ```typescript
 // prisma.config.ts
-import { definePrismaConfig } from '@prisma/cli-engine';
-import { defineConfig as ormConfig } from '@internal/postgres/config';
+import { definePrismaConfig } from 'prisma/config';
+import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
 
 export default definePrismaConfig({
   orm: ormConfig({
@@ -30,7 +30,7 @@ export default definePrismaConfig({
 });
 ```
 
-The default export must be the value `definePrismaConfig` from `@prisma/cli-engine` returns, with the ORM settings nested under `orm`; the CLI rejects a bare `defineConfig` result with `CONFIG.VERSION_MARKER_MISSING`.
+The default export must be the value `definePrismaConfig` returns, with the ORM settings nested under `orm`; the CLI rejects a bare `defineConfig` result with `CONFIG.VERSION_MARKER_MISSING`. (Inside this repository the same two imports are `@prisma/cli-engine` and `@internal/postgres/config`; see the contributor note under `prisma7Schema` below.)
 
 ### Node (long-lived process)
 
@@ -88,7 +88,7 @@ export default definePrismaConfig({
 });
 ```
 
-`prisma/config` is the published `prisma` package re-exporting `definePrismaConfig` from `@prisma/cli-engine`. Contributors working inside this repository, where the published `prisma` package is not built, import it from `@prisma/cli-engine` directly; the two forms are the same function. A worked example that runs Prisma 7 and Prisma 8 side by side is `examples/prisma7-adoption`.
+`prisma/config` is the published `prisma` package re-exporting `definePrismaConfig` from `@prisma/cli-engine`. Contributors working inside this repository, where the published `prisma` package is not built, import it from `@prisma/cli-engine` directly and the facade from `@internal/postgres/config`; the forms are the same functions. A worked example that runs Prisma 7 and Prisma 8 side by side is `examples/prisma7-adoption`.
 
 What the project needs around that file:
 
