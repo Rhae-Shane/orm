@@ -77,7 +77,7 @@ Simplified `defineConfig` that pre-wires all Postgres internals (family, target,
 
 ```typescript
 // prisma.config.ts
-import { definePrismaConfig } from '@prisma/cli-engine';
+import { definePrismaConfig } from 'prisma/config';
 import { defineConfig as ormConfig, prisma7Schema } from '@prisma/orm-postgres/config';
 
 export default definePrismaConfig({
@@ -87,6 +87,8 @@ export default definePrismaConfig({
   }),
 });
 ```
+
+`prisma/config` is the published `prisma` package re-exporting `definePrismaConfig` from `@prisma/cli-engine`. Contributors working inside this repository, where the published `prisma` package is not built, import it from `@prisma/cli-engine` directly; the two forms are the same function. A worked example that runs Prisma 7 and Prisma 8 side by side is `examples/prisma7-adoption`.
 
 What the project needs around that file:
 
