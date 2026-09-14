@@ -1,6 +1,8 @@
-# Slice 2: Prisma 7 contract source for Mongo
+# Slice 2: Prisma 6 contract source for Mongo
 
-_Parent project: `projects/prisma7-contract-source/`. Linear: to be created. Outcome: a Mongo user points `prisma.config.ts` at their Prisma 7 `schema.prisma` and `contract emit` and `db sign` succeed against the database Prisma 7 shaped._
+_Parent project: `projects/prisma7-contract-source/`. Linear: to be created. Outcome: a Mongo user points `prisma.config.ts` at their Prisma 6 `schema.prisma` and `contract emit` and `db sign` succeed against the database Prisma 6 shaped._
+
+> **Corrected 2026-09-14 from the public docs.** Prisma 7 has no MongoDB connector; the [MongoDB upgrade guide](https://www.prisma.io/docs/guides/upgrade-prisma-orm/mongodb) is a Prisma 6 to 8 port with no side-by-side phase. This slice therefore reads the Prisma 6 MongoDB schema dialect (the same `schema.prisma` grammar, `datasource` with `provider = "mongodb"`, `@db.ObjectId`, `@default(auto())`, composite `type` blocks, `@@fulltext`). The factory keeps the `prisma7Schema` name for a single documented entry point across both families unless the plan finds that confusing, in which case a `prisma6Schema` alias is exported for Mongo and the decision is recorded here.
 
 ## At a glance
 
