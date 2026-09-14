@@ -13,7 +13,10 @@ import sql from '@internal/family-sql/control';
 import { createControlStack } from '@internal/framework-components/control';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { prisma7Schema } from '@internal/sql-contract-prisma7/provider';
-import postgres, { INSTANT_NOW_GENERATOR_ID } from '@internal/target-postgres/control';
+import postgres, {
+  INSTANT_NOW_GENERATOR_ID,
+  PLAIN_DATE_TIME_NOW_GENERATOR_ID,
+} from '@internal/target-postgres/control';
 import postgresPackRef from '@internal/target-postgres/pack';
 import { prisma7PostgresTypeMap } from '@internal/target-postgres/prisma7-type-map';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
@@ -51,7 +54,12 @@ function load(schemaPath: string) {
     createNamespace: postgresCreateNamespace,
     nativeEnum: { entityKind: 'native_enum', typeConstructor: ['pg', 'enum'] },
     typeMap: prisma7PostgresTypeMap,
-    updatedAt: { generatorId: INSTANT_NOW_GENERATOR_ID },
+    updatedAt: {
+      generatorIdFor: ({ codecId }) =>
+        codecId === 'pg/timestamptz-temporal@1'
+          ? INSTANT_NOW_GENERATOR_ID
+          : PLAIN_DATE_TIME_NOW_GENERATOR_ID,
+    },
   }).source.load(sourceContext(schemaPath));
 }
 

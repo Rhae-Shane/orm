@@ -1,6 +1,9 @@
 import type { ContractConfig } from '@internal/config/config-types';
 import { prisma7Schema as sqlPrisma7Schema } from '@internal/sql-contract-prisma7/provider';
-import { INSTANT_NOW_GENERATOR_ID } from '@internal/target-postgres/control';
+import {
+  INSTANT_NOW_GENERATOR_ID,
+  PLAIN_DATE_TIME_NOW_GENERATOR_ID,
+} from '@internal/target-postgres/control';
 import postgresPackRef from '@internal/target-postgres/pack';
 import { prisma7PostgresTypeMap } from '@internal/target-postgres/prisma7-type-map';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
@@ -22,6 +25,11 @@ export function prisma7Schema(schemaPath: string, options?: Prisma7SchemaOptions
     createNamespace: postgresCreateNamespace,
     nativeEnum: { entityKind: 'native_enum', typeConstructor: ['pg', 'enum'] },
     typeMap: prisma7PostgresTypeMap,
-    updatedAt: { generatorId: INSTANT_NOW_GENERATOR_ID },
+    updatedAt: {
+      generatorIdFor: ({ codecId }) =>
+        codecId === 'pg/timestamptz-temporal@1'
+          ? INSTANT_NOW_GENERATOR_ID
+          : PLAIN_DATE_TIME_NOW_GENERATOR_ID,
+    },
   });
 }

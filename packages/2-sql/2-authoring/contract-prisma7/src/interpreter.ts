@@ -83,7 +83,17 @@ export interface InterpretPrisma7DocumentsInput {
     readonly typeConstructor: readonly string[];
   };
   readonly typeMap: Prisma7TypeMap;
-  readonly updatedAt: { readonly generatorId: string };
+  /**
+   * Picks the ORM-side "now" generator for an `@updatedAt` column from the
+   * column's resolved codec, so the generated value is in the representation
+   * that codec encodes (a zoneless `timestamp` and a `timestamptz` differ).
+   */
+  readonly updatedAt: {
+    readonly generatorIdFor: (column: {
+      readonly codecId: string;
+      readonly nativeType: string;
+    }) => string;
+  };
   readonly controlMutationDefaults: ControlMutationDefaults;
   readonly authoringContributions: AssembledAuthoringContributions;
   readonly codecLookup: CodecLookup;
@@ -869,7 +879,13 @@ function readField(args: {
   const updatedAtGenerator =
     updatedAt === undefined
       ? undefined
-      : { kind: 'generator' as const, id: input.updatedAt.generatorId };
+      : {
+          kind: 'generator' as const,
+          id: input.updatedAt.generatorIdFor({
+            codecId: resolved.descriptor.codecId,
+            nativeType: resolved.descriptor.nativeType,
+          }),
+        };
   const generator = updatedAtGenerator ?? lowered?.onCreate;
   if (generator !== undefined && field.optional) {
     diagnostics.push(

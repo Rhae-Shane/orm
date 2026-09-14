@@ -30,8 +30,17 @@ export interface Prisma7SchemaOptions {
   };
   /** The target's table of what Prisma 7 creates for each scalar and `@db.*` type. */
   readonly typeMap: Prisma7TypeMap;
-  /** The execution generator `@updatedAt` lowers to on create and update (Postgres: the one `temporal.updatedAt()` uses). */
-  readonly updatedAt: { readonly generatorId: string };
+  /**
+   * Picks the execution generator `@updatedAt` lowers to on create and update
+   * from the column's resolved codec, so the generated value is in the
+   * representation that codec encodes.
+   */
+  readonly updatedAt: {
+    readonly generatorIdFor: (column: {
+      readonly codecId: string;
+      readonly nativeType: string;
+    }) => string;
+  };
 }
 
 function defaultOutputFromSchemaPath(schemaPath: string): string {

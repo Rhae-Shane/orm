@@ -73,11 +73,11 @@
           },
           "onCreate": {
             "kind": "generator",
-            "id": "instantNow"
+            "id": "plainDateTimeNow"
           },
           "onUpdate": {
             "kind": "generator",
-            "id": "instantNow"
+            "id": "plainDateTimeNow"
           }
         },
         {
@@ -97,7 +97,7 @@
         }
       ]
     },
-    "executionHash": "36e598319a303ca6dcf6d1082321557361b6b8fb10a57f64384bae9224bc3664"
+    "executionHash": "b252358adc4d61bfe2500d33ccdbe3c463160a2bf200f34d96bd831f28fe042f"
   },
   "extensions": {},
   "capabilities": {},
