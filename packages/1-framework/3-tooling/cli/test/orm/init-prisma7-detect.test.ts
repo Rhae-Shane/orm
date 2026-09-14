@@ -308,6 +308,37 @@ describe('detectPrisma7Project', () => {
       timeouts.coldTransformImport,
     );
 
+    it.each([
+      ['an array', 'export default [];\n'],
+      ['null', 'export default null;\n'],
+      ['a string', "export default 'prisma/schema.prisma';\n"],
+      ['absent', "export const schema = 'db/schema.prisma';\n"],
+    ])(
+      'does not label a module whose default export is %s as a Prisma 7 config',
+      async (_label, source) => {
+        writeProjectFile('prisma.config.ts', source);
+
+        const detection = await detect();
+
+        expect(detection.config).toMatchObject({ kind: 'unreadable', path: 'prisma.config.ts' });
+        expect(detection.warnings).toHaveLength(1);
+      },
+      timeouts.coldTransformImport,
+    );
+
+    it(
+      'ignores a prisma7.config.* that carries the $prismaConfig marker',
+      async () => {
+        writeProjectFile('prisma7.config.ts', PRISMA_8_CONFIG);
+
+        const detection = await detect();
+
+        expect(detection.config).toEqual({ kind: 'none' });
+        expect(detection.warnings).toEqual([]);
+      },
+      timeouts.coldTransformImport,
+    );
+
     it(
       'discovers the config under every supported extension',
       async () => {

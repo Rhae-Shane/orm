@@ -88,10 +88,13 @@ async function evaluateConfig(cwd: string, path: string): Promise<EvaluatedConfi
     return { kind: 'unreadable', why: evaluated.failure.why ?? evaluated.failure.message };
   }
   const exported = evaluated.value;
-  if (isRecord(exported) && exported['$prismaConfig'] !== undefined) {
+  if (!isRecord(exported) || Object.hasOwn(exported, '__esModule')) {
+    return { kind: 'unreadable', why: `${path} has no object default export` };
+  }
+  if (exported['$prismaConfig'] !== undefined) {
     return { kind: 'prisma8' };
   }
-  const schema = isRecord(exported) ? exported['schema'] : undefined;
+  const schema = exported['schema'];
   return { kind: 'prisma7', schema: typeof schema === 'string' ? schema : undefined };
 }
 
