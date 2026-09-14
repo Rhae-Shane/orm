@@ -108,6 +108,16 @@ Recorded so they are not lost; each becomes its own project when scheduled.
 - Cross-schema enum references: Prisma 7 lets a table in one `@@schema` use an enum declared in another; the SQL contract resolves enum references only within the column's own namespace (`psl-field-resolution.ts:171`), so the Prisma 7 source rejects it with `PRISMA7_ENUM_NAMESPACE_MISMATCH`.
 - Not deferred, assigned to slice 2: the Mongo PSL interpreter silently ignores unknown top-level blocks (`view` included); slice 2 adds the diagnostic.
 
+## Product findings for hand-off
+
+Found by the adoption example (slice 4). Each is outside this project's scope and needs an owner.
+
+- **Wrong CLI through peer resolution.** `@prisma/client@7.10.0` declares a peer dependency on `prisma`; with pnpm auto-installing peers and no explicit Prisma 8 `prisma` dev dependency, `prisma` resolves to Prisma 7 and `prisma contract emit` runs the wrong CLI. The guide should tell users to keep an explicit Prisma 8 `prisma` dev dependency; the example README does.
+- **Provenance policy refuses `prisma@7.10.0`.** Earlier releases had provenance and 7.10.0 does not, so a `trustPolicy: no-downgrade` workspace needs an exact-version exemption. Worth raising with the Prisma 7 release process.
+- **The guide's `prisma7.config.ts` snippet** (`url: process.env["DATABASE_URL"]`) does not type-check under `exactOptionalPropertyTypes`. Docs fix for prisma/web.
+- **Prisma 8's `temporal.timestamp(onUpdate: now)` fails at write time** (`RUNTIME.ENCODE_FAILED`: generator yields an `Instant`, the codec encodes `PlainDateTime`). Fixed in this project as slice 4 dispatch 2.
+- **`orm init` writes `definePrismaConfig` from `@prisma/cli-engine`** while the public docs and the published `prisma` package use `prisma/config`. Not changed here; needs a decision from the CLI owners.
+
 ## References
 
 - The public upgrade guides: [PostgreSQL, 7 to 8](https://www.prisma.io/docs/guides/upgrade-prisma-orm/postgresql) and [MongoDB, 6 to 8](https://www.prisma.io/docs/guides/upgrade-prisma-orm/mongodb). The Postgres guide's phase 2 (`contract infer` plus hand edits) is what the Prisma 7 source replaces; its phase 4 is the cutover routine slice 3 must fit.
