@@ -6,6 +6,10 @@ import type {
 import { postgresTargetDescriptorMetaRuntime } from '../core/descriptor-meta-runtime';
 
 export { INSTANT_NOW_GENERATOR_ID, instantNow } from '../core/instant-now-generator';
+export {
+  PLAIN_DATE_TIME_NOW_GENERATOR_ID,
+  plainDateTimeNow,
+} from '../core/plain-date-time-now-generator';
 export { PostgresContractSerializer } from '../core/postgres-contract-serializer';
 export { PostgresContractView } from '../core/postgres-contract-view';
 
