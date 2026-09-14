@@ -60,6 +60,27 @@ describe('evaluateConfigModule', () => {
   );
 
   it(
+    'returns the requested file alone, not what an extended base contributes to the merged config',
+    async () => {
+      writeFileSync(join(tempDir, 'base.config.ts'), PRISMA_8_CONFIG_SOURCE, 'utf-8');
+      const configPath = join(tempDir, 'prisma.config.ts');
+      writeFileSync(
+        configPath,
+        "export default { schema: 'db/schema.prisma', extends: './base.config.ts' };\n",
+        'utf-8',
+      );
+
+      const result = await evaluateConfigModule(configPath);
+
+      expect(result.assertOk()).toEqual({
+        schema: 'db/schema.prisma',
+        extends: './base.config.ts',
+      });
+    },
+    timeouts.typeScriptCompilation,
+  );
+
+  it(
     'maps a module that throws to CONFIG.EVALUATION_FAILED carrying the thrown message',
     async () => {
       const configPath = join(tempDir, 'prisma.config.ts');
