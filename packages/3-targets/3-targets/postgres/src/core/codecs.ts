@@ -314,7 +314,7 @@ export class PgTextCodec extends CodecImpl<
   async encode(value: string, _ctx: CodecCallContext): Promise<string> {
     return value;
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
+  decode(wire: string, _ctx: CodecCallContext): string {
     return wire;
   }
   encodeJson(value: string): JsonValue {
@@ -379,7 +379,7 @@ export class PgEnumCodec extends CodecImpl<
   async encode(value: string, _ctx: CodecCallContext): Promise<string> {
     return value;
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
+  decode(wire: string, _ctx: CodecCallContext): string {
     return wire;
   }
   encodeJson(value: string): JsonValue {
@@ -516,7 +516,7 @@ export class PgTextArrayCodec extends CodecImpl<
   async encode(value: readonly string[], _ctx: CodecCallContext): Promise<readonly string[]> {
     return value;
   }
-  async decode(wire: readonly string[], _ctx: CodecCallContext): Promise<readonly string[]> {
+  decode(wire: readonly string[], _ctx: CodecCallContext): readonly string[] {
     return wire;
   }
   encodeJson(value: readonly string[]): JsonValue {
@@ -554,7 +554,7 @@ export class PgInt4Codec extends CodecImpl<
   async encode(value: number, _ctx: CodecCallContext): Promise<number> {
     return value;
   }
-  async decode(wire: number, _ctx: CodecCallContext): Promise<number> {
+  decode(wire: number, _ctx: CodecCallContext): number {
     return wire;
   }
   encodeJson(value: number): JsonValue {
@@ -603,7 +603,7 @@ export class PgInt2Codec extends CodecImpl<
   async encode(value: number, _ctx: CodecCallContext): Promise<number> {
     return value;
   }
-  async decode(wire: number, _ctx: CodecCallContext): Promise<number> {
+  decode(wire: number, _ctx: CodecCallContext): number {
     return wire;
   }
   encodeJson(value: number): JsonValue {
@@ -658,7 +658,7 @@ export class PgInt8Codec extends CodecImpl<
   async encode(value: bigint, _ctx: CodecCallContext): Promise<string> {
     return pgBigintEncode(PG_INT8_CODEC_ID, value);
   }
-  async decode(wire: string | number | bigint, _ctx: CodecCallContext): Promise<bigint> {
+  decode(wire: string | number | bigint, _ctx: CodecCallContext): bigint {
     return pgInt8Decode(wire);
   }
   encodeJson(value: bigint): JsonValue {
@@ -721,7 +721,7 @@ export class PgInt8NumberCodec extends CodecImpl<
   async encode(value: number, _ctx: CodecCallContext): Promise<string> {
     return pgInt8NumberEncode(value);
   }
-  async decode(wire: string | number | bigint, _ctx: CodecCallContext): Promise<number> {
+  decode(wire: string | number | bigint, _ctx: CodecCallContext): number {
     return pgInt8NumberDecode(wire);
   }
   encodeJson(value: number): JsonValue {
@@ -768,7 +768,7 @@ export class PgFloat4Codec extends CodecImpl<
   async encode(value: number, _ctx: CodecCallContext): Promise<number> {
     return value;
   }
-  async decode(wire: number, _ctx: CodecCallContext): Promise<number> {
+  decode(wire: number, _ctx: CodecCallContext): number {
     return wire;
   }
   encodeJson(value: number): JsonValue {
@@ -817,7 +817,7 @@ export class PgFloat8Codec extends CodecImpl<
   async encode(value: number, _ctx: CodecCallContext): Promise<number> {
     return value;
   }
-  async decode(wire: number, _ctx: CodecCallContext): Promise<number> {
+  decode(wire: number, _ctx: CodecCallContext): number {
     return wire;
   }
   encodeJson(value: number): JsonValue {
@@ -866,7 +866,7 @@ export class PgBoolCodec extends CodecImpl<
   async encode(value: boolean, _ctx: CodecCallContext): Promise<boolean> {
     return value;
   }
-  async decode(wire: boolean, _ctx: CodecCallContext): Promise<boolean> {
+  decode(wire: boolean, _ctx: CodecCallContext): boolean {
     return wire;
   }
   encodeJson(value: boolean): JsonValue {
@@ -913,7 +913,7 @@ export class PgNumericCodec extends CodecImpl<
   async encode(value: string, _ctx: CodecCallContext): Promise<string> {
     return value;
   }
-  async decode(wire: string | number, _ctx: CodecCallContext): Promise<string> {
+  decode(wire: string | number, _ctx: CodecCallContext): string {
     return pgNumericDecode(wire);
   }
   encodeJson(value: string): JsonValue {
@@ -980,7 +980,7 @@ export class PgUnboundedIntCodec extends CodecImpl<
   async encode(value: bigint, _ctx: CodecCallContext): Promise<string> {
     return pgBigintEncode(PG_UNBOUNDED_INT_CODEC_ID, value);
   }
-  async decode(wire: string | number | bigint, _ctx: CodecCallContext): Promise<bigint> {
+  decode(wire: string | number | bigint, _ctx: CodecCallContext): bigint {
     return pgUnboundedIntDecode(wire);
   }
   encodeJson(value: bigint): JsonValue {
@@ -1039,7 +1039,7 @@ export class PgTimetzCodec extends CodecImpl<
   async encode(value: string, _ctx: CodecCallContext): Promise<string> {
     return value;
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
+  decode(wire: string, _ctx: CodecCallContext): string {
     return wire;
   }
   encodeJson(value: string): JsonValue {
@@ -1089,7 +1089,7 @@ export class PgBitCodec extends CodecImpl<
   async encode(value: string, _ctx: CodecCallContext): Promise<string> {
     return value;
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
+  decode(wire: string, _ctx: CodecCallContext): string {
     return wire;
   }
   encodeJson(value: string): JsonValue {
@@ -1138,7 +1138,7 @@ export class PgVarbitCodec extends CodecImpl<
   async encode(value: string, _ctx: CodecCallContext): Promise<string> {
     return value;
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
+  decode(wire: string, _ctx: CodecCallContext): string {
     return wire;
   }
   encodeJson(value: string): JsonValue {
@@ -1187,7 +1187,7 @@ export class PgByteaCodec extends CodecImpl<
   async encode(value: Uint8Array, _ctx: CodecCallContext): Promise<Uint8Array> {
     return value;
   }
-  async decode(wire: Uint8Array, _ctx: CodecCallContext): Promise<Uint8Array> {
+  decode(wire: Uint8Array, _ctx: CodecCallContext): Uint8Array {
     // Postgres node drivers commonly return Buffer instances (which extend Uint8Array) — normalize to a plain Uint8Array view so engine-agnostic consumers don't accidentally observe Buffer-specific APIs.
     return wire instanceof Uint8Array && wire.constructor === Uint8Array
       ? wire
@@ -1236,7 +1236,7 @@ export class PgUuidCodec extends CodecImpl<
   async encode(value: string, _ctx: CodecCallContext): Promise<string> {
     return value;
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
+  decode(wire: string, _ctx: CodecCallContext): string {
     return wire;
   }
   encodeJson(value: string): JsonValue {
@@ -1282,7 +1282,7 @@ export class PgInetCodec extends CodecImpl<
   async encode(value: string, _ctx: CodecCallContext): Promise<string> {
     return value;
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
+  decode(wire: string, _ctx: CodecCallContext): string {
     return wire;
   }
   encodeJson(value: string): JsonValue {
@@ -1345,10 +1345,7 @@ export class PgIntervalCodec extends CodecImpl<
     // canonical rendering doubles as the wire form.
     return pgIntervalToIso(value);
   }
-  async decode(
-    wire: string | Record<string, unknown>,
-    _ctx: CodecCallContext,
-  ): Promise<PgInterval> {
+  decode(wire: string | Record<string, unknown>, _ctx: CodecCallContext): PgInterval {
     return pgIntervalDecode(wire);
   }
   encodeJson(value: PgInterval): JsonValue {
@@ -1396,7 +1393,7 @@ export class PgJsonCodec extends CodecImpl<
   async encode(value: JsonValue, _ctx: CodecCallContext): Promise<string> {
     return pgJsonEncode(value);
   }
-  async decode(wire: string | JsonValue, _ctx: CodecCallContext): Promise<JsonValue> {
+  decode(wire: string | JsonValue, _ctx: CodecCallContext): JsonValue {
     return pgJsonDecode(wire);
   }
   encodeJson(value: JsonValue): JsonValue {
@@ -1440,7 +1437,7 @@ export class PgJsonbCodec extends CodecImpl<
   async encode(value: JsonValue, _ctx: CodecCallContext): Promise<string> {
     return pgJsonbEncode(value);
   }
-  async decode(wire: string | JsonValue, _ctx: CodecCallContext): Promise<JsonValue> {
+  decode(wire: string | JsonValue, _ctx: CodecCallContext): JsonValue {
     return pgJsonbDecode(wire);
   }
   encodeJson(value: JsonValue): JsonValue {
