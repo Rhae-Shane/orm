@@ -1,6 +1,8 @@
 ---
 from: 8.0.0-rc.11
 to: 8.0.0-rc.12
+# The Prisma 7 contract source PR adds the `examples/prisma7-adoption` example and the
+# `prisma7Schema` config surface. Additive; nothing for a Prisma 8 user to translate.
 changes:
   - id: params-only-sql-facade-prepare
     summary: Replace injected SQL-builder preparation callbacks with params-only callbacks and lexical facade SQL access.
