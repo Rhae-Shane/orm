@@ -402,7 +402,7 @@ export function errorInitPrisma7ConfigUnreadable(options: {
   const why =
     versioned === undefined
       ? `\`${options.path}\` failed to evaluate, so init cannot tell whether it is a Prisma 7 config to rename or a Prisma 8 config to replace: ${options.why}`
-      : `\`${options.path}\` failed to evaluate: ${options.why}. \`${versioned}\` already exists, so this is the Prisma 8 config init wrote.`;
+      : `\`${options.path}\` failed to evaluate: ${options.why}. \`${versioned}\` already exists, so init leaves \`${options.path}\` alone.`;
   const fix =
     versioned === undefined
       ? `Install the project's dependencies so \`${options.path}\` can be evaluated (a Prisma 7 config imports \`prisma/config\`), or rename it to \`prisma7.config.${extension}\` by hand, then re-run \`prisma orm init\`.`
