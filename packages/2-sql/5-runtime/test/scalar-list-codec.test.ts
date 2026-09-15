@@ -18,7 +18,7 @@ import {
   TableSource,
 } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
-import { buildDecodeContext, decodeRow } from '../src/codecs/decoding';
+import { buildDecodeContext, decodeRow, sqlNativeArrayListDecoder } from '../src/codecs/decoding';
 import { encodeParam } from '../src/codecs/encoding';
 import { defineTestCodec } from './test-codec';
 import { buildTestContractCodecs } from './utils';
@@ -189,7 +189,7 @@ describe('decodeRow — many CodecRef via ProjectionItem', () => {
     const ast = buildPlan(true);
     const ctx = buildDecodeContext(ast, registry);
 
-    const result = decodeRow({ vals: ['a', 'b', 'c'] }, ctx, CTX);
+    const result = decodeRow({ vals: ['a', 'b', 'c'] }, ctx, CTX, sqlNativeArrayListDecoder);
 
     expect(result['vals']).toEqual(['DEC:a', 'DEC:b', 'DEC:c']);
     expect(calls).toEqual(['a', 'b', 'c']);
@@ -209,7 +209,7 @@ describe('decodeRow — many CodecRef via ProjectionItem', () => {
     const ast = buildPlan(true);
     const ctx = buildDecodeContext(ast, registry);
 
-    const result = decodeRow({ vals: ['x', null, 'z'] }, ctx, CTX);
+    const result = decodeRow({ vals: ['x', null, 'z'] }, ctx, CTX, sqlNativeArrayListDecoder);
 
     expect(result['vals']).toEqual(['DEC:x', null, 'DEC:z']);
     expect(calls).toEqual(['x', 'z']);
@@ -235,7 +235,7 @@ describe('decodeRow — many CodecRef via ProjectionItem', () => {
     ]);
     const ctx = buildDecodeContext(ast, registry);
 
-    expect(() => decodeRow({ vals: [1, 2, 3] }, ctx, CTX)).toThrowError(
+    expect(() => decodeRow({ vals: [1, 2, 3] }, ctx, CTX, sqlNativeArrayListDecoder)).toThrowError(
       expect.objectContaining({
         code: 'RUNTIME.DECODE_FAILED',
       }),
@@ -255,9 +255,28 @@ describe('decodeRow — many CodecRef via ProjectionItem', () => {
     const ast = buildPlan(true);
     const ctx = buildDecodeContext(ast, registry);
 
-    const result = decodeRow({ vals: null }, ctx, CTX);
+    const result = decodeRow({ vals: null }, ctx, CTX, sqlNativeArrayListDecoder);
 
     expect(result['vals']).toBeNull();
+  });
+
+  it('uses the explicit SQL default list decoder for driver-parsed arrays', async () => {
+    const calls: unknown[] = [];
+    const codec = defineTestCodec({
+      typeId: 'test/upper@1',
+      encode: (v: string) => v,
+      decode: (w: string) => {
+        calls.push(w);
+        return `DEC:${w}`;
+      },
+    });
+    const registry = buildTestContractCodecs([codec]);
+    const ctx = buildDecodeContext(buildPlan(true), registry);
+
+    const result = await decodeRow({ vals: ['a', 'b'] }, ctx, CTX, sqlNativeArrayListDecoder);
+
+    expect(result).toEqual({ vals: ['DEC:a', 'DEC:b'] });
+    expect(calls).toEqual(['a', 'b']);
   });
 
   it('scalar path (no many flag) applies codec to the whole wire value', async () => {
@@ -270,7 +289,7 @@ describe('decodeRow — many CodecRef via ProjectionItem', () => {
     const ast = buildPlan(false);
     const ctx = buildDecodeContext(ast, registry);
 
-    const result = decodeRow({ vals: 'hello' }, ctx, CTX);
+    const result = decodeRow({ vals: 'hello' }, ctx, CTX, sqlNativeArrayListDecoder);
 
     expect(result['vals']).toBe('DEC:hello');
   });

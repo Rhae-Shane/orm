@@ -1,3 +1,4 @@
+import type { JsonValue } from '@internal/contract/types';
 import { checkAborted, runtimeError } from '@internal/framework-components/runtime';
 import type {
   AnyQueryAst,
@@ -7,9 +8,28 @@ import type {
   RawQueryAst,
   SqlCodecCallContext,
 } from '@internal/sql-relational-core/ast';
+import { blindCast } from '@internal/utils/casts';
 import { isStructuredError } from '@internal/utils/structured-error';
 
 type ColumnRef = { table: string; column: string };
+
+export type ListDecoder = (
+  wireValue: unknown,
+  decodeElement: (value: unknown) => unknown,
+) => readonly unknown[];
+
+export const sqlNativeArrayListDecoder: ListDecoder = (wireValue, decodeElement) => {
+  if (!Array.isArray(wireValue)) {
+    throw new TypeError(
+      `expected an array from the driver for many-typed column, got ${typeof wireValue}`,
+    );
+  }
+  const decoded: unknown[] = [];
+  for (const elem of wireValue) {
+    decoded.push(decodeElement(elem));
+  }
+  return decoded;
+};
 
 export interface DecodeContext {
   readonly aliases: ReadonlyArray<string> | undefined;
@@ -186,7 +206,9 @@ function wrapIncludeAggregateFailure(error: unknown, alias: string, wireValue: u
   throw wrapped;
 }
 
-function decodeIncludeAggregate(alias: string, wireValue: unknown): unknown {
+type IncludeAggregateValue = JsonValue | readonly unknown[];
+
+function decodeIncludeAggregate(alias: string, wireValue: unknown): IncludeAggregateValue {
   if (wireValue === null || wireValue === undefined) {
     return [];
   }
@@ -201,7 +223,9 @@ function decodeIncludeAggregate(alias: string, wireValue: unknown): unknown {
       // both row include arrays (`json_agg`) and scalar / combine
       // include envelopes (`json_build_object`) flow through this path,
       // each with their own downstream shape decoder.
-      return wireValue;
+      return blindCast<IncludeAggregateValue, 'JSON aggregates are already parsed by the driver'>(
+        wireValue,
+      );
     }
     return JSON.parse(String(wireValue));
   } catch (error) {
@@ -216,13 +240,14 @@ function decodeIncludeAggregate(alias: string, wireValue: unknown): unknown {
  * The row-level `rowCtx` is repackaged into a per-cell `SqlCodecCallContext` whose `column = { table, name }` is a structural projection of the per-cell `ColumnRef = { table, column }` resolved from the AST-backed `DecodeContext` (the same resolution `wrapDecodeFailure` uses for envelope construction — one resolution per cell, two consumers). Cells the runtime cannot resolve to a single underlying column (aggregate
  * aliases, computed projections without a simple ref) get `column: undefined`, matching the spec contract that the runtime never silently defaults this field.
  *
- * For `many`-flagged aliases the driver has already parsed the wire form into a JS array; this function maps the element codec over that array element-by-element, passing `null` elements through unchanged. Element-level failures surface through the existing `RUNTIME.DECODE_FAILED` envelope with the column/codec context from the parent cell.
+ * For `many`-flagged aliases this function delegates frame traversal to the selected `ListDecoder`, passing `null` elements through unchanged and mapping the same element codec over every non-null element. SQL runtimes without a target-owned contribution select `sqlNativeArrayListDecoder` explicitly before row decoding. Element-level failures surface through the existing `RUNTIME.DECODE_FAILED` envelope with the column/codec context from the parent cell.
  */
 function decodeField(
   alias: string,
   wireValue: unknown,
   decodeCtx: DecodeContext,
   rowCtx: SqlCodecCallContext,
+  listDecoder: ListDecoder,
 ): unknown {
   if (wireValue === null) {
     return null;
@@ -243,32 +268,26 @@ function decodeField(
     cellCtx = rowCtxWithoutColumn;
   }
 
+  const decodeElement = (elem: unknown): unknown => {
+    if (elem === null || elem === undefined) {
+      return null;
+    }
+
+    try {
+      return codec.decode(elem, cellCtx);
+    } catch (error) {
+      if (isStructuredError(error)) throw error;
+      wrapDecodeFailure(error, alias, ref, codec, elem);
+    }
+  };
+
   if (decodeCtx.manyAliases.has(alias)) {
-    if (!Array.isArray(wireValue)) {
-      wrapDecodeFailure(
-        new TypeError(
-          `expected an array from the driver for many-typed column, got ${typeof wireValue}`,
-        ),
-        alias,
-        ref,
-        codec,
-        wireValue,
-      );
+    try {
+      return listDecoder(wireValue, decodeElement);
+    } catch (error) {
+      if (isStructuredError(error)) throw error;
+      wrapDecodeFailure(error, alias, ref, codec, wireValue);
     }
-    const decoded: unknown[] = [];
-    for (const elem of wireValue) {
-      if (elem === null || elem === undefined) {
-        decoded.push(null);
-        continue;
-      }
-      try {
-        decoded.push(codec.decode(elem, cellCtx));
-      } catch (error) {
-        if (isStructuredError(error)) throw error;
-        wrapDecodeFailure(error, alias, ref, codec, elem);
-      }
-    }
-    return decoded;
   }
 
   try {
@@ -291,6 +310,7 @@ export function decodeRow(
   row: Record<string, unknown>,
   decodeCtx: DecodeContext,
   rowCtx: SqlCodecCallContext,
+  listDecoder: ListDecoder,
 ): Record<string, unknown> {
   checkAborted(rowCtx, 'decode');
 
@@ -323,7 +343,7 @@ export function decodeRow(
     const wireValue = row[alias];
     decoded[alias] = decodeCtx.includeAliases.has(alias)
       ? decodeIncludeAggregate(alias, wireValue)
-      : decodeField(alias, wireValue, decodeCtx, rowCtx);
+      : decodeField(alias, wireValue, decodeCtx, rowCtx, listDecoder);
   }
   return decoded;
 }
