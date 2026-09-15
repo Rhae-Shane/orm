@@ -189,7 +189,7 @@ describe('decodeRow — many CodecRef via ProjectionItem', () => {
     const ast = buildPlan(true);
     const ctx = buildDecodeContext(ast, registry);
 
-    const result = await decodeRow({ vals: ['a', 'b', 'c'] }, ctx, CTX);
+    const result = decodeRow({ vals: ['a', 'b', 'c'] }, ctx, CTX);
 
     expect(result['vals']).toEqual(['DEC:a', 'DEC:b', 'DEC:c']);
     expect(calls).toEqual(['a', 'b', 'c']);
@@ -209,7 +209,7 @@ describe('decodeRow — many CodecRef via ProjectionItem', () => {
     const ast = buildPlan(true);
     const ctx = buildDecodeContext(ast, registry);
 
-    const result = await decodeRow({ vals: ['x', null, 'z'] }, ctx, CTX);
+    const result = decodeRow({ vals: ['x', null, 'z'] }, ctx, CTX);
 
     expect(result['vals']).toEqual(['DEC:x', null, 'DEC:z']);
     expect(calls).toEqual(['x', 'z']);
@@ -235,9 +235,11 @@ describe('decodeRow — many CodecRef via ProjectionItem', () => {
     ]);
     const ctx = buildDecodeContext(ast, registry);
 
-    await expect(decodeRow({ vals: [1, 2, 3] }, ctx, CTX)).rejects.toMatchObject({
-      code: 'RUNTIME.DECODE_FAILED',
-    });
+    expect(() => decodeRow({ vals: [1, 2, 3] }, ctx, CTX)).toThrowError(
+      expect.objectContaining({
+        code: 'RUNTIME.DECODE_FAILED',
+      }),
+    );
   });
 
   it('returns null for the whole column when the wire value is null (not an array)', async () => {
@@ -253,7 +255,7 @@ describe('decodeRow — many CodecRef via ProjectionItem', () => {
     const ast = buildPlan(true);
     const ctx = buildDecodeContext(ast, registry);
 
-    const result = await decodeRow({ vals: null }, ctx, CTX);
+    const result = decodeRow({ vals: null }, ctx, CTX);
 
     expect(result['vals']).toBeNull();
   });
@@ -268,7 +270,7 @@ describe('decodeRow — many CodecRef via ProjectionItem', () => {
     const ast = buildPlan(false);
     const ctx = buildDecodeContext(ast, registry);
 
-    const result = await decodeRow({ vals: 'hello' }, ctx, CTX);
+    const result = decodeRow({ vals: 'hello' }, ctx, CTX);
 
     expect(result['vals']).toBe('DEC:hello');
   });

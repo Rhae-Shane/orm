@@ -385,7 +385,7 @@ describe('scalar-list codec round-trip (element-wise encode/decode)', { concurre
 // this test proves that contract without requiring a real DB fixture.
 
 describe('scalar-list decode — malformed element surfaces RUNTIME.DECODE_FAILED', () => {
-  it('wraps an element-level decode failure in RUNTIME.DECODE_FAILED with column/codec context', async () => {
+  it('wraps an element-level decode failure in RUNTIME.DECODE_FAILED with column/codec context', () => {
     const codec = defineTestCodec({
       typeId: 'test/strict-string@1',
       encode: (v: string) => v,
@@ -410,13 +410,15 @@ describe('scalar-list decode — malformed element surfaces RUNTIME.DECODE_FAILE
     const ctx = buildDecodeContext(ast, registry);
 
     // Third element is a number — should trigger the element-level decode failure path.
-    await expect(decodeRow({ tags: ['ok', 'also-ok', 42] }, ctx, {})).rejects.toMatchObject({
-      code: 'RUNTIME.DECODE_FAILED',
-      details: expect.objectContaining({
-        table: 'ListTest',
-        column: 'tags',
-        codec: 'test/strict-string@1',
+    expect(() => decodeRow({ tags: ['ok', 'also-ok', 42] }, ctx, {})).toThrowError(
+      expect.objectContaining({
+        code: 'RUNTIME.DECODE_FAILED',
+        details: expect.objectContaining({
+          table: 'ListTest',
+          column: 'tags',
+          codec: 'test/strict-string@1',
+        }),
       }),
-    });
+    );
   });
 });
