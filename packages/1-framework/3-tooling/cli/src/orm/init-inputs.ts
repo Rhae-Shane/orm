@@ -243,6 +243,11 @@ function rejectFlagConflict(flags: InitFlagValues): void {
  * block is called one; otherwise the question is about the config, and the
  * path is only what it declares.
  */
+function looksLikePrisma7(detection: Prisma7Detection): boolean {
+  const { config, schema } = detection;
+  return config.kind === 'prisma7' || config.kind === 'collision' || schema.kind === 'datasource';
+}
+
 function prisma7Question(detection: Prisma7Detection): string {
   const { config, schema } = detection;
   if (schema.kind === 'datasource' || config.kind !== 'prisma7') {
@@ -265,10 +270,7 @@ async function choosePrisma7Path(ctx: {
   if (ctx.flags.fromPrisma7Schema !== undefined) {
     return true;
   }
-  const { config, schema } = ctx.detection;
-  const found =
-    config.kind === 'prisma7' || config.kind === 'collision' || schema.kind === 'datasource';
-  if (!found) {
+  if (!looksLikePrisma7(ctx.detection)) {
     return false;
   }
   try {
@@ -455,11 +457,13 @@ export async function resolveInitInputs(ctx: {
   const mayAdoptPrisma7 =
     flags.fromPrisma7Schema !== undefined ||
     (flagAuthoring === undefined && flags.schemaPath === undefined);
+  let prisma7SchemaPath: string | undefined;
   if (mayAdoptPrisma7) {
     const detection = await detectPrisma7Project({ cwd, schemaPath: flags.fromPrisma7Schema });
     if (await choosePrisma7Path({ flags, prompt, detection })) {
       return resolvePrisma7Inputs({ cwd, flags, prompt, detection, flagTarget });
     }
+    prisma7SchemaPath = looksLikePrisma7(detection) ? detection.schema.path : undefined;
   }
 
   let target: TargetId;
@@ -478,6 +482,7 @@ export async function resolveInitInputs(ctx: {
     throw errorInitMissingFlags({
       missing,
       why: 'This session cannot prompt, so the answers have to arrive as flags.',
+      prisma7SchemaPath,
     });
   }
 

@@ -13,6 +13,8 @@ import { CliStructuredError } from '../../utils/cli-errors';
 export function errorInitMissingFlags(options: {
   readonly missing: readonly string[];
   readonly why: string;
+  /** The Prisma 7 schema detection found, when the run could have adopted it instead. */
+  readonly prisma7SchemaPath: string | undefined;
 }): CliStructuredError {
   const flagList = options.missing.map((flag) => `--${flag}`).join(', ');
   const fixList = options.missing
@@ -29,11 +31,15 @@ export function errorInitMissingFlags(options: {
       }
     })
     .join(' ');
+  const prisma7 =
+    options.prisma7SchemaPath === undefined
+      ? ''
+      : ` This looks like a Prisma 7 project; to use ${options.prisma7SchemaPath} as the contract source instead, pass \`--from-prisma7-schema ${options.prisma7SchemaPath}\`.`;
   return new CliStructuredError('CLI.INIT_MISSING_FLAGS', 'Missing required flags', {
-    why: `${options.why} Missing required flag(s): ${flagList}.`,
+    why: `${options.why} Missing required flag(s): ${flagList}.${prisma7}`,
     fix: `Re-run with the missing flag(s) supplied, e.g. \`prisma orm init --yes ${fixList}\`. Use \`prisma orm init --help\` to see every flag.`,
     docsUrl: docsUrlFor('CLI.INIT_MISSING_FLAGS'),
-    meta: { missingFlags: options.missing },
+    meta: { missingFlags: options.missing, prisma7SchemaPath: options.prisma7SchemaPath ?? null },
   });
 }
 
@@ -388,16 +394,27 @@ export function errorInitPrisma7ConfigCollision(options: {
 export function errorInitPrisma7ConfigUnreadable(options: {
   readonly path: string;
   readonly why: string;
+  /** A `prisma7.config.*` already beside it: the unreadable file is then Prisma 8's own. */
+  readonly prisma7ConfigPath: string | undefined;
 }): CliStructuredError {
   const extension = options.path.slice(options.path.lastIndexOf('.') + 1);
+  const versioned = options.prisma7ConfigPath;
+  const why =
+    versioned === undefined
+      ? `\`${options.path}\` failed to evaluate, so init cannot tell whether it is a Prisma 7 config to rename or a Prisma 8 config to replace: ${options.why}`
+      : `\`${options.path}\` failed to evaluate: ${options.why}. \`${versioned}\` already exists, so this is the Prisma 8 config init wrote.`;
+  const fix =
+    versioned === undefined
+      ? `Install the project's dependencies so \`${options.path}\` can be evaluated (a Prisma 7 config imports \`prisma/config\`), or rename it to \`prisma7.config.${extension}\` by hand, then re-run \`prisma orm init\`.`
+      : `Install the project's dependencies and fix the error in \`${options.path}\` (a missing export usually means the package it imports from needs updating), then re-run \`prisma orm init\`.`;
   return new CliStructuredError(
     'CLI.INIT_PRISMA7_CONFIG_UNREADABLE',
     `Could not evaluate ${options.path}`,
     {
-      why: `\`${options.path}\` failed to evaluate, so init cannot tell whether it is a Prisma 7 config to rename or a Prisma 8 config to replace: ${options.why}`,
-      fix: `Install the project's dependencies so \`${options.path}\` can be evaluated (a Prisma 7 config imports \`prisma/config\`), or rename it to \`prisma7.config.${extension}\` by hand, then re-run \`prisma orm init\`.`,
+      why,
+      fix,
       docsUrl: docsUrlFor('CLI.INIT_PRISMA7_CONFIG_UNREADABLE'),
-      meta: { path: options.path, why: options.why },
+      meta: { path: options.path, why: options.why, prisma7ConfigPath: versioned ?? null },
     },
   );
 }

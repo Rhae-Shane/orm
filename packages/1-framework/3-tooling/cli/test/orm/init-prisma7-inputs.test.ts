@@ -276,6 +276,35 @@ describe(
         expect(inputs.sideBySide).toBeNull();
       });
 
+      it('tells the user to fix prisma.config.ts, not rename it, when prisma7.config.ts already exists', async () => {
+        writePrisma7Schema();
+        writeProjectFile('prisma.config.ts', "throw new Error('config module exploded');\n");
+        writeProjectFile('prisma7.config.ts', PRISMA7_CONFIG);
+        const { prompt } = scriptedPrompt();
+
+        await expect(
+          resolveInitInputs({
+            cwd: projectDir,
+            flags: flags({ ...NO_FLAGS, fromPrisma7Schema: 'prisma/schema.prisma' }),
+            prompt,
+          }),
+        ).rejects.toMatchObject({
+          code: 'CLI.INIT_PRISMA7_CONFIG_UNREADABLE',
+          why: expect.stringContaining('config module exploded'),
+          fix: expect.stringMatching(
+            /install the project's dependencies.*fix the error in `prisma.config.ts`/i,
+          ),
+          meta: { path: 'prisma.config.ts', prisma7ConfigPath: 'prisma7.config.ts' },
+        });
+        await expect(
+          resolveInitInputs({
+            cwd: projectDir,
+            flags: flags({ ...NO_FLAGS, fromPrisma7Schema: 'prisma/schema.prisma' }),
+            prompt,
+          }),
+        ).rejects.not.toMatchObject({ fix: expect.stringContaining('rename') });
+      });
+
       it('refuses a prisma.config.ts it could not evaluate rather than replace it', async () => {
         writePrisma7Schema();
         writeProjectFile('prisma.config.ts', "throw new Error('config module exploded');\n");
@@ -365,6 +394,22 @@ describe(
           PRISMA7_QUESTION,
           'How do you want to write your schema?',
         ]);
+      });
+
+      it('names --from-prisma7-schema in the missing-flags error of a non-interactive run', async () => {
+        writePrisma7Schema();
+        const { prompt } = scriptedPrompt();
+
+        await expect(
+          resolveInitInputs({ cwd: projectDir, flags: flags(NO_FLAGS), prompt }),
+        ).rejects.toMatchObject({
+          code: 'CLI.INIT_MISSING_FLAGS',
+          why: expect.stringContaining('`--from-prisma7-schema prisma/schema.prisma`'),
+          meta: {
+            missingFlags: ['target', 'authoring'],
+            prisma7SchemaPath: 'prisma/schema.prisma',
+          },
+        });
       });
 
       it('is not asked when --authoring or --schema-path is given', async () => {

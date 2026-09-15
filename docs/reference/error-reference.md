@@ -137,7 +137,7 @@ A flag passed to `prisma orm init` has a value outside its allowed set (for exam
 
 ### CLI.INIT_MISSING_FLAGS
 
-`prisma orm init` ran non-interactively (e.g. `--yes`, or stdin is not a TTY) but one or more required inputs (`--target`, `--authoring`, `--schema-path`) were not supplied as flags. Every missing flag is listed so scripts and agents can react without parsing English. Maps to init exit code 2 (PRECONDITION). Payload: `missingFlags`.
+`prisma orm init` ran non-interactively (e.g. `--yes`, or stdin is not a TTY) but one or more required inputs (`--target`, `--authoring`, `--schema-path`) were not supplied as flags. Every missing flag is listed so scripts and agents can react without parsing English. When detection found a Prisma 7 project, the message also names `--from-prisma7-schema <path>` as the alternative. Maps to init exit code 2 (PRECONDITION). Payload: `missingFlags`, `prisma7SchemaPath` (`null` when nothing Prisma 7 was found).
 
 ### CLI.INIT_PRISMA7_CONFIG_COLLISION
 
@@ -145,7 +145,7 @@ On the Prisma 7 path of `prisma orm init`, `prisma.config.*` evaluated as a Pris
 
 ### CLI.INIT_PRISMA7_CONFIG_UNREADABLE
 
-On the Prisma 7 path of `prisma orm init`, `prisma.config.*` exists but failed to evaluate (typically a Prisma 7 config importing `prisma/config` in a checkout whose dependencies are not installed). Init cannot tell whether the file is Prisma 7's, to rename, or its own, to replace, so it refuses rather than overwrite it. The fix is to install the project's dependencies so the config evaluates, or rename it to `prisma7.config.<ext>` by hand. The normal path is unaffected: without the flag or a yes to the Prisma 7 question, the file is treated as it is today. Nothing is written. Maps to init exit code 2 (PRECONDITION). Payload: `path`, `why`.
+On the Prisma 7 path of `prisma orm init`, `prisma.config.*` exists but failed to evaluate (typically a Prisma 7 config importing `prisma/config` in a checkout whose dependencies are not installed). Init cannot tell whether the file is Prisma 7's, to rename, or its own, to replace, so it refuses rather than overwrite it. The fix is to install the project's dependencies so the config evaluates, or rename it to `prisma7.config.<ext>` by hand; when a `prisma7.config.*` already exists the file is Prisma 8's own, and the fix is to install the dependencies and fix the error in it instead. The normal path is unaffected: without the flag or a yes to the Prisma 7 question, the file is treated as it is today. Nothing is written. Maps to init exit code 2 (PRECONDITION). Payload: `path`, `why`, `prisma7ConfigPath` (`null` when none exists).
 
 ### CLI.INIT_PRISMA7_MONGO_UNSUPPORTED
 

@@ -18,7 +18,13 @@ export type Prisma7ConfigDetection =
   | { readonly kind: 'none' }
   | { readonly kind: 'prisma8'; readonly path: string }
   | { readonly kind: 'prisma7'; readonly path: string; readonly schema: string | undefined }
-  | { readonly kind: 'unreadable'; readonly path: string; readonly why: string }
+  | {
+      readonly kind: 'unreadable';
+      readonly path: string;
+      readonly why: string;
+      /** A `prisma7.config.*` beside it, which makes the unreadable file Prisma 8's. */
+      readonly prisma7ConfigPath: string | undefined;
+    }
   | {
       readonly kind: 'collision';
       readonly prismaConfigPath: string;
@@ -107,7 +113,10 @@ async function detectConfig(cwd: string): Promise<Prisma7ConfigDetection> {
     if (evaluated.kind === 'prisma7' && prisma7ConfigPath !== undefined) {
       return { kind: 'collision', prismaConfigPath, prisma7ConfigPath };
     }
-    if (evaluated.kind !== 'prisma8') {
+    if (evaluated.kind === 'unreadable') {
+      return { ...evaluated, path: prismaConfigPath, prisma7ConfigPath };
+    }
+    if (evaluated.kind === 'prisma7') {
       return { ...evaluated, path: prismaConfigPath };
     }
     if (prisma7ConfigPath === undefined) {
@@ -121,6 +130,9 @@ async function detectConfig(cwd: string): Promise<Prisma7ConfigDetection> {
   const evaluated = await evaluateConfig(cwd, prisma7ConfigPath);
   if (evaluated.kind === 'prisma8') {
     return { kind: 'none' };
+  }
+  if (evaluated.kind === 'unreadable') {
+    return { ...evaluated, path: prisma7ConfigPath, prisma7ConfigPath: undefined };
   }
   return { ...evaluated, path: prisma7ConfigPath };
 }

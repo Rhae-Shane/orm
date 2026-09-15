@@ -228,6 +228,7 @@ describe('detectPrisma7Project', () => {
           kind: 'unreadable',
           path: 'prisma.config.ts',
           why: expect.stringContaining('config module exploded'),
+          prisma7ConfigPath: undefined,
         });
         expect(detection.schema).toMatchObject({ kind: 'datasource', provider: 'postgresql' });
         expect(detection.schemaPathSource).toBe('default');
@@ -250,6 +251,23 @@ describe('detectPrisma7Project', () => {
 
         expect(detection.config).toMatchObject({ kind: 'unreadable', path: 'prisma.config.ts' });
         expect(detection.warnings).toHaveLength(1);
+      },
+      timeouts.coldTransformImport,
+    );
+
+    it(
+      'names the prisma7.config.* beside an unreadable prisma.config.ts',
+      async () => {
+        writeProjectFile('prisma.config.ts', "throw new Error('config module exploded');\n");
+        writeProjectFile('prisma7.config.mts', prisma7Config('db/schema.prisma'));
+
+        const detection = await detect();
+
+        expect(detection.config).toMatchObject({
+          kind: 'unreadable',
+          path: 'prisma.config.ts',
+          prisma7ConfigPath: 'prisma7.config.mts',
+        });
       },
       timeouts.coldTransformImport,
     );

@@ -203,6 +203,16 @@ describe('the Prisma 7 scaffold', () => {
       expect(reference).not.toContain('model User');
     });
 
+    it('writes no README even when the project has src/index.ts', () => {
+      copyFixture();
+      writeProjectFile('src/index.ts', 'export {};\n');
+
+      const outcome = scaffold();
+
+      expect(existsSync(join(projectDir, 'README.md'))).toBe(false);
+      expect(outcome.filesWritten).not.toContain('README.md');
+    });
+
     it('leaves prisma/ byte-identical', () => {
       copyFixture();
       const before = hashTree(join(projectDir, 'prisma'));

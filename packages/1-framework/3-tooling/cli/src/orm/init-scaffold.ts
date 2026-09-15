@@ -389,7 +389,8 @@ function planScaffold(ctx: {
     }
   }
 
-  if (existsSync(join(cwd, 'src/index.ts'))) {
+  // The README describes a fresh scaffold; a Prisma 7 project has its own.
+  if (source.kind === 'starter' && existsSync(join(cwd, 'src/index.ts'))) {
     if (existsSync(join(cwd, 'README.md'))) {
       warnings.push('README.md already exists; leaving it untouched.');
     } else {
