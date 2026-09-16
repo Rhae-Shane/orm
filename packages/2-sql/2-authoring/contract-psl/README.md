@@ -59,7 +59,8 @@ Unsupported PSL constructs in v1 (strict errors):
 
 Supported `@default(...)` surface in v1 when composed contributors provide handlers:
 
-- Storage defaults: `autoincrement()`, `now()`, literals, `dbgenerated("...")`
+- Storage defaults: `autoincrement()`, `now()`, `gen_random_uuid()` (Postgres), literals, `dbgenerated("...")`
+- Raw SQL defaults as a tagged literal: `@default(sql`gen_random_uuid()`)` or, for a body with backticks, `@default(sql"(now() + '00:03:00'::interval)")`. The body is canonicalized (line endings, a blank first and last line, common indentation) and used verbatim as the default expression; `${` is rejected. `sql` is registered by every SQL target; `pg.sql` (Postgres) and `sqlite.sql` (SQLite) are target-prefixed spellings of the same tag.
 - Execution defaults: `uuid()`, `uuid(4)`, `uuid(7)`, `cuid(2)`, `ulid()`, `nanoid()`, `nanoid(<2-255>)`
 - Explicitly unsupported in v1: `cuid()` (diagnostic suggests `cuid(2)`)
 - `dbgenerated("...")` preserves the parsed PSL string-literal contents as-is (escaped sequences are not normalized in v1).

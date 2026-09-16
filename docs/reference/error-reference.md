@@ -247,7 +247,11 @@ A model declares an empty unique constraint (a unique with no fields), raised du
 
 ### CONTRACT.DEFAULT_INVALID
 
-A field's default declaration is invalid: `defaultSql` is used on an enum field, a field declares both `default` and `executionDefaults`, or a field is nullable while carrying `executionDefaults`. Raised while authoring/building a SQL contract. Payload: `modelName`, `fieldName`, `reason`. Also raised by the Postgres adapter's DDL renderer when a hand-authored `col(...)` pairs an `autoincrement()` default with a type that isn't `SERIAL`/`BIGSERIAL`/`SMALLSERIAL` (or their `SERIAL4`/`SERIAL8`/`SERIAL2` aliases). Meta in that case: `nativeType`.
+A field's default declaration is invalid: `defaultSql` is used on an enum field, a field declares both `default` and `executionDefaults`, or a field is nullable while carrying `executionDefaults`. Raised while authoring/building a SQL contract. Payload: `modelName`, `fieldName`, `reason`. Also raised by the Postgres adapter's DDL renderer when a hand-authored `col(...)` pairs an `autoincrement()` default with a type that isn't `SERIAL`/`BIGSERIAL`/`SMALLSERIAL` (or their `SERIAL4`/`SERIAL8`/`SERIAL2` aliases). Meta in that case: `nativeType`. Also raised by the TypeScript `sql` template tag when the body cannot be canonicalized (`sql\`...\` default rejected: the body contains \`${\`.`, `... the body contains a NUL character.`, `... the body exceeds 65536 bytes.`; meta: `reason`, `offset`) or fails the SQL body check (`Default SQL must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.`; meta: `reason: 'unsafe-sql'`, `expression`), and by both the Postgres and SQLite migration planners when a function default in the contract fails that same check at DDL time (meta: `expression`).
+
+### CONTRACT.DEFAULT_SQL_INTERPOLATION
+
+The TypeScript `sql` template tag was called with interpolated values: `sql\`...\` does not support interpolation; write the SQL as one literal.` Interpolation is already a type error (`...values: readonly never[]`); this is the runtime backstop. Meta: `interpolations` (how many values were passed).
 
 ### CONTRACT.ENTITY_KIND_INVALID
 
@@ -554,6 +558,34 @@ A `@default` value the source cannot read: an unknown function, an enum member o
 ### PSL.PRISMA7_VIEW_UNSUPPORTED
 
 A `view` block; Prisma 8 has no views. Remove the view, or replace it with a model over the underlying table. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+
+### PSL_UNTERMINATED_TEMPLATE_LITERAL
+
+A backtick-fenced template literal has no closing backtick: `Unterminated template literal`. The tokenizer turns the rest of the source into one invalid token and the parser reports this code at the opening backtick, whether or not a tag precedes it. Close the fence with a backtick; a backtick inside the body is written `` \` ``.
+
+### PSL_TAGGED_LITERAL_FENCE_EXPECTED
+
+Whitespace, a newline, or a comment sits between a tagged literal's tag and its fence: `Expected the literal fence to follow the tag "<tag>" directly`. Reported at the last tag segment; the literal is still read so the rest of the line parses. Write `` sql`...` `` or `sql"..."` with nothing between the tag and the fence.
+
+### PSL_UNKNOWN_DEFAULT_LITERAL_TAG
+
+A `@default` tagged literal uses a tag no pack in the stack registered: `Unknown literal tag "<tag>". Known tags: <tags in registration order>.` Every SQL target registers `sql`; Postgres also registers `pg.sql` and SQLite `sqlite.sql`. Reported at the literal.
+
+### PSL_TAGGED_LITERAL_INTERPOLATION
+
+A tagged literal's body contains `${` after escape resolution: `Tagged literals do not support ${...} interpolation.` There is no escape for it; a body that needs those two characters cannot be written as a tagged literal. Reported at the literal.
+
+### PSL_TAGGED_LITERAL_NUL
+
+A tagged literal's body contains a NUL character: `Tagged literals must not contain NUL characters.` Reported at the literal.
+
+### PSL_TAGGED_LITERAL_TOO_LARGE
+
+A tagged literal's canonical body is larger than 65536 UTF-8 bytes: `Tagged literal exceeds 65536 bytes.` Reported at the literal.
+
+### PSL_INVALID_DEFAULT_SQL
+
+A `@default(sql`...`)` body fails the SQL family's body check: `Default SQL must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.` This is the rule the migration planners apply at DDL time, run at authoring time so it has a source span. Reported at the literal.
 
 ## ORM
 

@@ -1,9 +1,7 @@
+import { checkSqlDefaultBody } from '@internal/sql-contract/validators';
 import { describe, expect, it } from 'vitest';
 import { createBuiltinLikeControlMutationDefaults } from '../../2-authoring/contract-psl/test/fixtures';
-import {
-  checkSqlDefaultBody,
-  sqlDefaultLiteralTagEntry,
-} from '../src/core/sql-default-literal-tag';
+import { sqlDefaultLiteralTagEntry } from '../src/core/sql-default-literal-tag';
 
 const span = {
   start: { offset: 0, line: 1, column: 1 },

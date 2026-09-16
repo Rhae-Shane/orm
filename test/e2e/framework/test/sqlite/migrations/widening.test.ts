@@ -1,5 +1,5 @@
 import { datetimeColumn } from '@prisma/orm-sqlite/adapter/column-types';
-import { defineContract, field, model } from '@prisma/orm-sqlite/contract-builder';
+import { defineContract, field, model, now, sql } from '@prisma/orm-sqlite/contract-builder';
 import { describe, expect, it } from 'vitest';
 import { applyMigration, int, text } from './harness';
 
@@ -77,7 +77,7 @@ describe('SQLite Migration E2E - Widening operations (recreate-table)', () => {
               fields: {
                 id: int.id(),
                 name: text,
-                createdAt: field.column(datetimeColumn).defaultSql('now()'),
+                createdAt: field.column(datetimeColumn).default(now()),
               },
             }),
           },
@@ -86,6 +86,35 @@ describe('SQLite Migration E2E - Widening operations (recreate-table)', () => {
       async ({ schema, driver }) => {
         const stored = schema.tables['User']!.columns['createdAt']!.default;
         expect(stored).toBe("datetime('now')");
+        await driver.query('INSERT INTO "User" (id, name) VALUES (?, ?)', [1, 'Alice']);
+        const row = (
+          await driver.query<{ createdAt: string }>(
+            'SELECT createdAt FROM "User" WHERE id = ?',
+            [1],
+          )
+        ).rows[0];
+        expect(typeof row?.createdAt).toBe('string');
+      },
+    );
+  });
+
+  it('stores a sql`CURRENT_TIMESTAMP` default verbatim and verifies clean against it', async () => {
+    await applyMigration(
+      {
+        destination: defineContract({
+          models: {
+            User: model('User', {
+              fields: {
+                id: int.id(),
+                name: text,
+                createdAt: field.column(datetimeColumn).default(sql`CURRENT_TIMESTAMP`),
+              },
+            }),
+          },
+        }),
+      },
+      async ({ schema, driver }) => {
+        expect(schema.tables['User']!.columns['createdAt']!.default).toBe('CURRENT_TIMESTAMP');
         await driver.query('INSERT INTO "User" (id, name) VALUES (?, ?)', [1, 'Alice']);
         const row = (
           await driver.query<{ createdAt: string }>(

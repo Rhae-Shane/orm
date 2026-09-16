@@ -107,6 +107,18 @@ Notes:
 - Executing or interpreting literal bodies in core
 - Allowing interpolation or environment-dependent evaluation
 
+## Amendment — column defaults
+
+Added when `@default(dbgenerated("..."))` was replaced by a tagged literal for raw SQL column defaults. This amendment records what was built; where it differs from the sections above, this amendment applies to column defaults.
+
+- **Two fences.** A tagged literal is `tag` followed directly by either a backtick fence, `` sql`gen_random_uuid()` ``, or a double-quote fence, `sql"(now() + '00:03:00'::interval)"`. The quote fence exists for a body with many backticks. Inside a backtick fence, `` \` `` is a backtick, `\\` is one backslash, and every other backslash sequence is kept as written, so `E'\n'` survives. Inside a quote fence the ordinary PSL string escapes apply and backticks need no escaping. No whitespace, newline, or comment may separate the tag from the fence (`PSL_TAGGED_LITERAL_FENCE_EXPECTED`).
+- **One canonicalization for both fences and both languages.** After escape resolution, `canonicalizeTaggedLiteralBody` in `@internal/framework-components/control` normalizes line endings, drops a blank first and last line, removes the common leading whitespace, keeps internal blank lines empty, adds no trailing newline, and refuses `${` (`PSL_TAGGED_LITERAL_INTERPOLATION`), NUL (`PSL_TAGGED_LITERAL_NUL`), and a body over 65536 bytes (`PSL_TAGGED_LITERAL_TOO_LARGE`). The same function canonicalizes the TypeScript `sql` template tag's cooked string. Two literals with different fences and the same canonical body are the same default.
+- **`\${` is not honoured.** The `${` check runs on the escape-resolved text, and `\$` resolves to `$`, so `\${` still fails; the grammar section's "unless escaped" rule does not apply to column defaults. A body that needs `${` cannot be a tagged literal in PSL, and a cooked TypeScript template literal rejects it the same way, so both languages agree.
+- **Tags are registered by targets.** A tag is a qualified identifier and is known only when a pack in the contract's stack registers it in `ControlMutationDefaults.defaultLiteralTagRegistry`. Every SQL target registers the unprefixed `sql` through one implementation the SQL family exports (`sqlDefaultLiteralTagEntry`), plus its own prefixed alias: `pg.sql` on Postgres, `sqlite.sql` on SQLite. Any other extension must prefix its tags. An unknown tag is `PSL_UNKNOWN_DEFAULT_LITERAL_TAG`, listing the known tags; two contributors registering the same tag is an assembly error.
+- **The node as built.** `TaggedLiteralExprAst` has `tag()`, `fence()` (`'backtick' | 'quote'`), `rawBody()` (between the fences, escapes unresolved), `body()` (the canonical body, `undefined` when canonicalization fails), and the node's span. The formatter never touches the token's text.
+- **Contract encoding.** A column default lowers to `{ kind: 'function', expression: <canonical body> }`, the shape `dbgenerated("...")` produced, not the `ext` envelope above. Whether raw SQL defaults should later become a content-addressed payload is recorded in the project's deferred list.
+- **Only `@default` accepts the node today.** Every other attribute rejects it through its ordinary combinator diagnostic. The body is checked once at authoring time with `checkSqlDefaultBody` (`PSL_INVALID_DEFAULT_SQL`), the same rule the migration planners apply at DDL time.
+
 ## References
 
 - ADR 104 — PSL extension namespacing & syntax
