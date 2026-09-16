@@ -136,7 +136,7 @@ Its `lower` runs `checkSqlDefaultBody(body)` (below) and returns `{ ok: true, va
 
 ### A6. The body check
 
-New function in the SQL family, beside the tag entry:
+New function in the SQL contract package (`packages/2-sql/1-core/contract/src/default-sql-body.ts`, exported from `@internal/sql-contract/validators`), because the TypeScript builder needs it too and cannot depend on the family. The family's control export re-exports it for the tag entry and the planners. (Amended during dispatch 3; the first draft placed it in the family.)
 
 ```ts
 /** Returns undefined when the body may be rendered as `DEFAULT (<body>)`, else the reason. */
@@ -164,6 +164,8 @@ File: [`postgres/src/core/control-mutation-defaults.ts`](../../../../packages/3-
 - The language-server completion test gains `gen_random_uuid` in the Postgres function list.
 
 ### A9. SQLite verifies defaults exactly the way Postgres does
+
+(Amended during dispatch 3.) The SQLite resolver runs only where verify derives the live and expected schemas (`diffSqliteSchema`), not in the shared derivation the planners also use, because the planners render DDL from the resolved default and D4 forbids changing the authored SQL in DDL. Postgres is unchanged because its resolver returns the authored expression unchanged for every function default it does not recognise.
 
 Postgres passes `postgresResolveDefault` into the family's `contract-to-schema-ir` resolver hook so an authored function expression is parsed the same way an introspected one is before comparison. SQLite provides the equivalent:
 
