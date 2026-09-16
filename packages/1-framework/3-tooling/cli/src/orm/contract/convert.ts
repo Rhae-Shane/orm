@@ -166,6 +166,7 @@ export function createContractConvertCommand({
                 'contract convert is not supported for this target',
                 {
                   why: 'The configured target does not implement the PslContractPrintCapable capability, so the loaded contract cannot be written as Prisma 8 PSL.',
+                  // biome-ignore lint/plugin/no-family-vocabulary: names a target on purpose — this is user-facing guidance about which target can convert, not a framework type
                   fix: 'Use a target that supports contract conversion (Postgres today).',
                 },
               ),
