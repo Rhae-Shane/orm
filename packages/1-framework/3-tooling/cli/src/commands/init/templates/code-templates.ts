@@ -334,8 +334,8 @@ import { defineConfig as ormConfig, prisma7Schema } from '${configEntrypoint}';
 
 export default definePrismaConfig({
   orm: ormConfig({
-    contract: prisma7Schema(${JSON.stringify(schemaPath).replace(/"/g, "'")}),
-    output: ${JSON.stringify(outputDir).replace(/"/g, "'")},
+    contract: prisma7Schema(${JSON.stringify(schemaPath)}),
+    output: ${JSON.stringify(outputDir)},
     db: {
       connection: process.env['DATABASE_URL']!,
     },
