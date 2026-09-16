@@ -10,7 +10,7 @@
  * window.
  */
 
-import { type Contract, coreHash, profileHash } from '@internal/contract/types';
+import { type Contract, type ControlPolicy, coreHash, profileHash } from '@internal/contract/types';
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import { APP_SPACE_ID } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
@@ -39,29 +39,48 @@ const DESTRUCTIVE_POLICY = {
 interface ContractOptions {
   readonly namespaceId?: string;
   readonly extraColumn?: string;
+  readonly control?: ControlPolicy;
+  readonly extraTables?: readonly string[];
+}
+
+function storageTable(
+  extraColumn: string | undefined,
+  control: ControlPolicy | undefined,
+  tableName: string,
+) {
+  return new StorageTable({
+    columns: {
+      id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+      email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+      ...(extraColumn === undefined
+        ? {}
+        : { [extraColumn]: { nativeType: 'text', codecId: 'pg/text@1', nullable: true } }),
+    },
+    primaryKey: { columns: ['id'], name: `${tableName}_pkey` },
+    foreignKeys: [],
+    uniques: [],
+    indexes: [],
+    ...(control === undefined ? {} : { control }),
+  });
 }
 
 function contractWithTable(
   tableName: string,
-  { namespaceId = UNBOUND_NAMESPACE_ID, extraColumn }: ContractOptions = {},
+  {
+    namespaceId = UNBOUND_NAMESPACE_ID,
+    extraColumn,
+    control,
+    extraTables = [],
+  }: ContractOptions = {},
 ): Contract<SqlStorage> {
   const schema = postgresCreateNamespace({
     id: namespaceId,
     entries: {
       table: {
-        [tableName]: new StorageTable({
-          columns: {
-            id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-            email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
-            ...(extraColumn === undefined
-              ? {}
-              : { [extraColumn]: { nativeType: 'text', codecId: 'pg/text@1', nullable: true } }),
-          },
-          primaryKey: { columns: ['id'], name: `${tableName}_pkey` },
-          foreignKeys: [],
-          uniques: [],
-          indexes: [],
-        }),
+        [tableName]: storageTable(extraColumn, control, tableName),
+        ...Object.fromEntries(
+          extraTables.map((name) => [name, storageTable(undefined, undefined, name)]),
+        ),
       },
       policy: {},
     },
@@ -190,6 +209,19 @@ describe('Postgres planner table-name case guard', () => {
     const ids = (await Promise.all(result.plan.operations)).map((op) => op.id);
     expect(ids).toContain('table.UserProfile');
     expect(ids.some((id) => id.startsWith('dropTable.'))).toBe(false);
+  });
+
+  it('ignores a pair whose new table the control policy keeps the planner away from', async () => {
+    const result = planFromLive(['userProfile'], 'UserProfile', {
+      control: 'external',
+      extraTables: ['Accounts'],
+    })();
+
+    expect(result.kind).toBe('success');
+    if (result.kind !== 'success') return;
+    const ids = (await Promise.all(result.plan.operations)).map((op) => op.id);
+    expect(ids).toContain('table.Accounts');
+    expect(ids).not.toContain('table.UserProfile');
   });
 
   it('plans a normal drop and create when the new table name is unrelated', async () => {

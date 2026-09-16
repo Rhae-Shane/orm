@@ -250,19 +250,6 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
     });
     const schemaIssues = [...namespaceIssues, ...gated];
 
-    const caseChangeConflicts = detectTableNameCaseChanges({
-      issues: gated,
-      tableOf: (issue) => {
-        const node = issueNode(issue);
-        return node !== undefined && PostgresTableSchemaNode.is(node) ? node : undefined;
-      },
-      namespaceIdOf: (issue) =>
-        resolveNamespaceIdForDdlSchema(options.contract, issueSchemaName(issue) ?? schemaName),
-    });
-    if (caseChangeConflicts.length > 0) {
-      return plannerFailure(caseChangeConflicts);
-    }
-
     // Index rename post-pass (the policy pass's structure, generalized): a
     // `not-found` and a `not-expected` index that are one rename collapse
     // into a single widening `ALTER INDEX … RENAME TO` before the per-issue
@@ -300,6 +287,22 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
         resolvePostgresNodeIssueControlPolicySubject(issue, options.contract),
       resolveCreationFactoryName: resolvePostgresNodeIssueCreationFactoryName,
     });
+
+    // The case guard runs on the plannable partition only: a table the
+    // control policy keeps the planner away from (`external`, `observed`) is
+    // never dropped or created, so it cannot form a drop-and-create pair.
+    const caseChangeConflicts = detectTableNameCaseChanges({
+      issues: issuePartition.plannable,
+      tableOf: (issue) => {
+        const node = issueNode(issue);
+        return node !== undefined && PostgresTableSchemaNode.is(node) ? node : undefined;
+      },
+      namespaceIdOf: (issue) =>
+        resolveNamespaceIdForDdlSchema(options.contract, issueSchemaName(issue) ?? schemaName),
+    });
+    if (caseChangeConflicts.length > 0) {
+      return plannerFailure(caseChangeConflicts);
+    }
 
     const result = planIssues({
       issues: issuePartition.plannable,
