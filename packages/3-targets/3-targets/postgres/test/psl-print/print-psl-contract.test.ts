@@ -275,7 +275,7 @@ describe('column defaults', () => {
     ).toBe('@default(dbgenerated("gen_random_uuid()"))');
   });
 
-  it('refuses a literal default the column type has no PSL spelling for', () => {
+  it('refuses a literal default that cannot be written in PSL for the column type', () => {
     let thrown: unknown;
     try {
       defaultOf({

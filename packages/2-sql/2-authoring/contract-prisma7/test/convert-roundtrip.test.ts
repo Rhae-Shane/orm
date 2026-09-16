@@ -19,7 +19,7 @@ const cases = readdirSync(fixturesDir, { withFileTypes: true })
   .sort();
 
 const NULLABLE_LIST =
-  'the printer has no spelling for a nullable list, so a list column comes back not nullable';
+  'the printer cannot print a nullable list type, so a list column comes back not nullable';
 const LOST_LIST_TYPE_PARAMS =
   'the PSL source drops type.typeParams from the domain field of a scalar list column';
 
@@ -33,12 +33,18 @@ const expectedFailures: ReadonlyMap<string, readonly string[]> = new Map([
     ],
   ],
   ['enum-native', [NULLABLE_LIST, LOST_LIST_TYPE_PARAMS]],
-  ['junction-name-in-other-schema', ['one model name in two namespaces has no PSL spelling']],
+  [
+    'junction-name-in-other-schema',
+    ['one model name in two namespaces cannot be written in a Prisma 8 schema'],
+  ],
   ['list-defaults', ['the PSL source refuses a function default on a list column']],
   ['native-types-accepted', [NULLABLE_LIST, LOST_LIST_TYPE_PARAMS]],
   ['number-default-spellings', [NULLABLE_LIST]],
   ['number-defaults', [NULLABLE_LIST, LOST_LIST_TYPE_PARAMS]],
-  ['relation-name-in-two-schemas', ['one model name in two namespaces has no PSL spelling']],
+  [
+    'relation-name-in-two-schemas',
+    ['one model name in two namespaces cannot be written in a Prisma 8 schema'],
+  ],
   ['scalars', [NULLABLE_LIST, LOST_LIST_TYPE_PARAMS]],
 ]);
 

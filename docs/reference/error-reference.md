@@ -251,7 +251,7 @@ A model declares an empty unique constraint (a unique with no fields), raised du
 
 ### CONTRACT.CONVERT_UNSUPPORTED
 
-`contract convert` cannot print the loaded contract as a Prisma 8 PSL file: either the configured target has no `printPslContract` hook on its descriptor (meta: `targetId`), or the contract holds something Prisma 8 PSL has no spelling for — a column whose native type is outside the target's type map, a generated value the target cannot author, a to-one relation with no foreign key behind it, or one model name declared in more than one namespace (a relation's target is resolved by model name alone, so the two would read back as one). Meta at the shape sites: `coordinate`, `nativeType`, `onCreate`, `onUpdate`, `model`, `field`, `modelName`, `namespaces`.
+`contract convert` cannot print the loaded contract as a Prisma 8 PSL file: either the configured target has no `printPslContract` hook on its descriptor (meta: `targetId`), or the contract holds something that cannot be written in a Prisma 8 PSL file — a column whose native type is outside the target's type map, a generated value the target cannot author, a to-one relation with no foreign key behind it, or one model name declared in more than one namespace (a relation's target is resolved by model name alone, so the two would read back as one). Meta at the shape sites: `coordinate`, `nativeType`, `onCreate`, `onUpdate`, `model`, `field`, `modelName`, `namespaces`.
 
 ### CONTRACT.DEFAULT_INVALID
 

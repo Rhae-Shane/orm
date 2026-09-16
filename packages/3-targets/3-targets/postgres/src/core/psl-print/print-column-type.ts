@@ -57,7 +57,7 @@ export function printColumnType(input: {
   if ('unsupported' in resolution) {
     throw postgresError(
       'CONTRACT.CONVERT_UNSUPPORTED',
-      `contract convert: column ${coordinate} has native type "${column.nativeType}", which has no Prisma 8 PSL spelling.`,
+      `contract convert: column ${coordinate} has native type "${column.nativeType}", which cannot be written in Prisma 8 PSL.`,
       {
         why: 'The Postgres contract-to-PSL printer maps each native type back to the PSL type that produces it; this one is not in that map.',
         fix: 'Retype the column, or author the Prisma 8 contract by hand.',

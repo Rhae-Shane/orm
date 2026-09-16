@@ -49,7 +49,7 @@ export type PrintedExecutionDefault =
   | { readonly kind: 'temporal'; readonly phases: TemporalPresetPhases };
 
 /**
- * The PSL spelling of one column's execution generators: an id generator
+ * How one column's execution generators are written in PSL: an id generator
  * prints as a `@default(<fn>())` attribute, and a wall-clock-now generator
  * prints as the `temporal.*` preset the column's codec is authored through.
  */
@@ -76,9 +76,9 @@ export function printExecutionDefault(input: {
   if (call === undefined || onUpdateId !== undefined) {
     throw postgresError(
       'CONTRACT.CONVERT_UNSUPPORTED',
-      `contract convert: column ${coordinate} carries generated value "${onCreateId ?? onUpdateId}", which has no Prisma 8 PSL spelling.`,
+      `contract convert: column ${coordinate} carries generated value "${onCreateId ?? onUpdateId}", which cannot be written in Prisma 8 PSL.`,
       {
-        why: 'The Postgres contract-to-PSL printer knows one authored spelling per generator; this generator is not among them.',
+        why: 'The Postgres contract-to-PSL printer knows one way to write each generator; this generator is not among them.',
         fix: 'Author the Prisma 8 contract by hand for this column.',
         meta: { coordinate, onCreate: onCreateId, onUpdate: onUpdateId },
       },
