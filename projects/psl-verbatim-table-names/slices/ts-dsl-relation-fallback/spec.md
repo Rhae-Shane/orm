@@ -8,9 +8,12 @@ In the TypeScript authoring DSL, a `belongsTo` relation whose target model lives
 
 ## Chosen design
 
-Stop guessing where the value is unused, and use the identity default where a string is required. For a cross-space relation with no `tableName`, the relation node's `toTable` and `on.childTable` are left undefined rather than fabricated; the only reader of those fields in `build-contract.ts` already skips cross-space relations, so no consumer changes behaviour. The foreign-key node builder for the same relation (`lowerCrossSpaceForeignKeyNode`) had the same lowercase guess, and its target table reaches the storage IR where the name is required and the planner resolves it against the remote contract (ADR 226); there the fallback becomes the model name unchanged, which is the DSL's identity naming default. Amended after implementation: the original text claimed the foreign-key path already left the table unset, which was true one layer up but not in the node builder.
+Never guess a table name. Two paths carried the lowercase guess:
 
-If making those two fields optional for the cross-space shape spreads into more than the relation-node type, its constructor, and `build-contract.ts`, fall back to the smaller change: use `targetModelName` unchanged (the identity default) and record in the report that the guess remains but now matches the DSL's default. Either way the `.toLowerCase()` call is deleted.
+- The relation node. For a cross-space relation with no `tableName`, `toTable` and `on.childTable` are left undefined rather than fabricated. Their only reader in `build-contract.ts` already skips cross-space relations, so no consumer changes behaviour.
+- The foreign-key node (`lowerCrossSpaceForeignKeyNode`). Its target table is written into `contract.json` and into the `REFERENCES` clause of the DDL, and nothing resolves it against the remote contract later. A guessed name there is a foreign key to a table that may not exist. So when a cross-space foreign key targets a handle with no statically readable table, lowering throws `CONTRACT.FOREIGN_KEY_INVALID`, naming the source model, the target model and the space, and telling the author to declare the target model's `.sql()` stage with a static object carrying `table`. That is the only way a cross-space handle can carry its table today; there is no per-relation table option.
+
+Amended after review: the original text claimed the foreign-key path already left the table unset and the planner resolved it. The reviewer traced the value into the emitted contract and the DDL; neither claim held.
 
 ## Why `tableName` can be undefined
 
@@ -18,7 +21,7 @@ If making those two fields optional for the cross-space shape spreads into more 
 
 ## Scope
 
-**In:** the lowering change; the relation-node type change if the primary design is taken; a test in `packages/2-sql/2-authoring/contract-ts/test/cross-space-relation.test.ts` (or `cross-space-fk.test.ts`) with a branded cross-space handle whose `.sql()` is a factory function and whose model is a two-word PascalCase name such as `OrderItem`, asserting the relation node carries no fabricated table (primary) or the identity-cased name (fallback). The test must fail on `main`.
+**In:** the lowering change; the relation-node type change if the primary design is taken; a test in `packages/2-sql/2-authoring/contract-ts/test/cross-space-relation.test.ts` (or `cross-space-fk.test.ts`) with a branded cross-space handle whose `.sql()` is a factory function and whose model is a two-word PascalCase name such as `OrderItem`, asserting the relation node carries no fabricated table; and a test in `cross-space-fk.test.ts` asserting the structured error for a cross-space foreign key to such a handle. Both must fail on `main`.
 
 **Out:** same-space relations; the naming-strategy machinery (`applyNaming`); any change to how the planner resolves remote tables.
 
