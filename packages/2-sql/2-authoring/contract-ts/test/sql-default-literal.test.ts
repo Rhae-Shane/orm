@@ -3,6 +3,7 @@ import { field, model } from '../src/contract-builder';
 import { sql } from '../src/sql-default-literal';
 import { columnDescriptor } from './helpers/column-descriptor';
 import { defineTestContract } from './helpers/define-test-contract';
+import { unboundTables } from './unbound-tables';
 
 const textColumn = columnDescriptor('sql/text@1');
 
@@ -10,7 +11,7 @@ function loweredDefault(builder: ReturnType<typeof field.column>) {
   const contract = defineTestContract({
     models: { T: model('T', { fields: { id: builder.id() } }) },
   });
-  return contract.storage.namespaces['public']?.entries.table?.['T']?.columns['id']?.default;
+  return unboundTables(contract.storage)['T']?.columns['id']?.default;
 }
 
 describe('sql template tag', () => {
@@ -37,7 +38,7 @@ describe('sql template tag', () => {
   });
 
   it('throws CONTRACT.DEFAULT_SQL_INTERPOLATION when values are interpolated at runtime', () => {
-    const tag: (strings: TemplateStringsArray, ...values: readonly unknown[]) => unknown = sql;
+    const tag = sql as (strings: TemplateStringsArray, ...values: readonly unknown[]) => unknown;
     expect(() => tag`a ${1} b`).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.DEFAULT_SQL_INTERPOLATION',

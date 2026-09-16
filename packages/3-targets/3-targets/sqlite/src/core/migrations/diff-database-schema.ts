@@ -1,5 +1,9 @@
 import type { ColumnDefault, Contract, ControlPolicy } from '@internal/contract/types';
-import type { NativeTypeExpander, SqlSchemaDiffResult } from '@internal/family-sql/control';
+import type {
+  DefaultResolver,
+  NativeTypeExpander,
+  SqlSchemaDiffResult,
+} from '@internal/family-sql/control';
 import { buildNativeTypeExpander, contractToSchemaIR } from '@internal/family-sql/control';
 import { verifySqlSchemaByDiff } from '@internal/family-sql/diff';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
@@ -54,6 +58,8 @@ export function sqliteContractToSchema(
   contract: Contract<SqlStorage> | null,
   extras?: {
     readonly expandNativeType?: NativeTypeExpander;
+    /** Verify-side only: the planner renders DDL from the resolved default, and DDL stays verbatim. */
+    readonly resolveDefault?: DefaultResolver;
   },
 ): SqlSchemaIR {
   // SQLite is single-schema: every contract FK targets the unbound namespace
@@ -63,8 +69,8 @@ export function sqliteContractToSchema(
   return contractToSchemaIR(contract, {
     annotationNamespace: 'sqlite',
     renderDefault: sqliteRenderDefault,
-    resolveDefault: sqliteResolveDefault,
     ...ifDefined('expandNativeType', extras?.expandNativeType),
+    ...ifDefined('resolveDefault', extras?.resolveDefault),
   });
 }
 
@@ -128,6 +134,7 @@ export function diffSqliteSchema(input: {
   const expandNativeType = buildNativeTypeExpander(input.frameworkComponents);
   const expected = sqliteContractToSchema(input.contract, {
     ...ifDefined('expandNativeType', expandNativeType),
+    resolveDefault: sqliteResolveDefault,
   });
   const actual =
     input.schema instanceof SqlSchemaIR

@@ -3,6 +3,7 @@ import { field, model } from '../src/contract-builder';
 import { autoincrement, now } from '../src/default-functions';
 import { columnDescriptor } from './helpers/column-descriptor';
 import { defineTestContract } from './helpers/define-test-contract';
+import { unboundTables } from './unbound-tables';
 
 const int4Column = columnDescriptor('pg/int4@1');
 
@@ -26,7 +27,7 @@ describe('named default functions', () => {
         }),
       },
     });
-    const columns = contract.storage.namespaces['public']?.entries.table?.['T']?.columns;
+    const columns = unboundTables(contract.storage)['T']?.columns;
     expect(columns?.['id']?.default).toEqual({ kind: 'function', expression: 'autoincrement()' });
     expect(columns?.['at']?.default).toEqual({ kind: 'function', expression: 'now()' });
   });
