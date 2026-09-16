@@ -6,7 +6,7 @@ This guide describes the canonical authoring shape for codecs in Prisma 8: **cla
 
 A codec is **three artifacts**:
 
-1. A **codec class** that extends `CodecImpl<Id, TTraits, TWire, TInput>` and implements all four conversion methods: `encode`, `decode`, `encodeJson`, and `decodeJson`.
+1. A **codec class** that extends `CodecImpl<Id, TTraits, TWire, TInput>` and implements all six conversion methods: `encode` and `decode` for the driver wire form, `encodeJson` and `decodeJson` for the JSON form stored in contract artifacts, and `encodePsl` and `decodePsl` for the PSL literal that denotes a value in schema source (`@default(...)`). The PSL pair is synchronous and required; the shared pairs in `@internal/framework-components/codec` (`encodeStringPsl`/`decodeStringPsl`, `encodeNumberPsl`/`decodeNumberPsl`, `decodeWholeNumberPsl`, `encodeFloatPsl`/`decodeFloatPsl`, `encodeBooleanPsl`/`decodeBooleanPsl`, `encodeJsonTextPsl`/`decodeJsonTextPsl`) cover the common shapes, and [ADR 184](../architecture%20docs/adrs/ADR%20184%20-%20Codec-owned%20value%20serialization.md) records the rule for which shape a codec takes.
 2. A **descriptor class** that extends `CodecDescriptorImpl<P>` for a target-neutral codec, or the target-owned `PostgresCodecDescriptor<P>` / `SqliteCodecDescriptor<P>` for a target-bound SQL codec, and declares the codec id, traits, target types, params schema, and the curried factory that materializes codec instances.
 3. A **per-codec column helper function** that calls `descriptor.factory(...)` directly and packages the result into a `ColumnSpec` via the framework-supplied `column(...)` packager. The helper carries a `satisfies ColumnHelperFor<D>` clause that ties it to its descriptor at compile time.
 
@@ -17,6 +17,8 @@ The framework imports live at `@internal/framework-components/codec`:
 - `ColumnHelperFor<D>` / `ColumnHelperForStrict<D>` — `satisfies` shapes for per-codec helpers.
 - `column(codecFactory, codecId, typeParams, nativeType)` — column-spec packager (`nativeType` is the database spelling for migrations and contract meta).
 - `voidParamsSchema` — Standard Schema validator for `P = void` (non-parameterized codecs).
+- `PslLiteral` — the `{ kind: 'string' | 'number' | 'boolean', text }` shape `encodePsl` returns and `decodePsl` receives, with the fence removed and escapes resolved.
+- `encodeStringPsl`, `decodeStringPsl`, `encodeNumberPsl`, `decodeNumberPsl`, `decodeWholeNumberPsl`, `encodeFloatPsl`, `decodeFloatPsl`, `encodeBooleanPsl`, `decodeBooleanPsl`, `encodeJsonTextPsl`, `decodeJsonTextPsl` — the shared PSL pairs; each decode helper takes the codec id so its error names the codec.
 - `Codec<...>`, `CodecDescriptor<P>`, `AnyCodecDescriptor` — consumer-facing interfaces (consumers depend on these; target-neutral authors extend the `*Impl` classes, while target-bound SQL authors use target-owned bases).
 
 SQL codecs use the same framework `CodecImpl` base. Their `encodeJson` and `decodeJson` methods define the codec's JSON-safe contract representation; `decode` remains responsible for the driver's ordinary column wire value. Keep that representation stable and mutually consistent, and keep `decodeJson` compatible with the values the current SQL JSON renderer returns for the codec. This distinction matters for types such as PostgreSQL `bytea` and extension-defined types whose values inside database-produced JSON may differ from their normal driver representation.
@@ -56,6 +58,9 @@ import {
   CodecImpl,
   type ColumnHelperFor,
   column,
+  decodeStringPsl,
+  encodeStringPsl,
+  type PslLiteral,
   voidParamsSchema,
 } from '@internal/framework-components/codec';
 import type { ProjectionExpr } from '@internal/sql-relational-core/ast';
@@ -76,6 +81,8 @@ class PgTextCodec extends CodecImpl<
     }
     return json;
   }
+  encodePsl(value: string): PslLiteral { return encodeStringPsl(value); }
+  decodePsl(literal: PslLiteral): string { return decodeStringPsl(this.id, literal); }
 }
 
 class PgTextDescriptor extends PostgresCodecDescriptor<void> {
@@ -103,6 +110,32 @@ text satisfies ColumnHelperFor<PgTextDescriptor>;
 ```
 
 The factory is **constant**: every call returns the same shared codec instance. The runtime relies on this contract — non-parameterized columns sharing a codec id share one resolved codec without explicit caching.
+
+The PSL pair is the string rule: a `pg/text@1` value is a JSON string, so it is written as a string literal (`@default("hello")`) and read back from one. `decodeStringPsl(this.id, literal)` throws `pg/text@1 reads a string literal; got a number 5` for any other literal kind, and the PSL interpreter turns that into `PSL_INVALID_DEFAULT_LITERAL` at the attribute.
+
+#### A JSON-valued codec (`pg/jsonb@1`)
+
+A codec whose JSON form is an object, array, or null takes the JSON-text rule: the PSL literal is a string holding the JSON text (`@default("{\"a\":1}")`, `@default("[1, 2]")`, `@default("null")`), which `decodePsl` parses and hands to `decodeJson`.
+
+```ts
+import {
+  decodeJsonTextPsl,
+  encodeJsonTextPsl,
+} from '@internal/framework-components/codec';
+
+class PgJsonbCodec extends CodecImpl<'pg/jsonb@1', readonly ['equality'], string | JsonValue, JsonValue> {
+  async encode(value: JsonValue, _ctx: CodecCallContext) { return JSON.stringify(value); }
+  async decode(wire: string | JsonValue, _ctx: CodecCallContext) {
+    return typeof wire === 'string' ? (JSON.parse(wire) as JsonValue) : wire;
+  }
+  encodeJson(value: JsonValue) { return value; }
+  decodeJson(json: JsonValue) { return json; }
+  encodePsl(value: JsonValue): PslLiteral { return encodeJsonTextPsl(value); }
+  decodePsl(literal: PslLiteral): JsonValue { return decodeJsonTextPsl(this.id, literal); }
+}
+```
+
+A codec whose value is not a string but whose JSON form is one (`pg/bytea@1` as base64, the Temporal codecs) also writes a string literal, carrying `encodeJson`/`decodeJson` through it: `encodeStringPsl(this.encodeJson(value))` and `this.decodeJson(decodeStringPsl(this.id, literal))`.
 
 ### Case 2 — Parameterized codec with literal preservation (`pg/vector@1`)
 
@@ -475,7 +508,7 @@ The class hierarchy isn't load-bearing for variance preservation (per-codec help
 - **`override` discipline.** With `noImplicitOverride`, every concrete-subclass member that touches an inherited member must carry `override`. Forgetting it surfaces as a typecheck error.
 - **Don't widen the factory return at the descriptor.** Concrete descriptors should declare their factory's typed return (`(ctx) => VectorCodec<N>`, not `(ctx) => Codec<...>`). The widened return loses literal preservation at consumer sites.
 - **Don't extract codec types via `Parameters` / `ReturnType` of the descriptor's `factory`.** TypeScript widens method generics to their constraint in those forms. Use the per-codec helper's typed return (`ColumnSpec<R, P>`) and project with `R extends Codec<any, any, any, infer T> ? T : never`.
-- **Don't reach through the codec instance for metadata.** The runtime `Codec` instance is narrow (id + four conversion methods). Read traits / target types / meta from `descriptor` (e.g. `context.codecDescriptors.descriptorFor(codecId).traits`).
+- **Don't reach through the codec instance for metadata.** The runtime `Codec` instance is narrow (id + six conversion methods). Read traits / target types / meta from `descriptor` (e.g. `context.codecDescriptors.descriptorFor(codecId).traits`).
 
 ## See also
 

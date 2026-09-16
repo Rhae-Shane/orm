@@ -173,6 +173,61 @@ ADR 167 proposed a standalone `DefaultLiteralCodec` interface, parallel to `Code
 
 Rejected because this isn't a separate kind of codec — it's an extension of codec responsibilities. The codec already owns the type; value serialization is part of what owning a type means.
 
+## Amendment — PSL literal methods live on `Codec` (2026-09-16)
+
+`encodePsl` and `decodePsl` are required members of the `Codec` interface and abstract members of `CodecImpl`, next to `encode`, `decode`, `encodeJson`, and `decodeJson`. Every codec states the PSL literal that denotes its values; there is no default on the base class.
+
+```ts
+/** A PSL scalar literal as its content, with the fence removed and escapes resolved. */
+interface PslLiteral {
+  readonly kind: 'string' | 'number' | 'boolean';
+  /** string: the characters between the quotes with escapes resolved. number: the digits exactly as written. boolean: 'true' or 'false'. */
+  readonly text: string;
+}
+
+interface Codec<Id, TTraits, TWire, TInput> {
+  // ... encode, decode, encodeJson, decodeJson
+  encodePsl(value: TInput): PslLiteral;
+  decodePsl(literal: PslLiteral): TInput;
+}
+```
+
+The codec never sees the fence, and a number's digits reach it verbatim: a big integer or a decimal is never converted to a JavaScript number before the codec reads it. The PSL interpreter passes each `@default` literal to the column codec's `decodePsl` and stores the result through `encodeJson`; a literal the codec refuses is the diagnostic `PSL_INVALID_DEFAULT_LITERAL`, carrying the codec's message. The `contract infer` printer calls `encodePsl` on the value `decodeJson` read from the contract and writes the literal with the fence and escapes added.
+
+The `PslLiteralCodec` interface sketched above is not a separate entity and never was: it is the consumer's view of the same codec, the dependency inversion the "Single interface with all boundaries" alternative describes. That alternative is therefore no longer rejected for PSL. It stays rejected for DDL: `encodeDdl` and `decodeDdl` are not built, and that decision is recorded in the project's deferred list ([item 3](../../../projects/remove-dbgenerated/deferred.md#3-encodeddl-and-decodeddl-on-codecs)).
+
+### The rule for a codec's PSL form
+
+One rule, applied to every codec, keyed on the JSON form `encodeJson` produces:
+
+- A JSON string is a string literal holding that string: `{ kind: 'string', text }`.
+- A JSON number is a number literal with no exponent: `{ kind: 'number', text }`, the exact decimal text of the value.
+- A JSON boolean is a boolean literal.
+- A JSON object, array, or null is a string literal holding the JSON text: `{ kind: 'string', text: JSON.stringify(json) }`, which `decodePsl` parses and hands to `decodeJson`. The JSON codecs, `arktype/json@1`, `pg/vector@1`, and the Mongo vector codec take this form.
+
+The shared pairs in `@internal/framework-components/codec` implement the rule: `encodeStringPsl`/`decodeStringPsl`, `encodeNumberPsl`/`decodeNumberPsl`, `decodeWholeNumberPsl`, `encodeFloatPsl`/`decodeFloatPsl`, `encodeBooleanPsl`/`decodeBooleanPsl`, and `encodeJsonTextPsl`/`decodeJsonTextPsl`. Every decode error has one shape, `<codecId> reads a <kind> literal; got a <kind> <text>`, so the interpreter's diagnostic names the codec.
+
+```ts
+class PgTextCodec extends CodecImpl<'pg/text@1', readonly ['equality', 'order', 'textual'], string, string> {
+  // ... encode, decode, encodeJson, decodeJson
+  encodePsl(value: string): PslLiteral {
+    return encodeStringPsl(value);
+  }
+  decodePsl(literal: PslLiteral): string {
+    return decodeStringPsl(this.id, literal);
+  }
+}
+```
+
+The named exceptions, each the way PSL is already written:
+
+- `pg/float4@1` and `pg/float8@1` write `NaN`, `Infinity`, and `-Infinity` as the quoted strings `"NaN"`, `"Infinity"`, `"-Infinity"`, because PSL has no number token for them, and read both that string and the number token the tokenizer produces for the bare text. Their JSON form and their wire form carry those three values as that text; finite values stay numbers.
+- `pg/int8@1`, `pg/unboundedint@1`, and `pg/numeric@1` read the digits from `text` and print them as text, so every digit of a big integer or a decimal survives. `pg/numeric@1` canonicalises leading zeros and the sign of zero (`007` → `7`, `-0` → `0`, `-0.00` → `0.00`; trailing zeros are kept), writes the three special values as quoted strings, and also reads a quoted decimal string.
+- The integer codecs (`pg/int4@1`, `pg/int2@1`, `pg/int8@1`, `pg/int8number@1`, `pg/unboundedint@1`, `sql/int@1`, `sqlite/integer@1`, `sqlite/bigint@1`, `sqlite/bigintnumber@1`, `mongo/int32@1`) reject a fraction: `pg/int4@1 reads a whole number literal; got a number 1.5`.
+- `sql/float@1` and `sqlite/real@1` refuse non-finite values in PSL as they do in JSON.
+- A codec whose JSON form is a string but whose value is not (`pg/bytea@1` and `sqlite/blob@1` as base64 or hex text, `pg/geometry@1` as HEXEWKB, `pg/interval@1` as an ISO duration, the Temporal codecs, and the `Date` codecs) uses the string rule and carries `encodeJson`/`decodeJson` through it: `encodePsl` writes `encodeJson(value)` as the string, `decodePsl` returns `decodeJson(text)`.
+- The Mongo `mongoCodec({...})` factory takes `encodePsl` and `decodePsl` as required config members, so every Mongo codec declares its PSL form explicitly too.
+
 ## Supersedes
 
 - **ADR 167 v2** (deferred codec-keyed `DefaultLiteralCodec` SPI) — this ADR generalizes and implements the concept. The v1 hardcoded pipeline is replaced.

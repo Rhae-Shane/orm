@@ -29,6 +29,8 @@ This keeps core/CLI source-agnostic while giving PSL-first SQL users a one-line 
 - Return `notOk` with structured diagnostics for unsupported constructs
 - Keep interpretation deterministic for equivalent AST inputs
 
+Literal defaults: the written form of a `@default(...)` literal is whatever the column's codec accepts through its `decodePsl`. A JSON column takes a string holding JSON text (`Jsonb @default("{}")`, `Json @default("[1, 2]")`); a number is read exactly as written, so a big integer or a decimal keeps every digit (`BigInt @default(9007199254740993)`, `Decimal @default(1.50)`); a Postgres float takes `"NaN"`, `"Infinity"`, or `"-Infinity"` as a quoted string. A literal the codec cannot read is the diagnostic `PSL_INVALID_DEFAULT_LITERAL` at the attribute, with the codec's own message (`Field "M.count": @default(1.5) is not a value of pg/int4@1: pg/int4@1 reads a whole number literal; got a number 1.5`).
+
 Determinism note:
 - Relation metadata emission is intentionally **sorted by storage table name, then model name, then relation field name** (not PSL declaration order) so `contract.json` snapshots and hashes are stable across environments.
 
