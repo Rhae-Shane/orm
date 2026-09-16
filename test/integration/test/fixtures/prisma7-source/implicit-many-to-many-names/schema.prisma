@@ -10,7 +10,6 @@ model User {
   following User[] @relation("Follows")
 
   @@schema("public")
-  @@map("user")
 }
 
 model Post {
@@ -27,7 +26,6 @@ model Tag {
   posts Post[]
 
   @@schema("public")
-  @@map("tag")
 }
 
 model Category {
@@ -35,7 +33,6 @@ model Category {
   products Product[]
 
   @@schema("public")
-  @@map("category")
 }
 
 model Product {
@@ -43,7 +40,6 @@ model Product {
   categories Category[]
 
   @@schema("shop")
-  @@map("product")
 }
 
 model A {
@@ -53,7 +49,6 @@ model A {
   prev A[] @relation("Loop")
 
   @@schema("public")
-  @@map("a")
 }
 
 model B {
@@ -61,5 +56,4 @@ model B {
   ays A[]
 
   @@schema("public")
-  @@map("b")
 }
