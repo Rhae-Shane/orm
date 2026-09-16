@@ -1,4 +1,4 @@
-import { readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { ok } from '@internal/utils/result';
 import { structuredError } from '@internal/utils/structured-error';
 import type { ErroredEnvelope, MountedTree, StreamEvent } from '@prisma/cli-engine';
@@ -229,6 +229,45 @@ describe('contract convert', () => {
     expect(run.presented?.presentation.stdout).toEqual([]);
     expect(stripAnsi(run.stderr)).toContain('Contract written to generated/contract.prisma');
     expect(run.stdout).toBe('');
+  });
+
+  it('refuses to write over the schema it reads and leaves that file untouched', async () => {
+    const dir = await projectDir();
+    const schema = 'model User {\n  id Int @id\n}\n';
+    await mkdir(join(dir, 'prisma'), { recursive: true });
+    await writeFile(join(dir, 'prisma', 'schema.prisma'), schema, 'utf-8');
+
+    const run = await harness(ormConfig(dir)).run(
+      ['contract', 'convert', '--output', 'prisma/schema.prisma', '--json'],
+      { cwd: dir },
+    );
+
+    expect(run.exitCode).toBe(2);
+    expect(erroredEnvelope(run).error).toMatchObject({
+      code: 'CONTRACT.CONVERT_OUTPUT_IS_SOURCE',
+      meta: { output: 'prisma/schema.prisma', source: 'prisma/schema.prisma' },
+    });
+    expect(await readFile(join(dir, 'prisma', 'schema.prisma'), 'utf-8')).toBe(schema);
+    expect(mocks.load).not.toHaveBeenCalled();
+  });
+
+  it('refuses an output path inside a directory the contract source reads', async () => {
+    const dir = await projectDir();
+    const config = ormConfig(dir, {
+      contract: {
+        source: { format: 'prisma7', inputs: ['./prisma'], load: mocks.load },
+        output: join(dir, 'generated', 'contract.json'),
+      },
+    });
+
+    const run = await harness(config).run(
+      ['contract', 'convert', '--output', 'prisma/nested/contract.prisma', '--json'],
+      { cwd: dir },
+    );
+
+    expect(run.exitCode).toBe(2);
+    expect(erroredEnvelope(run).error).toMatchObject({ code: 'CONTRACT.CONVERT_OUTPUT_IS_SOURCE' });
+    expect(await readdir(dir)).not.toContain('prisma');
   });
 
   it('refuses a PSL source and writes nothing', async () => {

@@ -5,10 +5,10 @@
  * wrote, and emits the same contract — which `db verify` then reports zero
  * findings against the database the Prisma 7 SQL built. It runs over the
  * `relations` fixture, whose database is the SQL Prisma 7.10.0 generated for
- * the full `supported` schema. Three things are
- * refused with exit 2 and no file written: a config on any other contract
- * source, a Prisma 7 schema Prisma 8 cannot read, and a schema holding a
- * default that cannot be written in Prisma 8 PSL.
+ * the full `supported` schema. Four things are refused with exit 2 and no file
+ * written: a config on any other contract source, a Prisma 7 schema Prisma 8
+ * cannot read, an output path that is the schema being read, and a schema
+ * holding a default that cannot be written in Prisma 8 PSL.
  */
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { withClient } from '@repo/test-utils';
@@ -192,6 +192,21 @@ withTempDir(({ createTempDir }) => {
 
       expect(convert.exitCode, output(convert)).toBe(2);
       expect(errorOf(convert).code).toBe('CONTRACT.SOURCE_LOAD_FAILED');
+      expect(existsSync(join(ctx.testDir, 'contract.prisma'))).toBe(false);
+    });
+
+    it('refuses to write over the schema it reads and leaves that file unchanged', async () => {
+      const ctx = setupPrisma7Project(createTempDir, NO_DATABASE, {
+        copyFrom: join(PRISMA7_FIXTURES, 'relations/schema.prisma'),
+      });
+      const schemaPath = join(ctx.testDir, 'schema.prisma');
+      const before = readFileSync(schemaPath, 'utf-8');
+
+      const convert = await runContractConvert(ctx, ['--output', 'schema.prisma', '--json']);
+
+      expect(convert.exitCode, output(convert)).toBe(2);
+      expect(errorOf(convert).code).toBe('CONTRACT.CONVERT_OUTPUT_IS_SOURCE');
+      expect(readFileSync(schemaPath, 'utf-8')).toBe(before);
       expect(existsSync(join(ctx.testDir, 'contract.prisma'))).toBe(false);
     });
 

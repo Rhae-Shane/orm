@@ -4,7 +4,7 @@ import type { Block, Presentations } from '@prisma/cli-engine';
 import { flag } from '@prisma/cli-engine';
 import type { NextAction } from '@prisma/cli-engine/protocol';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
-import { relative } from 'pathe';
+import { relative, resolve } from 'pathe';
 import { createControlClient as createDefaultControlClient } from '../../control-api/client';
 import { loadContractSource } from '../../control-api/operations/load-contract-source';
 import type { ControlClient, ControlClientOptions } from '../../control-api/types';
@@ -72,6 +72,25 @@ export interface ContractConvertCommandDeps {
 
 function convertHeaderComment(schemaPath: string): string {
   return `// use prisma-8\n// Converted from ${schemaPath} by \`prisma contract convert\`.`;
+}
+
+/**
+ * The contract source input the output path would be written over: the one it
+ * names, or the directory of schema files it sits inside. `undefined` when the
+ * output path touches no input.
+ */
+function sourceInputCovering(inputs: {
+  readonly inputs: readonly string[];
+  readonly cwd: string;
+  readonly outputPath: string;
+}): string | undefined {
+  return inputs.inputs.find((input) => {
+    const resolved = resolve(inputs.cwd, input);
+    return (
+      resolved === inputs.outputPath ||
+      inputs.outputPath.startsWith(`${resolved.replace(/\/$/, '')}/`)
+    );
+  });
 }
 
 export function createContractConvertCommand({
@@ -142,6 +161,33 @@ export function createContractConvertCommand({
       }
       const schemaPath = relative(ctx.cwd, schemaInput);
 
+      const outputPath = inferredContractPathFor({
+        config: ctx.config,
+        cwd: ctx.cwd,
+        output: args.flags.output,
+      });
+      const displayPath = relative(ctx.cwd, outputPath);
+      const sourceInput = sourceInputCovering({
+        inputs: contractConfig.source.inputs ?? [],
+        cwd: ctx.cwd,
+        outputPath,
+      });
+      if (sourceInput !== undefined) {
+        return notOk(
+          normalizeError(
+            errorRuntime(
+              'CONTRACT.CONVERT_OUTPUT_IS_SOURCE',
+              'contract convert would write over the schema it reads',
+              {
+                why: `The output path ${displayPath} is the contract source ${relative(ctx.cwd, sourceInput)}, or sits inside it, so converting would destroy the Prisma 7 schema.`,
+                fix: 'Pick another --output path, outside the Prisma 7 schema the config names.',
+                meta: { output: displayPath, source: relative(ctx.cwd, sourceInput) },
+              },
+            ),
+          ),
+        );
+      }
+
       const client = createControlClient({
         family: ctx.config.family,
         target: ctx.config.target,
@@ -185,12 +231,6 @@ export function createContractConvertCommand({
       }
       ctx.signal.throwIfAborted();
 
-      const outputPath = inferredContractPathFor({
-        config: ctx.config,
-        cwd: ctx.cwd,
-        output: args.flags.output,
-      });
-      const displayPath = relative(ctx.cwd, outputPath);
       if (existsSync(outputPath)) {
         ctx.report({
           kind: 'message',
