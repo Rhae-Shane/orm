@@ -8,12 +8,7 @@ import { relative } from 'pathe';
 import { createControlClient as createDefaultControlClient } from '../../control-api/client';
 import { loadContractSource } from '../../control-api/operations/load-contract-source';
 import type { ControlClient, ControlClientOptions } from '../../control-api/types';
-import {
-  CliStructuredError,
-  errorContractConfigMissing,
-  errorRuntime,
-  errorUnexpected,
-} from '../../utils/cli-errors';
+import { errorContractConfigMissing, errorRuntime } from '../../utils/cli-errors';
 import { closeQuietly } from '../../utils/command-helpers';
 import { runCommandAction } from '../../utils/next-actions';
 import { publishTextArtifact } from '../../utils/publish-text-artifact';
@@ -179,17 +174,7 @@ export function createContractConvertCommand({
           headerComment: convertHeaderComment(schemaPath),
         });
       } catch (error) {
-        if (CliStructuredError.is(error)) {
-          return notOk(normalizeError(error));
-        }
-        const message = error instanceof Error ? error.message : String(error);
-        return notOk(
-          normalizeError(
-            errorUnexpected(message, {
-              why: `Unexpected error during contract convert: ${message}`,
-            }),
-          ),
-        );
+        return notOk(normalizeError(error));
       } finally {
         await closeQuietly(client);
       }

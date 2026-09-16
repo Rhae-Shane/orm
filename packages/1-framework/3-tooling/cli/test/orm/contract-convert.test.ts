@@ -1,5 +1,6 @@
 import { readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { ok } from '@internal/utils/result';
+import { structuredError } from '@internal/utils/structured-error';
 import type { ErroredEnvelope, MountedTree, StreamEvent } from '@prisma/cli-engine';
 import { createTestCli } from '@prisma/cli-engine/testing';
 import { join } from 'pathe';
@@ -255,5 +256,38 @@ describe('contract convert', () => {
     expect(run.exitCode).toBe(2);
     expect(erroredEnvelope(run).error).toMatchObject({ code: 'CONTRACT.CONVERT_UNSUPPORTED' });
     expect(mocks.close).toHaveBeenCalled();
+  });
+
+  it('reports the code, summary and next actions of a refusal the target raised', async () => {
+    const dir = await projectDir();
+    mocks.printPslContract.mockImplementation(() => {
+      throw structuredError(
+        'CONTRACT.CONVERT_UNSUPPORTED',
+        'contract convert: column "public"."Defaults"."jsonLiteral" has a literal default that cannot be written in Prisma 8 PSL.',
+        {
+          why: 'The PSL source would read the written value back as a string rather than as the value the column defaults to.',
+          fix: 'Replace the literal default with a database expression default, or drop the default before converting.',
+          meta: { namespaceId: 'public', table: 'Defaults', column: 'jsonLiteral' },
+        },
+      );
+    });
+
+    const run = await harness(ormConfig(dir)).run(['contract', 'convert', '--json'], { cwd: dir });
+
+    expect(run.exitCode).toBe(2);
+    expect(erroredEnvelope(run).error).toMatchObject({
+      code: 'CONTRACT.CONVERT_UNSUPPORTED',
+      summary: expect.stringContaining('"public"."Defaults"."jsonLiteral"'),
+      why: 'The PSL source would read the written value back as a string rather than as the value the column defaults to.',
+      nextActions: [
+        {
+          kind: 'user-choice',
+          label:
+            'Replace the literal default with a database expression default, or drop the default before converting.',
+        },
+      ],
+      meta: { namespaceId: 'public', table: 'Defaults', column: 'jsonLiteral' },
+    });
+    expect(await readdir(dir)).not.toContain('generated');
   });
 });
