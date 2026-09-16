@@ -278,6 +278,33 @@ describe('addModelMaps', () => {
     strictEqual(addModelMaps(input), expected);
   });
 
+  it('leaves a field named model whose line carries a brace alone', () => {
+    const input = [
+      'type Device {',
+      '  model    Json   @default("{}")',
+      '  settings Json   @default("{ \\"dark\\": true }")',
+      '}',
+      '',
+    ].join('\n');
+    strictEqual(addModelMaps(input), input);
+  });
+
+  it('handles a comment line between the model name and its brace', () => {
+    const input = ['model UserProfile', '// one row per user', '{', '  id Int @id', '}', ''].join(
+      '\n',
+    );
+    const expected = [
+      'model UserProfile',
+      '// one row per user',
+      '{',
+      '  id Int @id',
+      '  @@map("userProfile")',
+      '}',
+      '',
+    ].join('\n');
+    strictEqual(addModelMaps(input), expected);
+  });
+
   it('keeps working when a model block has a field named model', () => {
     const input = ['model Device {', '  id    Int    @id', '  model String', '}', ''].join('\n');
     const expected = [

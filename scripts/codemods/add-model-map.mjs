@@ -52,18 +52,20 @@ function stripCr(line) {
  */
 function nextNonBlankIndex(lines, index) {
   let i = index + 1;
-  while (i < lines.length && /^\s*$/.test(lines[i])) i += 1;
+  while (i < lines.length && BLANK_OR_COMMENT.test(stripCr(lines[i]))) i += 1;
   return i;
 }
 
 /**
- * A `model` line is a declaration only when a `{` sits on that line or on the
- * next non-blank line. Any other `model` line is a field named `model` inside
- * some block and is left alone.
+ * A `model` line is a declaration only when the block's `{` follows the model
+ * name on that line, or opens the next line that is not blank or a comment.
+ * Any other `model` line is a field named `model` inside some block and is
+ * left alone.
  */
 function isModelDeclaration(lines, index) {
-  const line = stripCr(lines[index]);
-  if (line.includes('{')) return true;
+  const match = MODEL_START.exec(stripCr(lines[index]));
+  if (!match) return false;
+  if (match[3] !== undefined) return true;
   const next = lines[nextNonBlankIndex(lines, index)];
   return next !== undefined && OPEN_BRACE_LINE.test(stripCr(next));
 }
