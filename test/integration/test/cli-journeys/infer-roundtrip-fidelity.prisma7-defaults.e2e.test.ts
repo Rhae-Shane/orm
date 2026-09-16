@@ -147,15 +147,6 @@ interface SchemaVerifyResult {
   readonly schema: { readonly issues: readonly VerifyIssue[] };
 }
 
-interface SourceLoadError {
-  readonly meta?: {
-    readonly diagnostics?: readonly {
-      readonly code: string;
-      readonly span?: { readonly start: { readonly line: number } };
-    }[];
-  };
-}
-
 function readContractPsl(ctx: JourneyContext): string {
   return readFileSync(join(ctx.testDir, 'contract.prisma'), 'utf-8');
 }
@@ -210,9 +201,9 @@ withTempDir(({ createTempDir }) => {
               emptyBigInts   BigInt[]?          @default([]) @noCheck(elementNotNull)
               hugeBigInts    BigInt[]?          @default([9007199254740993, -9007199254740993]) @noCheck(elementNotNull)
               negFloats      Float[]?           @default([-1.5, 2]) @noCheck(elementNotNull)
-              negDecimals    Numeric(65, 30)[]? @default(["-1.5", "2"]) @noCheck(elementNotNull)
-              longDecimals   Numeric(65, 30)[]? @default(["12345678901234567890.123456789", "0.000000000000000001"]) @noCheck(elementNotNull)
-              scaledDecimals Numeric(10, 2)[]?  @default(["-1.25", "2"]) @noCheck(elementNotNull)
+              negDecimals    Numeric(65, 30)[]? @default([-1.5, 2]) @noCheck(elementNotNull)
+              longDecimals   Numeric(65, 30)[]? @default([12345678901234567890.123456789, 0.000000000000000001]) @noCheck(elementNotNull)
+              scaledDecimals Numeric(10, 2)[]?  @default([-1.25, 2]) @noCheck(elementNotNull)
               emptyVarchars  VarChar(32)[]?     @default([]) @noCheck(elementNotNull)
 
               @@map("list_defaults")
@@ -225,17 +216,17 @@ withTempDir(({ createTempDir }) => {
               negFloat      Float           @default(-1.5)
               tinyFloat     Float           @default(0.0000001)
               negReal       Real            @default(-2.5)
-              negDecimal    Numeric(65, 30) @default("-0.5")
-              longDecimal   Numeric(65, 30) @default("12345678901234567890.123456789")
-              tinyDecimal   Numeric(65, 30) @default("0.000000000000000001")
-              scaleDecimal  Numeric(65, 30) @default("1.50")
-              wholeDecimal  Numeric(65, 30) @default("10")
-              scaledDecimal Numeric(10, 2)  @default("-1.25")
+              negDecimal    Numeric(65, 30) @default(-0.5)
+              longDecimal   Numeric(65, 30) @default(12345678901234567890.123456789)
+              tinyDecimal   Numeric(65, 30) @default(0.000000000000000001)
+              scaleDecimal  Numeric(65, 30) @default(1.50)
+              wholeDecimal  Numeric(65, 30) @default(10)
+              scaledDecimal Numeric(10, 2)  @default(-1.25)
               negSafeBigInt BigInt          @default(-5)
               negBigInt     BigInt          @default(-9007199254740993)
               hugeBigInt    BigInt          @default(9007199254740993)
-              stamp         Timestamp(3)    @default(dbgenerated("'2024-01-01 00:00:00'::timestamp without time zone"))
-              jsonNull      Jsonb?          @default(dbgenerated("'null'::jsonb"))
+              stamp         Timestamp(3)    @default("2024-01-01T00:00:00")
+              jsonNull      Jsonb?          @default("null")
 
               @@map("number_defaults")
             }
@@ -310,13 +301,13 @@ withTempDir(({ createTempDir }) => {
       );
     });
 
-    describe('given list defaults with an element that has no PSL literal', () => {
+    describe('given a list default of timestamps', () => {
       const db = useDevDatabase({
         onReady: (cs) => withClient(cs, (client) => client.query(RAW_LIST_DEFAULTS_SQL)),
       });
 
       it(
-        'infer prints them as dbgenerated, which emit rejects at each field',
+        'infer prints each element as the literal its codec accepts, and the schema emits and verifies clean',
         async () => {
           const ctx = setupJourney({
             connectionString: db.connectionString,
@@ -330,21 +321,21 @@ withTempDir(({ createTempDir }) => {
 
             model RawListDefaults {
               id         Int             @id(map: "raw_list_defaults_pkey")
-              timestamps Timestamp(3)[]? @default(dbgenerated("ARRAY['2024-01-01 00:00:00'::timestamp(3) without time zone]")) @noCheck(elementNotNull)
+              timestamps Timestamp(3)[]? @default(["2024-01-01T00:00:00"]) @noCheck(elementNotNull)
 
               @@map("raw_list_defaults")
             }
             "
           `);
 
-          const emit = await runContractEmit(ctx, ['--json']);
-          expect(emit.exitCode, `contract emit\n${output(emit)}`).toBe(2);
-          expect(parseJsonOutput<SourceLoadError>(emit).meta?.diagnostics).toEqual([
-            expect.objectContaining({
-              code: 'PSL_LIST_EXECUTION_DEFAULT_UNSUPPORTED',
-              span: expect.objectContaining({ start: expect.objectContaining({ line: 6 }) }),
-            }),
-          ]);
+          const emit = await runContractEmit(ctx);
+          expect(emit.exitCode, `contract emit\n${output(emit)}`).toBe(0);
+
+          const verify = await runDbVerify(ctx, ['--schema-only', '--strict', '--json']);
+          expect(
+            parseJsonOutput<SchemaVerifyResult>(verify).schema.issues,
+            `db verify\n${output(verify)}`,
+          ).toEqual([]);
         },
         timeouts.spinUpPpgDev,
       );

@@ -1,8 +1,20 @@
+import {
+  type Codec,
+  decodeBooleanPsl,
+  decodeJsonTextPsl,
+  decodeNumberPsl,
+  decodeStringPsl,
+  encodeBooleanPsl,
+  encodeJsonTextPsl,
+  encodeNumberPsl,
+  encodeStringPsl,
+} from '@internal/framework-components/codec';
 import { describe, expect, it } from 'vitest';
 import {
   type DefaultMappingOptions,
   mapDefault,
 } from '../../src/core/psl-contract-infer/default-mapping';
+import { formatPslLiteral } from '../../src/core/psl-contract-infer/psl-literal-format';
 
 // Inline dialect-mapping fixture (the Postgres maps now live in the target);
 // these cases exercise the neutral `mapDefault` with an injected mapping.
@@ -10,6 +22,44 @@ const injectedMapping: DefaultMappingOptions = {
   functionAttributes: { 'gen_random_uuid()': '@default(dbgenerated("gen_random_uuid()"))' },
   fallbackFunctionAttribute: (expression) => `@default(dbgenerated(${JSON.stringify(expression)}))`,
 };
+
+function codec(
+  id: string,
+  members: Pick<Codec, 'encodePsl' | 'decodePsl'> & Partial<Pick<Codec, 'decodeJson'>>,
+): Codec {
+  return {
+    id,
+    encode: async (value: unknown) => value,
+    decode: async (wire: unknown) => wire,
+    encodeJson: (value) => value as never,
+    decodeJson: (json) => json as never,
+    ...members,
+  };
+}
+
+const text = codec('test/text@1', {
+  encodePsl: (value) => encodeStringPsl(value as string),
+  decodePsl: (literal) => decodeStringPsl('test/text@1', literal),
+});
+const number = codec('test/number@1', {
+  encodePsl: (value) => encodeNumberPsl(value as number),
+  decodePsl: (literal) => decodeNumberPsl('test/number@1', literal),
+});
+const boolean = codec('test/bool@1', {
+  encodePsl: (value) => encodeBooleanPsl(value as boolean),
+  decodePsl: (literal) => decodeBooleanPsl('test/bool@1', literal),
+});
+const json = codec('test/json@1', {
+  encodePsl: (value) => encodeJsonTextPsl(value as never),
+  decodePsl: (literal) => decodeJsonTextPsl('test/json@1', literal),
+});
+const refusing = codec('test/refusing@1', {
+  decodeJson: () => {
+    throw new Error('test/refusing@1 reads nothing');
+  },
+  encodePsl: (value) => encodeStringPsl(value as string),
+  decodePsl: (literal) => decodeStringPsl('test/refusing@1', literal),
+});
 
 describe('mapDefault', () => {
   it('maps autoincrement()', () => {
@@ -38,42 +88,6 @@ describe('mapDefault', () => {
     });
   });
 
-  it('maps boolean true', () => {
-    expect(mapDefault({ kind: 'literal', value: true })).toEqual({
-      attribute: '@default(true)',
-    });
-  });
-
-  it('maps boolean false', () => {
-    expect(mapDefault({ kind: 'literal', value: false })).toEqual({
-      attribute: '@default(false)',
-    });
-  });
-
-  it('maps number', () => {
-    expect(mapDefault({ kind: 'literal', value: 42 })).toEqual({
-      attribute: '@default(42)',
-    });
-  });
-
-  it('maps string', () => {
-    expect(mapDefault({ kind: 'literal', value: 'hello' })).toEqual({
-      attribute: '@default("hello")',
-    });
-  });
-
-  it('maps string with quotes', () => {
-    expect(mapDefault({ kind: 'literal', value: 'he said "hi"' })).toEqual({
-      attribute: '@default("he said \\"hi\\"")',
-    });
-  });
-
-  it('escapes control characters in string defaults', () => {
-    expect(mapDefault({ kind: 'literal', value: 'line 1\nline 2\t"quoted"' })).toEqual({
-      attribute: '@default("line 1\\nline 2\\t\\"quoted\\"")',
-    });
-  });
-
   it('unrecognized function becomes comment', () => {
     expect(mapDefault({ kind: 'function', expression: 'custom_func()' })).toEqual({
       comment: '// Raw default: custom_func()',
@@ -86,21 +100,58 @@ describe('mapDefault', () => {
     });
   });
 
-  it('maps null literal', () => {
-    expect(mapDefault({ kind: 'literal', value: null })).toEqual({
-      attribute: '@default(null)',
+  describe('literal defaults print through the column codec', () => {
+    it('prints a boolean', () => {
+      expect(mapDefault({ kind: 'literal', value: true }, { codec: boolean })).toEqual({
+        attribute: '@default(true)',
+      });
+    });
+
+    it('prints a number', () => {
+      expect(mapDefault({ kind: 'literal', value: 42 }, { codec: number })).toEqual({
+        attribute: '@default(42)',
+      });
+    });
+
+    it('prints a string with its quotes, newlines, and tabs escaped', () => {
+      expect(
+        mapDefault({ kind: 'literal', value: 'line 1\nline 2\t"quoted"' }, { codec: text }),
+      ).toEqual({ attribute: '@default("line 1\\nline 2\t\\"quoted\\"")' });
+    });
+
+    it('prints a JSON document as a string holding JSON text', () => {
+      expect(mapDefault({ kind: 'literal', value: { a: 1 } }, { codec: json })).toEqual({
+        attribute: '@default("{\\"a\\":1}")',
+      });
+    });
+
+    it('prints a list one element at a time', () => {
+      expect(mapDefault({ kind: 'literal', value: [1, 2] }, { codec: number })).toEqual({
+        attribute: '@default([1, 2])',
+      });
+    });
+
+    it('lets an error the codec raises propagate', () => {
+      expect(() => mapDefault({ kind: 'literal', value: 'x' }, { codec: refusing })).toThrow(
+        'test/refusing@1 reads nothing',
+      );
     });
   });
+});
 
-  it('maps large number literal', () => {
-    expect(mapDefault({ kind: 'literal', value: 9007199254740991 })).toEqual({
-      attribute: '@default(9007199254740991)',
-    });
+describe('formatPslLiteral', () => {
+  it.each([
+    ['plain', '"plain"'],
+    ['back\\slash', '"back\\\\slash"'],
+    ['say "hi"', '"say \\"hi\\""'],
+    ['line\nbreak', '"line\\nbreak"'],
+    ['carriage\rreturn', '"carriage\\rreturn"'],
+  ])('writes the string %j as %s', (text, expected) => {
+    expect(formatPslLiteral({ kind: 'string', text })).toBe(expected);
   });
 
-  it('stringifies unsupported literal defaults', () => {
-    expect(mapDefault({ kind: 'literal', value: { nested: ['value'] } })).toEqual({
-      attribute: '@default("{\\"nested\\":[\\"value\\"]}")',
-    });
+  it('writes a number and a boolean as their text', () => {
+    expect(formatPslLiteral({ kind: 'number', text: '9007199254740993' })).toBe('9007199254740993');
+    expect(formatPslLiteral({ kind: 'boolean', text: 'false' })).toBe('false');
   });
 });

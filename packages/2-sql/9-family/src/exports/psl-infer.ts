@@ -12,6 +12,7 @@
 export type {
   DefaultMappingOptions,
   DefaultMappingResult,
+  LiteralDefaultMappingOptions,
 } from '../core/psl-contract-infer/default-mapping';
 export { mapDefault } from '../core/psl-contract-infer/default-mapping';
 export {
@@ -31,6 +32,10 @@ export type {
   PslTypeResolution,
   RelationField,
 } from '../core/psl-contract-infer/printer-config';
+export {
+  escapePslString,
+  formatPslLiteral,
+} from '../core/psl-contract-infer/psl-literal-format';
 export type { InferredRelations } from '../core/psl-contract-infer/relation-inference';
 export {
   buildChildRelationField,

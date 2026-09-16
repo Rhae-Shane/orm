@@ -5,7 +5,13 @@ import type {
   PslTypeMap,
   RelationField,
 } from '@internal/family-sql/psl-infer';
-import { mapDefault, toFieldName, toModelName } from '@internal/family-sql/psl-infer';
+import {
+  escapePslString,
+  mapDefault,
+  toFieldName,
+  toModelName,
+} from '@internal/family-sql/psl-infer';
+import type { Codec } from '@internal/framework-components/codec';
 import type {
   PslAttributeArgument,
   PslField,
@@ -22,6 +28,7 @@ import {
 import type { SqlColumnIR, SqlTableIR } from '@internal/sql-schema-ir/types';
 import { ifDefined } from '@internal/utils/defined';
 import { postgresRenderCheckExpressions } from '../check-expressions';
+import { defaultCodecFor } from './infer-default-codec';
 import { buildDanglingForeignKeyWarning, type DanglingForeignKeyInfo } from './infer-foreign-keys';
 import {
   buildCheckAttribute,
@@ -37,15 +44,10 @@ import {
   buildAttribute,
   buildMapAttribute,
   buildSimpleConstraintFieldAttribute,
-  escapePslString,
-  formatPslListLiteralValue,
-  formatPslValue,
   namedArg,
-  type PslDefaultValueFormat,
   parseColumnDefault,
   parseDefaultAttributeString,
   positionalArg,
-  pslDefaultValueFormat,
   SYNTHETIC_SPAN,
 } from './psl-literals';
 
@@ -283,7 +285,7 @@ function buildScalarField(
 
   const defaultAttribute = inferDefaultAttribute(
     column,
-    enumPslName === undefined ? pslDefaultValueFormat(resolution.pslType.name) : formatPslValue,
+    defaultCodecFor(resolution.pslType.name, enumPslName !== undefined),
     defaultMapping,
     rawDefaultParser,
   );
@@ -338,13 +340,14 @@ function buildScalarField(
 }
 
 /**
- * A literal default prints as the PSL literal its codec accepts. A literal that has no such PSL
- * literal prints as `dbgenerated(...)` with the expression Postgres reported: `contract emit`
- * accepts that on a scalar column and rejects it at the field on a list column.
+ * A literal default prints through the column codec: the codec reads the JSON form the introspection
+ * parser produced and writes its PSL literal. A value the codec does not read prints as
+ * `dbgenerated(...)` with the expression Postgres reported: `contract emit` accepts that on a
+ * scalar column and rejects it at the field on a list column.
  */
 function inferDefaultAttribute(
   column: SqlColumnIR,
-  valueFormat: PslDefaultValueFormat,
+  codec: Codec | undefined,
   defaultMapping: DefaultMappingOptions | undefined,
   rawDefaultParser: PslPrinterOptions['parseRawDefault'],
 ): string | undefined {
@@ -364,9 +367,8 @@ function inferDefaultAttribute(
     // A list column's literal default prints from `resolvedDefault`: the raw
     // SQL text read against the element type only yields a function, which
     // the interpreter rejects on a list column.
-    const { value } = column.resolvedDefault;
-    return Array.isArray(value)
-      ? literalOrRawAttribute(formatPslListLiteralValue(value, valueFormat), column, defaultMapping)
+    return Array.isArray(column.resolvedDefault.value)
+      ? literalOrRawAttribute(column.resolvedDefault, codec, column, defaultMapping)
       : undefined;
   }
   const parsed = parseColumnDefault(column.default, column.nativeType, rawDefaultParser);
@@ -374,27 +376,42 @@ function inferDefaultAttribute(
     return undefined;
   }
   if (parsed.kind === 'literal') {
-    return literalOrRawAttribute(valueFormat(parsed.value), column, defaultMapping);
+    return literalOrRawAttribute(parsed, codec, column, defaultMapping);
   }
   return mappedAttribute(parsed, defaultMapping);
 }
 
 function literalOrRawAttribute(
-  literal: string | undefined,
+  columnDefault: ColumnDefault,
+  codec: Codec | undefined,
   column: SqlColumnIR,
   defaultMapping: DefaultMappingOptions | undefined,
 ): string | undefined {
-  if (literal !== undefined) {
-    return `@default(${literal})`;
-  }
+  const literal =
+    codec === undefined ? undefined : codecAttribute(columnDefault, codec, defaultMapping);
+  if (literal !== undefined) return literal;
   return typeof column.default === 'string'
     ? mappedAttribute({ kind: 'function', expression: column.default }, defaultMapping)
     : undefined;
 }
 
+/** `undefined` when the codec does not read the value, so the raw expression prints instead. */
+function codecAttribute(
+  columnDefault: ColumnDefault,
+  codec: Codec,
+  defaultMapping: DefaultMappingOptions | undefined,
+): string | undefined {
+  try {
+    const result = mapDefault(columnDefault, { ...defaultMapping, codec });
+    return 'attribute' in result ? result.attribute : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** A default the mapping can only describe in a comment is dropped: a field AST node has no comment. */
 function mappedAttribute(
-  columnDefault: ColumnDefault,
+  columnDefault: Extract<ColumnDefault, { readonly kind: 'function' }>,
   defaultMapping: DefaultMappingOptions | undefined,
 ): string | undefined {
   const result = mapDefault(columnDefault, defaultMapping);

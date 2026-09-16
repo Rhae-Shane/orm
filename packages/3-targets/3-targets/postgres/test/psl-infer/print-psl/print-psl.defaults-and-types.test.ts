@@ -392,7 +392,7 @@ describe('printPsl', () => {
     `);
   });
 
-  it('preserves raw Postgres defaults via dbgenerated attributes', () => {
+  it('preserves raw Postgres function defaults via dbgenerated attributes, and a jsonb literal through its codec', () => {
     const schemaIR = new SqlSchemaIR({
       tables: {
         data: {
@@ -433,7 +433,7 @@ describe('printPsl', () => {
       model Data {
         id        Int         @id
         computed  String      @default(dbgenerated("my_custom_func()"))
-        payload   Jsonb       @default(dbgenerated("'{}'::jsonb"))
+        payload   Jsonb       @default("{}")
         touchedAt Timestamptz @default(dbgenerated("clock_timestamp()")) @map("touched_at")
 
         @@map("data")

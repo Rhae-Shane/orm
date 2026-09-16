@@ -1,4 +1,4 @@
-import { toEnumMemberName, toEnumName } from '@internal/family-sql/psl-infer';
+import { escapePslString, toEnumMemberName, toEnumName } from '@internal/family-sql/psl-infer';
 import type {
   PslExtensionBlock,
   PslExtensionBlockParamValue,
@@ -8,7 +8,7 @@ import {
   createUniqueFieldName,
   type TopLevelNameResult,
 } from './infer-names';
-import { escapePslString, SYNTHETIC_SPAN } from './psl-literals';
+import { SYNTHETIC_SPAN } from './psl-literals';
 
 export const PSL_SCALAR_TYPE_NAMES = new Set([
   'String',

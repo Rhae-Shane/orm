@@ -79,11 +79,11 @@ describe('printPsl literal defaults', () => {
           negFloat      Float           @default(-1.5)
           tinyFloat     Float           @default(0.0000001)
           negReal       Real            @default(-2.5)
-          negDecimal    Numeric(65, 30) @default("-0.5")
-          longDecimal   Numeric(65, 30) @default("12345678901234567890.123456789")
-          tinyDecimal   Numeric(65, 30) @default("0.000000000000000001")
-          scaleDecimal  Numeric(65, 30) @default("1.50")
-          scaledDecimal Numeric(10, 2)  @default("-1.25")
+          negDecimal    Numeric(65, 30) @default(-0.5)
+          longDecimal   Numeric(65, 30) @default(12345678901234567890.123456789)
+          tinyDecimal   Numeric(65, 30) @default(0.000000000000000001)
+          scaleDecimal  Numeric(65, 30) @default(1.50)
+          scaledDecimal Numeric(10, 2)  @default(-1.25)
           safeBigInt    BigInt          @default(5)
           negSafeBigInt BigInt          @default(-5)
           negBigInt     BigInt          @default(-9007199254740993)
@@ -95,11 +95,12 @@ describe('printPsl literal defaults', () => {
       `);
     });
 
-    it('prints a default that has no PSL literal as dbgenerated with the expression Postgres printed', () => {
+    it('prints a default the codec reads as its literal, and one it does not as dbgenerated with the expression Postgres printed', () => {
       const output = printTable('raw_defaults', [
         introspected('stamp', 'timestamp(3)', "'2024-01-01 00:00:00'::timestamp without time zone"),
         introspected('day', 'date', "'2024-01-01'::date"),
         introspected('jsonNull', 'jsonb', "'null'::jsonb", { nullable: true }),
+        introspected('jsonObject', 'jsonb', '\'{"a": 1}\'::jsonb'),
         introspected('textNull', 'character varying(32)', 'NULL::character varying', {
           nullable: true,
         }),
@@ -110,11 +111,12 @@ describe('printPsl literal defaults', () => {
         // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
         model RawDefaults {
-          id       Int          @id
-          stamp    Timestamp(3) @default(dbgenerated("'2024-01-01 00:00:00'::timestamp without time zone"))
-          day      Date         @default(dbgenerated("'2024-01-01'::date"))
-          jsonNull Jsonb?       @default(dbgenerated("'null'::jsonb"))
-          textNull VarChar(32)? @default(dbgenerated("NULL::character varying"))
+          id         Int          @id
+          stamp      Timestamp(3) @default("2024-01-01T00:00:00")
+          day        Date         @default("2024-01-01")
+          jsonNull   Jsonb?       @default("null")
+          jsonObject Jsonb        @default("{\\"a\\":1}")
+          textNull   VarChar(32)? @default(dbgenerated("NULL::character varying"))
 
           @@map("raw_defaults")
         }
@@ -209,8 +211,8 @@ describe('printPsl literal defaults', () => {
           emptyBigInts   BigInt[]?          @default([]) @noCheck(elementNotNull)
           hugeBigInts    BigInt[]?          @default([9007199254740993, -9007199254740993]) @noCheck(elementNotNull)
           negFloats      Float[]?           @default([-1.5, 2]) @noCheck(elementNotNull)
-          longDecimals   Numeric(65, 30)[]? @default(["12345678901234567890.123456789", "0.000000000000000001"]) @noCheck(elementNotNull)
-          scaledDecimals Numeric(10, 2)[]?  @default(["-1.25", "2"]) @noCheck(elementNotNull)
+          longDecimals   Numeric(65, 30)[]? @default([12345678901234567890.123456789, 0.000000000000000001]) @noCheck(elementNotNull)
+          scaledDecimals Numeric(10, 2)[]?  @default([-1.25, 2]) @noCheck(elementNotNull)
           emptyVarchars  VarChar(32)[]?     @default([]) @noCheck(elementNotNull)
 
           @@map("list_defaults")
@@ -219,7 +221,7 @@ describe('printPsl literal defaults', () => {
       `);
     });
 
-    it('prints a default with an element that has no PSL literal as dbgenerated with the expression Postgres printed', () => {
+    it('prints a temporal list default as the literal its codec accepts', () => {
       const output = printTable('raw_list_defaults', [
         introspected(
           'timestamps',
@@ -235,7 +237,7 @@ describe('printPsl literal defaults', () => {
 
         model RawListDefaults {
           id         Int             @id
-          timestamps Timestamp(3)[]? @default(dbgenerated("ARRAY['2024-01-01 00:00:00'::timestamp(3) without time zone]")) @noCheck(elementNotNull)
+          timestamps Timestamp(3)[]? @default(["2024-01-01T00:00:00"]) @noCheck(elementNotNull)
 
           @@map("raw_list_defaults")
         }
