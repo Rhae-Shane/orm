@@ -22,6 +22,11 @@ import {
   type ColumnHelperForStrict,
   type ColumnSpec,
   column,
+  decodeJsonTextPsl,
+  decodeNumberPsl,
+  encodeJsonTextPsl,
+  encodeNumberPsl,
+  type PslLiteral,
   voidParamsSchema,
 } from '../src/exports/codec';
 
@@ -37,6 +42,12 @@ class Int4FixtureCodec extends CodecImpl<'demo/int4@1', readonly ['equality'], n
   }
   decodeJson(json: JsonValue): number {
     return json as number;
+  }
+  encodePsl(value: number): PslLiteral {
+    return encodeNumberPsl(value);
+  }
+  decodePsl(literal: PslLiteral): number {
+    return decodeNumberPsl(this.id, literal);
   }
 }
 
@@ -90,6 +101,12 @@ class VectorFixtureCodec<N extends number> extends CodecImpl<
   }
   decodeJson(json: JsonValue): number[] {
     return json as number[];
+  }
+  encodePsl(value: number[]): PslLiteral {
+    return encodeJsonTextPsl(value);
+  }
+  decodePsl(literal: PslLiteral): number[] {
+    return decodeJsonTextPsl(this.id, literal) as number[];
   }
 }
 

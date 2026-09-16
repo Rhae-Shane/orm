@@ -10,10 +10,10 @@
 
 import type { JsonValue } from '@internal/contract/types';
 import type { CodecDescriptor } from './codec-descriptor';
-import type { CodecCallContext, CodecTrait } from './codec-types';
+import type { CodecCallContext, CodecTrait, PslLiteral } from './codec-types';
 
 /**
- * A codec is the contract between an application value and its driver-wire and JSON representations.
+ * A codec is the contract between an application value and its driver-wire, JSON, and PSL literal representations.
  *
  * The author's mental model is two JS-side types — `TInput` (the application JS type) and `TWire` (the database driver wire format) — plus a target-defined `JsonValue`. The codec translates `TInput` to `TWire` on writes and back on ordinary reads, and to/from the target's JSON representation for contract artifacts and database-produced JSON values.
  *
@@ -22,12 +22,13 @@ import type { CodecCallContext, CodecTrait } from './codec-types';
  * - **Wire** (`TWire`): the format exchanged with the database driver.
  * - **JSON** (`JsonValue`): the target-defined JSON-safe form used in contract artifacts. It uses the exact scalar shape the target produces inside JSON values, which can differ from the ordinary wire format.
  *
- * The runtime instance carries only its `id` (the descriptor's `codecId`, set by the factory) and the four conversion methods. Static metadata (`traits`, `targetTypes`) and the build-time `renderOutputType` renderer live on the {@link CodecDescriptor} keyed by `codecId` — the read-surface single source of truth. Consumers that need them resolve through `descriptorFor(codecId)`.
+ * The runtime instance carries only its `id` (the descriptor's `codecId`, set by the factory) and the six conversion methods. Static metadata (`traits`, `targetTypes`) and the build-time `renderOutputType` renderer live on the {@link CodecDescriptor} keyed by `codecId` — the read-surface single source of truth. Consumers that need them resolve through `descriptorFor(codecId)`.
  *
- * Codec methods split into two groups:
+ * Codec methods split into three pairs:
  *
  * - **Query-time** methods (`encode`, `decode`) run per row/parameter at the IO boundary; they are required and Promise-returning. The per-family codec factory accepts sync or async author functions and lifts sync ones to Promise-shaped methods automatically.
  * - **JSON** methods (`encodeJson`, `decodeJson`) run when the contract is serialized or loaded. Runtimes may also use `decodeJson` for values embedded in database-produced JSON results. They stay synchronous so contract validation and client construction are synchronous.
+ * - **PSL** methods (`encodePsl`, `decodePsl`) run when a schema is read and when a schema is printed. They translate between the codec's value and the {@link PslLiteral} that denotes it in schema source. They are synchronous and required: every codec states its own PSL form.
  *
  * Target-family codec interfaces extend this base; family-specific concerns (e.g. the SQL `column?` per-call context) layer on through the `CodecCallContext` extension pattern.
  */
@@ -49,12 +50,16 @@ export interface Codec<
   encodeJson(value: TInput): JsonValue;
   /** Converts the target-defined JSON representation back to the JS input type. Synchronous; called during contract loading via `family.deserializeContract` and may be called by runtimes for embedded JSON values. */
   decodeJson(json: JsonValue): TInput;
+  /** The PSL literal that denotes this value in schema source. */
+  encodePsl(value: TInput): PslLiteral;
+  /** The value a PSL literal denotes. Throws when the literal is not a value of this type. */
+  decodePsl(literal: PslLiteral): TInput;
 }
 
 /**
  * Abstract base class for concrete codec implementations.
  *
- * Codec authors extend this class with their typed `Id`, `TTraits`, `TWire`, `TInput` and override all four abstract conversion methods: `encode`, `decode`, `encodeJson`, and `decodeJson`. The runtime instance carries only its `id` (proxied through the descriptor so alias subclasses inherit the descriptor's id automatically) and the conversion methods — static metadata lives on the {@link CodecDescriptor}.
+ * Codec authors extend this class with their typed `Id`, `TTraits`, `TWire`, `TInput` and override all six abstract conversion methods: `encode`, `decode`, `encodeJson`, `decodeJson`, `encodePsl`, and `decodePsl`. The runtime instance carries only its `id` (proxied through the descriptor so alias subclasses inherit the descriptor's id automatically) and the conversion methods — static metadata lives on the {@link CodecDescriptor}.
  */
 export abstract class CodecImpl<
   Id extends string = string,
@@ -77,4 +82,6 @@ export abstract class CodecImpl<
   abstract decode(wire: TWire, ctx: CodecCallContext): Promise<TInput>;
   abstract encodeJson(value: TInput): JsonValue;
   abstract decodeJson(json: JsonValue): TInput;
+  abstract encodePsl(value: TInput): PslLiteral;
+  abstract decodePsl(literal: PslLiteral): TInput;
 }

@@ -17,6 +17,7 @@ export type {
   CodecRef,
   CodecRegistry,
   CodecTrait,
+  PslLiteral,
 } from '../shared/codec-types';
 export { emptyCodecLookup, voidParamsSchema } from '../shared/codec-types';
 export type {
@@ -26,6 +27,17 @@ export type {
   ColumnTypeDescriptor,
 } from '../shared/column-spec';
 export { column } from '../shared/column-spec';
+export {
+  decodeBooleanPsl,
+  decodeJsonTextPsl,
+  decodeNumberPsl,
+  decodeStringPsl,
+  encodeBooleanPsl,
+  encodeJsonTextPsl,
+  encodeNumberPsl,
+  encodeStringPsl,
+  pslLiteralKindError,
+} from '../shared/psl-literal-helpers';
 export { renderTsLiteral } from '../shared/render-ts-literal';
 export {
   CONTRACT_CODEC_DESCRIPTOR_MISSING,

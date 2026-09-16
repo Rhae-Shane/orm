@@ -49,6 +49,7 @@ export { int } from '../attribute-spec/combinators/int';
 export { json } from '../attribute-spec/combinators/json';
 export type { ListOptions } from '../attribute-spec/combinators/list';
 export { list } from '../attribute-spec/combinators/list';
+export { literal } from '../attribute-spec/combinators/literal';
 export { num } from '../attribute-spec/combinators/num';
 export { numLiteral } from '../attribute-spec/combinators/num-literal';
 export { oneOf } from '../attribute-spec/combinators/one-of';
@@ -78,9 +79,11 @@ export type {
   FuncCallSig,
   InferAttr,
   InspectableArgType,
+  LiteralArgType,
   ModelAttributeCtx,
   NamedOut,
   NumLiteral,
+  NumLiteralArgType,
   OptionalArgType,
   OutOf,
   Param,

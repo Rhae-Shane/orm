@@ -135,6 +135,7 @@ function valueItems(
     case 'entityRef':
     case 'int':
     case 'json':
+    case 'literal':
     case 'rejecting':
       return [];
   }

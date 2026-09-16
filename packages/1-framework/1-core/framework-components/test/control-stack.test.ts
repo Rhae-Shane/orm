@@ -15,8 +15,9 @@ import {
 } from '../src/control/control-stack';
 import type { Codec } from '../src/shared/codec';
 import type { AnyCodecDescriptor } from '../src/shared/codec-descriptor';
-import type { CodecLookup } from '../src/shared/codec-types';
+import type { CodecLookup, PslLiteral } from '../src/shared/codec-types';
 import type { ComponentDescriptor } from '../src/shared/framework-components';
+import { decodeJsonTextPsl, encodeJsonTextPsl } from '../src/shared/psl-literal-helpers';
 import { isRuntimeError } from '../src/shared/runtime-error';
 
 function createDescriptor<K extends string = 'target'>(
@@ -1490,6 +1491,8 @@ describe('validateScalarTypeCodecIds', () => {
               decode: async (v: unknown) => v,
               encodeJson: (v: unknown) => v as JsonValue,
               decodeJson: (v: JsonValue) => v,
+              encodePsl: (v: unknown) => encodeJsonTextPsl(v as JsonValue),
+              decodePsl: (literal: PslLiteral) => decodeJsonTextPsl(id, literal),
             }
           : undefined,
       targetTypesFor: (id: string) => (id === 'test/text@1' ? ['text'] : undefined),

@@ -38,6 +38,9 @@ import {
   CodecDescriptorImpl,
   CodecImpl,
   type CodecInstanceContext,
+  decodeStringPsl,
+  encodeStringPsl,
+  type PslLiteral,
   voidParamsSchema,
 } from '../src/exports/codec';
 import type { PslExtensionBlock } from '../src/exports/psl-ast';
@@ -74,6 +77,12 @@ class StubStringCodec extends CodecImpl<'stub/string@1', readonly ['textual'], s
       throw new TypeError(`expected a JSON string, got ${typeof json}`);
     }
     return json;
+  }
+  encodePsl(value: string): PslLiteral {
+    return encodeStringPsl(value);
+  }
+  decodePsl(literal: PslLiteral): string {
+    return decodeStringPsl(this.id, literal);
   }
 }
 

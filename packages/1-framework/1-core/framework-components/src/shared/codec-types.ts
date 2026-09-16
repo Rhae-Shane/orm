@@ -13,6 +13,13 @@ export function isCodecTrait(value: unknown): value is CodecTrait {
   return CODEC_TRAITS.some((trait) => trait === value);
 }
 
+/** A PSL scalar literal as its content, with the fence removed and escapes resolved. */
+export interface PslLiteral {
+  readonly kind: 'string' | 'number' | 'boolean';
+  /** string: the characters between the quotes with escapes resolved. number: the digits exactly as written. boolean: 'true' or 'false'. */
+  readonly text: string;
+}
+
 /**
  * Serializable codec identity carried by every codec-bearing AST node.
  *

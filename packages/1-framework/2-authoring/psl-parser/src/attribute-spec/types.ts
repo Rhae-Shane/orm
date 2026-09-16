@@ -1,3 +1,4 @@
+import type { PslLiteral } from '@internal/framework-components/codec';
 import type { PslDiagnostic, PslSpan } from '@internal/framework-components/psl-ast';
 import type { Result } from '@internal/utils/result';
 import type { Simplify, UnionToIntersection } from '@internal/utils/types';
@@ -31,6 +32,7 @@ export type ArgTypeKind =
   | 'int'
   | 'json'
   | 'list'
+  | 'literal'
   | 'num'
   | 'oneOf'
   | 'record'
@@ -129,6 +131,11 @@ export interface FixedNumArgType<T extends number = number, Ctx extends Attribut
   readonly value: T;
 }
 
+export interface LiteralArgType<Ctx extends AttributeCtx = AttributeCtx>
+  extends ArgTypeOutput<PslLiteral, Ctx> {
+  readonly kind: 'literal';
+}
+
 export interface NumLiteral {
   readonly text: string;
 }
@@ -215,6 +222,7 @@ export type InspectableArgType<Ctx extends AttributeCtx> =
   | IntArgType<Ctx>
   | JsonArgType<Ctx>
   | ListArgType<unknown, Ctx>
+  | LiteralArgType<Ctx>
   | FixedNumArgType<number, Ctx>
   | UnrestrictedNumArgType<Ctx>
   | NumLiteralArgType<Ctx>
