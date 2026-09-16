@@ -3,7 +3,9 @@
  * `prisma.config.ts` points at `prisma7Schema('./schema.prisma')` runs
  * `contract convert`, switches its config to the Prisma 8 PSL the command
  * wrote, and emits the same contract — which `db verify` then reports zero
- * findings against the database the Prisma 7 SQL built. Three things are
+ * findings against the database the Prisma 7 SQL built. It runs over the
+ * `relations` fixture, whose database is the SQL Prisma 7.10.0 generated for
+ * the full `supported` schema. Three things are
  * refused with exit 2 and no file written: a config on any other contract
  * source, a Prisma 7 schema Prisma 8 cannot read, and a schema holding a
  * default that cannot be written in Prisma 8 PSL.
@@ -28,10 +30,7 @@ import {
 const PRISMA7_FIXTURES = join(__dirname, '../fixtures/prisma7-source');
 const JOURNEY_FIXTURES = join(__dirname, '../fixtures/cli/cli-e2e-test-app/fixtures/cli-journeys');
 
-const PRISMA7_DDL = readFileSync(
-  join(PRISMA7_FIXTURES, 'implicit-many-to-many-names/migration.sql'),
-  'utf-8',
-);
+const PRISMA7_DDL = readFileSync(join(PRISMA7_FIXTURES, 'supported/migration.sql'), 'utf-8');
 
 const VIEW_SCHEMA = `datasource db {
   provider = "postgresql"
@@ -162,7 +161,7 @@ withTempDir(({ createTempDir }) => {
       async () => {
         await convertAndVerify(
           setupPrisma7Project(createTempDir, db.connectionString, {
-            copyFrom: join(PRISMA7_FIXTURES, 'implicit-many-to-many-names/schema.prisma'),
+            copyFrom: join(PRISMA7_FIXTURES, 'relations/schema.prisma'),
           }),
           db.connectionString,
         );
