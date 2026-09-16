@@ -1,6 +1,10 @@
-import { strictEqual } from 'node:assert/strict';
+import { strictEqual, throws } from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
-import { addModelMaps } from './add-model-map.mjs';
+import { fileURLToPath } from 'node:url';
+import { addModelMaps, UnhandledModelError } from './add-model-map.mjs';
+
+const here = fileURLToPath(new URL('.', import.meta.url));
 
 describe('addModelMaps', () => {
   it('appends @@map with the first letter lowered as the last line of a model block', () => {
@@ -184,6 +188,63 @@ describe('addModelMaps', () => {
       'model UserProfile { id Int @id email String? @unique @@map("userProfile") }\n';
     strictEqual(addModelMaps(input), expected);
     strictEqual(addModelMaps(expected), expected);
+  });
+
+  it('handles a header line that ends in a comment', () => {
+    const input = ['model UserProfile { // keep', '  id Int @id', '}', ''].join('\n');
+    const expected = [
+      'model UserProfile { // keep',
+      '  id Int @id',
+      '  @@map("userProfile")',
+      '}',
+      '',
+    ].join('\n');
+    strictEqual(addModelMaps(input), expected);
+  });
+
+  it('recognises @@map and @@base written with a space before the parenthesis', () => {
+    const input = [
+      'model TeamMember {',
+      '  id Int @id',
+      '  @@map ("team_member")',
+      '}',
+      '',
+      'model BugReport {',
+      '  id Int @id',
+      '  @@base (Task, "bug")',
+      '}',
+      '',
+      'model OrderItem { id Int @id @@map ("order_item") }',
+      '',
+    ].join('\n');
+    strictEqual(addModelMaps(input), input);
+  });
+
+  it('refuses a model header it does not understand instead of skipping it', () => {
+    const input = ['model UserProfile', '{', '  id Int @id', '}', ''].join('\n');
+    throws(
+      () => addModelMaps(input),
+      (error) => {
+        strictEqual(error instanceof UnhandledModelError, true);
+        strictEqual(error.lineNumbers.join(','), '1');
+        return true;
+      },
+    );
+  });
+
+  it('keeps CRLF line endings on the inserted line', () => {
+    const input = 'model UserProfile {\r\n  id Int @id\r\n}\r\n';
+    const expected = 'model UserProfile {\r\n  id Int @id\r\n  @@map("userProfile")\r\n}\r\n';
+    strictEqual(addModelMaps(input), expected);
+  });
+
+  it('is byte-identical to the copy shipped in the pending upgrade fragment', () => {
+    const repoCopy = readFileSync(`${here}add-model-map.mjs`, 'utf8');
+    const fragmentCopy = readFileSync(
+      `${here}../../upgrade-instructions/pending/psl-verbatim-table-names/app/scripts/add-model-map.mjs`,
+      'utf8',
+    );
+    strictEqual(fragmentCopy, repoCopy);
   });
 
   it('is idempotent', () => {

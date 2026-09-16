@@ -20,11 +20,14 @@ import { glob } from 'node:fs/promises';
 import { argv, exit, stderr, stdout } from 'node:process';
 import { fileURLToPath } from 'node:url';
 
-const MODEL_HEADER = /^(\s*)model\s+([A-Za-z_][A-Za-z0-9_]*)\s*\{\s*$/;
+const MODEL_HEADER = /^(\s*)model\s+([A-Za-z_][A-Za-z0-9_]*)\s*\{\s*(\/\/.*)?$/;
 const SINGLE_LINE_MODEL = /^(\s*model\s+([A-Za-z_][A-Za-z0-9_]*)\s*\{)(.*?)(\s*\}\s*)$/;
+const UNHANDLED_MODEL =
+  /^(\s*model\s+[A-Za-z_][A-Za-z0-9_]*\s*\{|model\s+[A-Za-z_][A-Za-z0-9_]*\s*)$/;
 const BLOCK_CLOSE = /^\s*\}\s*$/;
-const MAP_ATTRIBUTE = /^\s*@@map\(/;
-const BASE_ATTRIBUTE = /^\s*@@base\(/;
+const MAP_ATTRIBUTE = /^\s*@@map\s*\(/;
+const BASE_ATTRIBUTE = /^\s*@@base\s*\(/;
+const OWN_STORAGE_ATTRIBUTE = /@@(map|base)\s*\(/;
 
 function lowerFirst(name) {
   return name.charAt(0).toLowerCase() + name.slice(1);
@@ -42,17 +45,29 @@ function addMapToSingleLineModel(line) {
   const match = SINGLE_LINE_MODEL.exec(line);
   if (!match) return line;
   const [, open, modelName, body, close] = match;
-  if (/@@map\(|@@base\(/.test(body)) return line;
+  if (OWN_STORAGE_ATTRIBUTE.test(body)) return line;
   return `${open}${body} @@map("${lowerFirst(modelName)}")${close}`;
 }
 
+/** Thrown when a `model` line is written in a shape the codemod does not recognise. */
+export class UnhandledModelError extends Error {
+  constructor(lineNumbers) {
+    super(`model block(s) not understood at line(s) ${lineNumbers.join(', ')}`);
+    this.lineNumbers = lineNumbers;
+  }
+}
+
 export function addModelMaps(source) {
+  const newline = source.includes('\r\n') ? '\r' : '';
   const lines = source.split('\n');
   const out = [];
+  const unhandled = [];
   let i = 0;
   while (i < lines.length) {
-    const header = MODEL_HEADER.exec(lines[i]);
+    const header = MODEL_HEADER.exec(lines[i].replace(/\r$/, ''));
     if (!header) {
+      const line = lines[i].replace(/\r$/, '');
+      if (UNHANDLED_MODEL.test(line) && !SINGLE_LINE_MODEL.test(line)) unhandled.push(i + 1);
       out.push(addMapToSingleLineModel(lines[i]));
       i += 1;
       continue;
@@ -68,11 +83,12 @@ export function addModelMaps(source) {
     out.push(lines[i], ...body);
     if (!body.some((line) => MAP_ATTRIBUTE.test(line) || BASE_ATTRIBUTE.test(line))) {
       const indent = bodyIndent(lines, i + 1, close, headerIndent);
-      out.push(`${indent}@@map("${lowerFirst(modelName)}")`);
+      out.push(`${indent}@@map("${lowerFirst(modelName)}")${newline}`);
     }
     out.push(lines[close]);
     i = close + 1;
   }
+  if (unhandled.length > 0) throw new UnhandledModelError(unhandled);
   return out.join('\n');
 }
 
@@ -91,14 +107,25 @@ async function main() {
     exit(2);
   }
   const files = await expandPatterns(patterns);
+  let failed = false;
   for (const file of files) {
     const before = readFileSync(file, 'utf8');
-    const after = addModelMaps(before);
+    let after;
+    try {
+      after = addModelMaps(before);
+    } catch (error) {
+      if (!(error instanceof UnhandledModelError)) throw error;
+      for (const line of error.lineNumbers)
+        stderr.write(`${file}:${line}: model block not understood\n`);
+      failed = true;
+      continue;
+    }
     if (after !== before) {
       writeFileSync(file, after);
       stdout.write(`${file}\n`);
     }
   }
+  if (failed) exit(1);
 }
 
 if (argv[1] && fileURLToPath(import.meta.url) === argv[1]) {
