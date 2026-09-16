@@ -460,9 +460,6 @@ function lowerBelongsToRelation(
     );
     // For cross-space relations, the `to` field names map directly to column
     // names because we have no fieldToColumn map for the remote model.
-    // The brand carries the table name only when the handle's `.sql()` stage
-    // was a static object; otherwise the table, like field→column resolution,
-    // is left to the planner, which has the remote contract.
     return {
       fieldName: relationName,
       toModel: targetModelName,

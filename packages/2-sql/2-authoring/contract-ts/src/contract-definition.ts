@@ -146,8 +146,7 @@ export interface RelationNode {
   readonly toModel: string;
   /**
    * Physical table of the related model. Undefined only for a cross-space
-   * relation whose handle carries no static table name; the planner resolves
-   * it from the remote contract.
+   * relation whose handle carries no static table name.
    */
   readonly toTable: string | undefined;
   /**
