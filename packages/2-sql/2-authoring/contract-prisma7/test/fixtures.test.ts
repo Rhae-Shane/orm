@@ -49,6 +49,7 @@ describe('Prisma 7 fixtures', () => {
       'dbgenerated-without-expression-optional',
       'defaults',
       'enum-default-member',
+      'enum-default-member-unmapped-type',
       'enum-namespace-mismatch',
       'enum-native',
       'enum-unreferenced',
