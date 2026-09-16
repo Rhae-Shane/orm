@@ -372,7 +372,8 @@ The written file opens with the two lines that say where it came from:
 // Converted from prisma/schema.prisma by `prisma contract convert`.
 ```
 
-Two things are refused, and neither writes a file:
+Some Prisma 7 schemas cannot be converted yet. Three things are refused, and none of them writes a file:
+- A schema holding something a Prisma 8 schema cannot express exits `2` with `CONTRACT.CONVERT_UNSUPPORTED`, naming the column it stopped on. This is the one most conversions meet first. A JSON object literal default is the common case: the written value would read back as a string rather than as the value the column defaults to. Replace such a default with a database expression default, or drop it, then convert again.
 - A contract source that is not a Prisma 7 schema exits `2` with `CONTRACT.CONVERT_SOURCE_NOT_PRISMA7`. A contract already authored the Prisma 8 way has nothing to convert.
 - A Prisma 7 schema Prisma 8 cannot read exits `2` with `CONTRACT.SOURCE_LOAD_FAILED`, reporting exactly what `contract emit` reports for the same schema.
 
