@@ -6,6 +6,9 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
+  decodeStringPsl,
+  encodeStringPsl,
+  type PslLiteral,
   voidParamsSchema,
 } from '@internal/framework-components/codec';
 import { CastExpr, type ProjectionExpr } from '@internal/sql-relational-core/ast';
@@ -45,6 +48,12 @@ export class PgDateStringCodec extends CodecImpl<
     return blindCast<string, 'date-string columns serialize to JSON as their wire string form'>(
       json,
     );
+  }
+  encodePsl(value: string): PslLiteral {
+    return encodeStringPsl(value);
+  }
+  decodePsl(literal: PslLiteral): string {
+    return decodeStringPsl(this.id, literal);
   }
 }
 
@@ -92,6 +101,12 @@ export class PgTimestampStringCodec extends CodecImpl<
       string,
       'timestamp-string columns serialize to JSON as their wire string form'
     >(json);
+  }
+  encodePsl(value: string): PslLiteral {
+    return encodeStringPsl(value);
+  }
+  decodePsl(literal: PslLiteral): string {
+    return decodeStringPsl(this.id, literal);
   }
 }
 
@@ -151,6 +166,12 @@ export class PgTimestamptzStringCodec extends CodecImpl<
       'timestamptz-string columns serialize to JSON as their wire string form'
     >(json);
   }
+  encodePsl(value: string): PslLiteral {
+    return encodeStringPsl(value);
+  }
+  decodePsl(literal: PslLiteral): string {
+    return decodeStringPsl(this.id, literal);
+  }
 }
 
 export class PgTimestamptzStringDescriptor extends PostgresCodecDescriptor<PrecisionParams> {
@@ -207,6 +228,12 @@ export class PgTimeStringCodec extends CodecImpl<
     return blindCast<string, 'time-string columns serialize to JSON as their wire string form'>(
       json,
     );
+  }
+  encodePsl(value: string): PslLiteral {
+    return encodeStringPsl(value);
+  }
+  decodePsl(literal: PslLiteral): string {
+    return decodeStringPsl(this.id, literal);
   }
 }
 

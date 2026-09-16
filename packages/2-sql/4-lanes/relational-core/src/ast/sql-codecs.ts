@@ -18,6 +18,13 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
+  decodeNumberPsl,
+  decodeStringPsl,
+  decodeWholeNumberPsl,
+  encodeNumberPsl,
+  encodeStringPsl,
+  type PslLiteral,
+  pslLiteralReadsError,
   voidParamsSchema,
 } from '@internal/framework-components/codec';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
@@ -68,6 +75,12 @@ export class SqlTextCodec extends CodecImpl<
   decodeJson(json: JsonValue): string {
     return json as string;
   }
+  encodePsl(value: string): PslLiteral {
+    return encodeStringPsl(value);
+  }
+  decodePsl(literal: PslLiteral): string {
+    return decodeStringPsl(this.id, literal);
+  }
 }
 
 export class SqlTextDescriptor extends CodecDescriptorImpl<void> {
@@ -105,6 +118,12 @@ export class SqlIntCodec extends CodecImpl<
   }
   decodeJson(json: JsonValue): number {
     return json as number;
+  }
+  encodePsl(value: number): PslLiteral {
+    return encodeNumberPsl(value);
+  }
+  decodePsl(literal: PslLiteral): number {
+    return Number(decodeWholeNumberPsl(this.id, literal));
   }
 }
 
@@ -144,6 +163,15 @@ export class SqlFloatCodec extends CodecImpl<
   decodeJson(json: JsonValue): number {
     return sqlFloatDecodeJson(json);
   }
+  encodePsl(value: number): PslLiteral {
+    if (!Number.isFinite(value)) throw new Error(`${this.id} writes a finite number; got ${value}`);
+    return encodeNumberPsl(value);
+  }
+  decodePsl(literal: PslLiteral): number {
+    const value = decodeNumberPsl(this.id, literal);
+    if (!Number.isFinite(value)) throw pslLiteralReadsError(this.id, 'a finite number', literal);
+    return value;
+  }
 }
 
 export class SqlFloatDescriptor extends CodecDescriptorImpl<void> {
@@ -181,6 +209,12 @@ export class SqlCharCodec extends CodecImpl<
   }
   decodeJson(json: JsonValue): string {
     return json as string;
+  }
+  encodePsl(value: string): PslLiteral {
+    return encodeStringPsl(value);
+  }
+  decodePsl(literal: PslLiteral): string {
+    return decodeStringPsl(this.id, literal);
   }
 }
 
@@ -222,6 +256,12 @@ export class SqlVarcharCodec extends CodecImpl<
   }
   decodeJson(json: JsonValue): string {
     return json as string;
+  }
+  encodePsl(value: string): PslLiteral {
+    return encodeStringPsl(value);
+  }
+  decodePsl(literal: PslLiteral): string {
+    return decodeStringPsl(this.id, literal);
   }
 }
 

@@ -29,14 +29,18 @@ export type {
 export { column } from '../shared/column-spec';
 export {
   decodeBooleanPsl,
+  decodeFloatPsl,
   decodeJsonTextPsl,
   decodeNumberPsl,
   decodeStringPsl,
+  decodeWholeNumberPsl,
   encodeBooleanPsl,
+  encodeFloatPsl,
   encodeJsonTextPsl,
   encodeNumberPsl,
   encodeStringPsl,
   pslLiteralKindError,
+  pslLiteralReadsError,
 } from '../shared/psl-literal-helpers';
 export { renderTsLiteral } from '../shared/render-ts-literal';
 export {

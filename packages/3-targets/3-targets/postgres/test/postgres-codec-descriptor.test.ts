@@ -6,6 +6,9 @@ import {
   CodecImpl,
   type CodecInstanceContext,
   type CodecRef,
+  decodeJsonTextPsl,
+  encodeJsonTextPsl,
+  type PslLiteral,
 } from '@internal/framework-components/codec';
 import {
   CaseExpr,
@@ -83,6 +86,12 @@ class VectorCodec<N extends number> extends CodecImpl<
       throw new Error('Expected vector JSON array');
     }
     return json.map(Number);
+  }
+  encodePsl(value: ReadonlyArray<number>): PslLiteral {
+    return encodeJsonTextPsl(this.encodeJson(value));
+  }
+  decodePsl(literal: PslLiteral): ReadonlyArray<number> {
+    return this.decodeJson(decodeJsonTextPsl(this.id, literal));
   }
 }
 

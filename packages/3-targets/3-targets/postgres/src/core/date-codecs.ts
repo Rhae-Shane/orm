@@ -6,6 +6,9 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
+  decodeStringPsl,
+  encodeStringPsl,
+  type PslLiteral,
 } from '@internal/framework-components/codec';
 import { CastExpr, type ProjectionExpr } from '@internal/sql-relational-core/ast';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
@@ -113,6 +116,12 @@ export class PgTimestamptzDateCodec extends CodecImpl<
   }
   decodeJson(json: JsonValue): Date {
     return decodeDate(json);
+  }
+  encodePsl(value: Date): PslLiteral {
+    return encodeStringPsl(encodeDate(value));
+  }
+  decodePsl(literal: PslLiteral): Date {
+    return decodeDate(decodeStringPsl(this.id, literal));
   }
 }
 

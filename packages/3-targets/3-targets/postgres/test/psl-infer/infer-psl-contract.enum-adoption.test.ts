@@ -8,7 +8,12 @@
  */
 import { type Contract, coreHash, profileHash } from '@internal/contract/types';
 import type { SqlDescribedContractSpace } from '@internal/family-sql/control';
-import type { Codec, CodecLookup } from '@internal/framework-components/codec';
+import {
+  type Codec,
+  type CodecLookup,
+  decodeStringPsl,
+  encodeStringPsl,
+} from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { UNSPECIFIED_PSL_NAMESPACE_ID } from '@internal/framework-components/psl-ast';
 import { buildSymbolTable } from '@internal/psl-parser';
@@ -186,6 +191,8 @@ const pgEnumCodec = {
   decode: () => Promise.reject(new Error('unused')),
   encodeJson: (value) => value,
   decodeJson: (json) => json,
+  encodePsl: (value) => encodeStringPsl(value as string),
+  decodePsl: (literal) => decodeStringPsl(PG_ENUM_CODEC_ID, literal),
 } as Codec;
 
 const codecLookup: CodecLookup = {

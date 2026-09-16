@@ -14,7 +14,12 @@
  */
 
 import sqlFamilyPack from '@internal/family-sql/pack';
-import type { Codec, CodecLookup } from '@internal/framework-components/codec';
+import {
+  type Codec,
+  type CodecLookup,
+  decodeStringPsl,
+  encodeStringPsl,
+} from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
@@ -410,6 +415,8 @@ describe('native_enum coexists with a PSL enum block in the same namespace', () 
       if (typeof json !== 'string') throw new Error(`expected string, got ${typeof json}`);
       return json;
     },
+    encodePsl: (value) => encodeStringPsl(value as string),
+    decodePsl: (literal) => decodeStringPsl('pg/text@1', literal),
   };
 
   const enumTestCodecLookup: CodecLookup = {

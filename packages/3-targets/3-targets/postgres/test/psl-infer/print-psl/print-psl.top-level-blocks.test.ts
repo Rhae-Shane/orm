@@ -18,7 +18,12 @@ import {
   type AuthoringTypeNamespace,
   collectScalarTypeConstructors,
 } from '@internal/framework-components/authoring';
-import type { Codec, CodecLookup } from '@internal/framework-components/codec';
+import {
+  type Codec,
+  type CodecLookup,
+  decodeStringPsl,
+  encodeStringPsl,
+} from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import type {
   PslDocumentAst,
@@ -84,6 +89,8 @@ const textCodec: Codec = {
     if (typeof json !== 'string') throw new Error(`expected string, got ${typeof json}`);
     return json;
   },
+  encodePsl: (value) => encodeStringPsl(value as string),
+  decodePsl: (literal) => decodeStringPsl('pg/text@1', literal),
 };
 
 const codecLookup: CodecLookup = {

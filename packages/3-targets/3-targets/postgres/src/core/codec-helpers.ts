@@ -148,6 +148,22 @@ export const pgInt8Decode = (wire: string | number | bigint): bigint =>
 export const pgUnboundedIntDecode = (wire: string | number | bigint): bigint =>
   decimalIntegerDecode('pg/unboundedint@1', wire);
 
+const NON_FINITE_TEXT = /^(?:NaN|-?Infinity)$/;
+
+/** JSON has no number for `NaN` or the infinities; PostgreSQL emits them as strings and the float codecs store them that way. */
+export const pgFloatEncodeJson = (value: number): JsonValue =>
+  Number.isFinite(value) ? value : String(value);
+
+export const pgFloatDecodeJson = (codecId: string, json: JsonValue): number => {
+  if (typeof json === 'number') return json;
+  if (typeof json === 'string' && NON_FINITE_TEXT.test(json)) return Number(json);
+  throw postgresError(
+    'RUNTIME.DECODE_FAILED',
+    `${codecId} database JSON value must be a number, or the string NaN, Infinity or -Infinity`,
+    { meta: { codecId, received: typeof json } },
+  );
+};
+
 const MIN_SAFE_INTEGER_BIGINT = BigInt(Number.MIN_SAFE_INTEGER);
 const MAX_SAFE_INTEGER_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
 
@@ -373,7 +389,7 @@ export const pgIntervalFromIso = (text: string): PgInterval => intervalFieldsOf(
 /** Renders the application value as its canonical ISO-8601 duration. */
 export const pgIntervalToIso = (value: PgInterval): string => formatIsoDuration(value);
 
-export const pgIntervalEncodeJson = (value: PgInterval): JsonValue => formatIsoDuration(value);
+export const pgIntervalEncodeJson = (value: PgInterval): string => formatIsoDuration(value);
 
 export const pgIntervalDecodeJson = (json: JsonValue): PgInterval => {
   if (typeof json !== 'string') {
@@ -411,7 +427,7 @@ export const pgIntervalDecode = (wire: string | Record<string, unknown>): PgInte
 
 const BASE64_TEXT = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
 
-export const pgByteaEncodeJson = (value: Uint8Array): JsonValue =>
+export const pgByteaEncodeJson = (value: Uint8Array): string =>
   Buffer.from(value).toString('base64');
 
 export const pgByteaDecodeJson = (value: JsonValue): Uint8Array => {

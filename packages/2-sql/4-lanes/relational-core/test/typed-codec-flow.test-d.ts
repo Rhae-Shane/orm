@@ -19,6 +19,9 @@ import {
   CodecImpl,
   type CodecInstanceContext,
   type CodecTrait,
+  decodeJsonTextPsl,
+  encodeJsonTextPsl,
+  type PslLiteral,
   voidParamsSchema,
 } from '@internal/framework-components/codec';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
@@ -64,6 +67,12 @@ class TestVectorCodec extends CodecImpl<'test/vector@1', readonly ['equality'], 
   }
   decodeJson(json: JsonValue): number[] {
     return json as number[];
+  }
+  encodePsl(value: number[]): PslLiteral {
+    return encodeJsonTextPsl(this.encodeJson(value));
+  }
+  decodePsl(literal: PslLiteral): number[] {
+    return this.decodeJson(decodeJsonTextPsl(this.id, literal));
   }
 }
 

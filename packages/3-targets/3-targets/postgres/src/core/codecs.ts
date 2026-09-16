@@ -19,6 +19,18 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
+  decodeBooleanPsl,
+  decodeFloatPsl,
+  decodeJsonTextPsl,
+  decodeStringPsl,
+  decodeWholeNumberPsl,
+  encodeBooleanPsl,
+  encodeFloatPsl,
+  encodeJsonTextPsl,
+  encodeNumberPsl,
+  encodeStringPsl,
+  type PslLiteral,
+  pslLiteralReadsError,
   renderTsLiteral,
   voidParamsSchema,
 } from '@internal/framework-components/codec';
@@ -55,6 +67,8 @@ import {
   pgByteaDecodeJson,
   pgByteaDecodeWire,
   pgByteaEncodeJson,
+  pgFloatDecodeJson,
+  pgFloatEncodeJson,
   pgInt8Decode,
   pgInt8NumberDecode,
   pgInt8NumberDecodeJson,
@@ -175,6 +189,36 @@ const PG_JSONB_NATIVE_TYPE = 'jsonb';
 const CANONICAL_NUMERIC_TEXT = /^(?:-?\d+(?:\.\d+)?|NaN|-?Infinity)$/;
 
 const isCanonicalNumericText = (value: string): boolean => CANONICAL_NUMERIC_TEXT.test(value);
+
+const NON_FINITE_NUMERIC_TEXT = /^(?:NaN|-?Infinity)$/;
+const DECIMAL_NUMERAL = /^(-?)0*(\d+)(\.\d+)?$/;
+const NUMERIC_READS = 'a number literal or "NaN", "Infinity", "-Infinity"';
+
+/** Leading zeros and the sign of zero never change a decimal. Trailing zeros are kept, because a column without a scale keeps them. */
+const canonicalDecimalText = (text: string): string => {
+  const numeral = DECIMAL_NUMERAL.exec(text);
+  if (numeral === null) return text;
+  const [, sign = '', whole = '', fraction = ''] = numeral;
+  const digits = `${whole}${fraction}`;
+  return /^[0.]+$/.test(digits) ? digits : `${sign}${digits}`;
+};
+
+/** A finite decimal is written as a number literal; `NaN` and the infinities as the quoted string, which PSL has no number token for. */
+const pgNumericEncodePsl = (text: string): PslLiteral =>
+  NON_FINITE_NUMERIC_TEXT.test(text) ? { kind: 'string', text } : { kind: 'number', text };
+
+const pgNumericDecodePsl = (codecId: string, literal: PslLiteral): string => {
+  const text =
+    literal.kind === 'number'
+      ? canonicalDecimalText(literal.text)
+      : literal.kind === 'string' && NON_FINITE_NUMERIC_TEXT.test(literal.text)
+        ? literal.text
+        : undefined;
+  if (text === undefined || !isCanonicalNumericText(text)) {
+    throw pslLiteralReadsError(codecId, NUMERIC_READS, literal);
+  }
+  return text;
+};
 
 const identityJsonProjection = (expression: ProjectionExpr): ProjectionExpr => expression;
 
@@ -338,6 +382,12 @@ export class PgTextCodec extends CodecImpl<
       json,
     );
   }
+  encodePsl(value: string): PslLiteral {
+    return encodeStringPsl(value);
+  }
+  decodePsl(literal: PslLiteral): string {
+    return decodeStringPsl(this.id, literal);
+  }
 }
 
 export class PgTextDescriptor extends PostgresCodecDescriptor<void> {
@@ -403,6 +453,12 @@ export class PgEnumCodec extends CodecImpl<
       string,
       'text codec: a native-enum member value is stored as its wire string form'
     >(json);
+  }
+  encodePsl(value: string): PslLiteral {
+    return encodeStringPsl(value);
+  }
+  decodePsl(literal: PslLiteral): string {
+    return decodeStringPsl(this.id, literal);
   }
 }
 
@@ -538,6 +594,12 @@ export class PgTextArrayCodec extends CodecImpl<
   decodeJson(json: JsonValue): readonly string[] {
     return Array.isArray(json) ? json.map((entry) => String(entry)) : [];
   }
+  encodePsl(value: readonly string[]): PslLiteral {
+    return encodeJsonTextPsl(this.encodeJson(value));
+  }
+  decodePsl(literal: PslLiteral): readonly string[] {
+    return this.decodeJson(decodeJsonTextPsl(this.id, literal));
+  }
 }
 
 export class PgTextArrayDescriptor extends PostgresCodecDescriptor<void> {
@@ -577,6 +639,12 @@ export class PgInt4Codec extends CodecImpl<
     return blindCast<number, 'identity numeric codecs serialize JSON in their wire number form'>(
       json,
     );
+  }
+  encodePsl(value: number): PslLiteral {
+    return encodeNumberPsl(value);
+  }
+  decodePsl(literal: PslLiteral): number {
+    return Number(decodeWholeNumberPsl(this.id, literal));
   }
 }
 
@@ -626,6 +694,12 @@ export class PgInt2Codec extends CodecImpl<
     return blindCast<number, 'identity numeric codecs serialize JSON in their wire number form'>(
       json,
     );
+  }
+  encodePsl(value: number): PslLiteral {
+    return encodeNumberPsl(value);
+  }
+  decodePsl(literal: PslLiteral): number {
+    return Number(decodeWholeNumberPsl(this.id, literal));
   }
 }
 
@@ -687,6 +761,12 @@ export class PgInt8Codec extends CodecImpl<
     }
     return pgInt8Decode(json);
   }
+  encodePsl(value: bigint): PslLiteral {
+    return { kind: 'number', text: pgBigintEncodeJson(this.id, value) };
+  }
+  decodePsl(literal: PslLiteral): bigint {
+    return pgInt8Decode(decodeWholeNumberPsl(this.id, literal));
+  }
 }
 
 export class PgInt8Descriptor extends PostgresCodecDescriptor<void> {
@@ -743,6 +823,12 @@ export class PgInt8NumberCodec extends CodecImpl<
   decodeJson(json: JsonValue): number {
     return pgInt8NumberDecodeJson(json);
   }
+  encodePsl(value: number): PslLiteral {
+    return encodeNumberPsl(pgInt8NumberEncodeJson(value));
+  }
+  decodePsl(literal: PslLiteral): number {
+    return pgInt8NumberDecode(decodeWholeNumberPsl(this.id, literal));
+  }
 }
 
 export class PgInt8NumberDescriptor extends PostgresCodecDescriptor<void> {
@@ -785,12 +871,16 @@ export class PgFloat4Codec extends CodecImpl<
     return decodePostgresNumberWire(wire);
   }
   encodeJson(value: number): JsonValue {
-    return value;
+    return pgFloatEncodeJson(value);
   }
   decodeJson(json: JsonValue): number {
-    return blindCast<number, 'identity numeric codecs serialize JSON in their wire number form'>(
-      json,
-    );
+    return pgFloatDecodeJson(this.id, json);
+  }
+  encodePsl(value: number): PslLiteral {
+    return encodeFloatPsl(value);
+  }
+  decodePsl(literal: PslLiteral): number {
+    return decodeFloatPsl(this.id, literal);
   }
 }
 
@@ -834,12 +924,16 @@ export class PgFloat8Codec extends CodecImpl<
     return decodePostgresNumberWire(wire);
   }
   encodeJson(value: number): JsonValue {
-    return value;
+    return pgFloatEncodeJson(value);
   }
   decodeJson(json: JsonValue): number {
-    return blindCast<number, 'identity numeric codecs serialize JSON in their wire number form'>(
-      json,
-    );
+    return pgFloatDecodeJson(this.id, json);
+  }
+  encodePsl(value: number): PslLiteral {
+    return encodeFloatPsl(value);
+  }
+  decodePsl(literal: PslLiteral): number {
+    return decodeFloatPsl(this.id, literal);
   }
 }
 
@@ -888,6 +982,12 @@ export class PgBoolCodec extends CodecImpl<
   decodeJson(json: JsonValue): boolean {
     return blindCast<boolean, 'boolean columns serialize JSON in their wire boolean form'>(json);
   }
+  encodePsl(value: boolean): PslLiteral {
+    return encodeBooleanPsl(value);
+  }
+  decodePsl(literal: PslLiteral): boolean {
+    return decodeBooleanPsl(this.id, literal);
+  }
 }
 
 export class PgBoolDescriptor extends PostgresCodecDescriptor<void> {
@@ -929,7 +1029,7 @@ export class PgNumericCodec extends CodecImpl<
   async decode(wire: string | number, _ctx: CodecCallContext): Promise<string> {
     return pgNumericDecode(wire);
   }
-  encodeJson(value: string): JsonValue {
+  encodeJson(value: string): string {
     if (!isCanonicalNumericText(value)) {
       throw postgresError(
         'RUNTIME.ENCODE_FAILED',
@@ -948,6 +1048,12 @@ export class PgNumericCodec extends CodecImpl<
       );
     }
     return json;
+  }
+  encodePsl(value: string): PslLiteral {
+    return pgNumericEncodePsl(this.encodeJson(value));
+  }
+  decodePsl(literal: PslLiteral): string {
+    return pgNumericDecodePsl(this.id, literal);
   }
 }
 
@@ -1009,6 +1115,12 @@ export class PgUnboundedIntCodec extends CodecImpl<
     }
     return pgUnboundedIntDecode(json);
   }
+  encodePsl(value: bigint): PslLiteral {
+    return { kind: 'number', text: pgBigintEncodeJson(this.id, value) };
+  }
+  decodePsl(literal: PslLiteral): bigint {
+    return pgUnboundedIntDecode(decodeWholeNumberPsl(this.id, literal));
+  }
 }
 
 export class PgUnboundedIntDescriptor extends PostgresCodecDescriptor<void> {
@@ -1063,6 +1175,12 @@ export class PgTimetzCodec extends CodecImpl<
       json,
     );
   }
+  encodePsl(value: string): PslLiteral {
+    return encodeStringPsl(value);
+  }
+  decodePsl(literal: PslLiteral): string {
+    return decodeStringPsl(this.id, literal);
+  }
 }
 
 export class PgTimetzDescriptor extends PostgresCodecDescriptor<PrecisionParams> {
@@ -1113,6 +1231,12 @@ export class PgBitCodec extends CodecImpl<
       json,
     );
   }
+  encodePsl(value: string): PslLiteral {
+    return encodeStringPsl(value);
+  }
+  decodePsl(literal: PslLiteral): string {
+    return decodeStringPsl(this.id, literal);
+  }
 }
 
 export class PgBitDescriptor extends PostgresCodecDescriptor<LengthParams> {
@@ -1162,6 +1286,12 @@ export class PgVarbitCodec extends CodecImpl<
       json,
     );
   }
+  encodePsl(value: string): PslLiteral {
+    return encodeStringPsl(value);
+  }
+  decodePsl(literal: PslLiteral): string {
+    return decodeStringPsl(this.id, literal);
+  }
 }
 
 export class PgVarbitDescriptor extends PostgresCodecDescriptor<LengthParams> {
@@ -1209,6 +1339,12 @@ export class PgByteaCodec extends CodecImpl<
   decodeJson(json: JsonValue): Uint8Array {
     return pgByteaDecodeJson(json);
   }
+  encodePsl(value: Uint8Array): PslLiteral {
+    return encodeStringPsl(pgByteaEncodeJson(value));
+  }
+  decodePsl(literal: PslLiteral): Uint8Array {
+    return pgByteaDecodeJson(decodeStringPsl(this.id, literal));
+  }
 }
 
 export class PgByteaDescriptor extends PostgresCodecDescriptor<void> {
@@ -1255,6 +1391,12 @@ export class PgUuidCodec extends CodecImpl<
   decodeJson(json: JsonValue): string {
     return blindCast<string, 'uuid columns serialize to JSON as their wire string form'>(json);
   }
+  encodePsl(value: string): PslLiteral {
+    return encodeStringPsl(value);
+  }
+  decodePsl(literal: PslLiteral): string {
+    return decodeStringPsl(this.id, literal);
+  }
 }
 
 export class PgUuidDescriptor extends PostgresCodecDescriptor<void> {
@@ -1300,6 +1442,12 @@ export class PgInetCodec extends CodecImpl<
   }
   decodeJson(json: JsonValue): string {
     return blindCast<string, 'inet columns serialize to JSON as their wire string form'>(json);
+  }
+  encodePsl(value: string): PslLiteral {
+    return encodeStringPsl(value);
+  }
+  decodePsl(literal: PslLiteral): string {
+    return decodeStringPsl(this.id, literal);
   }
 }
 
@@ -1367,6 +1515,12 @@ export class PgIntervalCodec extends CodecImpl<
   decodeJson(json: JsonValue): PgInterval {
     return pgIntervalDecodeJson(json);
   }
+  encodePsl(value: PgInterval): PslLiteral {
+    return encodeStringPsl(pgIntervalEncodeJson(value));
+  }
+  decodePsl(literal: PslLiteral): PgInterval {
+    return pgIntervalDecodeJson(decodeStringPsl(this.id, literal));
+  }
 }
 
 export class PgIntervalDescriptor extends PostgresCodecDescriptor<PrecisionParams> {
@@ -1415,6 +1569,12 @@ export class PgJsonCodec extends CodecImpl<
   decodeJson(json: JsonValue): JsonValue {
     return json;
   }
+  encodePsl(value: JsonValue): PslLiteral {
+    return encodeJsonTextPsl(value);
+  }
+  decodePsl(literal: PslLiteral): JsonValue {
+    return decodeJsonTextPsl(this.id, literal);
+  }
 }
 
 export class PgJsonDescriptor extends PostgresCodecDescriptor<void> {
@@ -1458,6 +1618,12 @@ export class PgJsonbCodec extends CodecImpl<
   }
   decodeJson(json: JsonValue): JsonValue {
     return json;
+  }
+  encodePsl(value: JsonValue): PslLiteral {
+    return encodeJsonTextPsl(value);
+  }
+  decodePsl(literal: PslLiteral): JsonValue {
+    return decodeJsonTextPsl(this.id, literal);
   }
 }
 

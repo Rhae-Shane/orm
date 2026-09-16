@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   decodeBooleanPsl,
+  decodeFloatPsl,
   decodeJsonTextPsl,
   decodeNumberPsl,
   decodeStringPsl,
+  decodeWholeNumberPsl,
   encodeBooleanPsl,
+  encodeFloatPsl,
   encodeJsonTextPsl,
   encodeNumberPsl,
   encodeStringPsl,
@@ -102,6 +105,62 @@ describe('pslLiteralKindError', () => {
   it('names the codec, the expected kind, and the literal it got', () => {
     expect(pslLiteralKindError('pg/int4@1', 'number', { kind: 'boolean', text: 'true' })).toEqual(
       new Error('pg/int4@1 reads a number literal; got a boolean true'),
+    );
+  });
+});
+
+describe('whole number helpers', () => {
+  it('returns the digits of a whole number literal as written', () => {
+    expect(decodeWholeNumberPsl('pg/int8@1', { kind: 'number', text: '9007199254740993' })).toBe(
+      '9007199254740993',
+    );
+    expect(decodeWholeNumberPsl('pg/int4@1', { kind: 'number', text: '-7' })).toBe('-7');
+  });
+
+  it('rejects a fraction naming the codec', () => {
+    expect(() => decodeWholeNumberPsl('pg/int4@1', { kind: 'number', text: '1.5' })).toThrow(
+      'pg/int4@1 reads a whole number literal; got a number 1.5',
+    );
+  });
+
+  it('rejects a non-finite number text', () => {
+    expect(() => decodeWholeNumberPsl('pg/int8@1', { kind: 'number', text: 'NaN' })).toThrow(
+      'pg/int8@1 reads a whole number literal; got a number NaN',
+    );
+  });
+
+  it('rejects a string literal naming the codec', () => {
+    expect(() => decodeWholeNumberPsl('pg/int4@1', { kind: 'string', text: '1' })).toThrow(
+      'pg/int4@1 reads a whole number literal; got a string "1"',
+    );
+  });
+});
+
+describe('float helpers', () => {
+  it('writes a finite value as a number literal', () => {
+    expect(encodeFloatPsl(1.5)).toEqual({ kind: 'number', text: '1.5' });
+    expect(decodeFloatPsl('pg/float8@1', { kind: 'number', text: '1.5' })).toBe(1.5);
+  });
+
+  it.each([
+    [Number.NaN, 'NaN'],
+    [Number.POSITIVE_INFINITY, 'Infinity'],
+    [Number.NEGATIVE_INFINITY, '-Infinity'],
+  ])('writes %s as the quoted string %s and reads both spellings', (value, text) => {
+    expect(encodeFloatPsl(value)).toEqual({ kind: 'string', text });
+    expect(decodeFloatPsl('pg/float8@1', { kind: 'string', text })).toBe(value);
+    expect(decodeFloatPsl('pg/float8@1', { kind: 'number', text })).toBe(value);
+  });
+
+  it('rejects any other string naming the codec', () => {
+    expect(() => decodeFloatPsl('pg/float8@1', { kind: 'string', text: '1.5' })).toThrow(
+      'pg/float8@1 reads a number literal or "NaN", "Infinity", "-Infinity"; got a string "1.5"',
+    );
+  });
+
+  it('rejects a boolean literal naming the codec', () => {
+    expect(() => decodeFloatPsl('pg/float4@1', { kind: 'boolean', text: 'true' })).toThrow(
+      'pg/float4@1 reads a number literal or "NaN", "Infinity", "-Infinity"; got a boolean true',
     );
   });
 });

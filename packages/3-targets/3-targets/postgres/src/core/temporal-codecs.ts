@@ -6,6 +6,9 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
+  decodeStringPsl,
+  encodeStringPsl,
+  type PslLiteral,
   voidParamsSchema,
 } from '@internal/framework-components/codec';
 import { CastExpr, type ProjectionExpr } from '@internal/sql-relational-core/ast';
@@ -54,6 +57,12 @@ export class PgDateTemporalCodec extends CodecImpl<
       blindCast<string, 'date-temporal columns serialize to JSON as their wire string form'>(json),
     );
   }
+  encodePsl(value: Temporal.PlainDate): PslLiteral {
+    return encodeStringPsl(pgDateTemporalEncode(value));
+  }
+  decodePsl(literal: PslLiteral): Temporal.PlainDate {
+    return pgDateTemporalDecode(decodeStringPsl(this.id, literal));
+  }
 }
 
 export class PgDateTemporalDescriptor extends PostgresCodecDescriptor<void> {
@@ -101,6 +110,12 @@ export class PgTimestampTemporalCodec extends CodecImpl<
         json,
       ),
     );
+  }
+  encodePsl(value: Temporal.PlainDateTime): PslLiteral {
+    return encodeStringPsl(pgTimestampTemporalEncode(value));
+  }
+  decodePsl(literal: PslLiteral): Temporal.PlainDateTime {
+    return pgTimestampTemporalDecode(decodeStringPsl(this.id, literal));
   }
 }
 
@@ -158,6 +173,12 @@ export class PgTimestamptzTemporalCodec extends CodecImpl<
       ),
     );
   }
+  encodePsl(value: Temporal.Instant): PslLiteral {
+    return encodeStringPsl(pgTimestamptzTemporalEncode(value));
+  }
+  decodePsl(literal: PslLiteral): Temporal.Instant {
+    return pgTimestamptzTemporalDecode(decodeStringPsl(this.id, literal));
+  }
 }
 
 export class PgTimestamptzTemporalDescriptor extends PostgresCodecDescriptor<PrecisionParams> {
@@ -211,6 +232,12 @@ export class PgTimeTemporalCodec extends CodecImpl<
     return pgTimeTemporalDecode(
       blindCast<string, 'time-temporal columns serialize to JSON as their wire string form'>(json),
     );
+  }
+  encodePsl(value: Temporal.PlainTime): PslLiteral {
+    return encodeStringPsl(pgTimeTemporalEncode(value));
+  }
+  decodePsl(literal: PslLiteral): Temporal.PlainTime {
+    return pgTimeTemporalDecode(decodeStringPsl(this.id, literal));
   }
 }
 
