@@ -183,6 +183,7 @@ export function createContractConvertCommand({
       } finally {
         await closeQuietly(client);
       }
+      ctx.signal.throwIfAborted();
 
       const outputPath = inferredContractPathFor({
         config: ctx.config,

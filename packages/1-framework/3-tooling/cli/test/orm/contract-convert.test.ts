@@ -139,6 +139,22 @@ describe('contract convert', () => {
     expect(await readdir(join(dir, 'generated'))).toEqual(['contract.prisma']);
   });
 
+  it('writes nothing when the run is cancelled while the client is closing', async () => {
+    const dir = await projectDir();
+    const controller = new AbortController();
+    mocks.close.mockImplementation(async () => {
+      controller.abort();
+    });
+
+    const run = await harness(ormConfig(dir)).run(['contract', 'convert', '--json'], {
+      cwd: dir,
+      abort: controller.signal,
+    });
+
+    expect(run.exitCode).not.toBe(0);
+    expect(await readdir(dir)).not.toContain('generated');
+  });
+
   it('resolves a relative --output against the invocation directory', async () => {
     const dir = await projectDir();
 
