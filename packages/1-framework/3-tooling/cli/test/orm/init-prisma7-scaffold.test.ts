@@ -307,10 +307,41 @@ describe('the Prisma 7 scaffold', () => {
       ['after ;', 'echo x; prisma studio', 'echo x; prisma7 studio'],
       ['after |', 'cat x | prisma format', 'cat x | prisma7 format'],
       ['after pnpm', 'pnpm prisma generate', 'pnpm prisma7 generate'],
+      ['after pnpm exec', 'pnpm exec prisma generate', 'pnpm exec prisma7 generate'],
+      ['after pnpm dlx', 'pnpm dlx prisma generate', 'pnpm dlx prisma7 generate'],
       ['after the npm runner', 'np' + 'x prisma migrate deploy', 'np' + 'x prisma7 migrate deploy'],
       ['after yarn', 'yarn prisma generate', 'yarn prisma7 generate'],
+      ['after yarn exec', 'yarn exec prisma generate', 'yarn exec prisma7 generate'],
+      ['after yarn dlx', 'yarn dlx prisma generate', 'yarn dlx prisma7 generate'],
       ['after bun', 'bun prisma generate', 'bun prisma7 generate'],
-      ['after --', 'dotenv -e .env -- prisma migrate dev', 'dotenv -e .env -- prisma7 migrate dev'],
+      ['after bun x', 'bun x prisma generate', 'bun x prisma7 generate'],
+      ['after bunx', 'bunx prisma generate', 'bunx prisma7 generate'],
+      [
+        'after dotenv and its --',
+        'dotenv -e .env -- prisma migrate dev',
+        'dotenv -e .env -- prisma7 migrate dev',
+      ],
+      [
+        'after dotenvx run and its --',
+        'dotenvx run -f .env -- prisma migrate dev',
+        'dotenvx run -f .env -- prisma7 migrate dev',
+      ],
+      [
+        'after env-cmd and its --',
+        'env-cmd -f .env -- prisma migrate dev',
+        'env-cmd -f .env -- prisma7 migrate dev',
+      ],
+      [
+        'after cross-env and its assignments',
+        'cross-env NODE_ENV=test prisma migrate dev',
+        'cross-env NODE_ENV=test prisma7 migrate dev',
+      ],
+      [
+        'after a runner behind a passthrough wrapper',
+        'dotenv -e .env -- pnpm prisma migrate dev',
+        'dotenv -e .env -- pnpm prisma7 migrate dev',
+      ],
+      ['after && with no spaces', 'tsc&&prisma generate', 'tsc&&prisma7 generate'],
       [
         'after an environment assignment',
         'NODE_OPTIONS=--max-old-space-size=4096 prisma studio',
@@ -338,8 +369,12 @@ describe('the Prisma 7 scaffold', () => {
     it.each([
       ['a script that does not invoke prisma', 'biome check .'],
       ['a prisma-prefixed binary', 'prisma-erd generate'],
+      ['a prisma-prefixed binary with no arguments', 'prisma-erd-generator'],
       ['a prisma package spec', 'np' + 'x prisma@7 generate'],
+      ['a prisma package spec at the start', 'prisma@7 generate'],
       ['a path argument named prisma', 'tsx scripts/seed.ts prisma'],
+      ['a runner that is an argument, not the command', 'echo ' + 'np' + 'x prisma generate'],
+      ['prisma after the -- of a command that is not a wrapper', 'vitest -- prisma'],
     ])('leaves %s alone', (_case, script) => {
       copyFixture();
       writeManifestWithScript(script);

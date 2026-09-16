@@ -17,23 +17,107 @@ export function rewritePrisma7ConfigImport(content: string): {
   return { content: rewritten, found: rewritten !== content };
 }
 
-const RUNNER = String.raw`(?:pnpm|npx|yarn|bunx?)(?:\s+(?:exec|dlx|x))?`;
+const SHELL_OPERATOR = /&&|\|\||;|\|/g;
 
-const ENV_ASSIGNMENTS = String.raw`(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*`;
+const ENV_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
+
+/** Wrappers whose next word, after any `NAME=value` assignments, is the command they run. */
+const PREFIX_WRAPPERS: readonly (readonly string[])[] = [
+  ['pnpm', 'exec'],
+  ['pnpm', 'dlx'],
+  ['pnpm'],
+  ['yarn', 'exec'],
+  ['yarn', 'dlx'],
+  ['yarn'],
+  ['bun', 'x'],
+  ['bun'],
+  ['bunx'],
+  ['npx'],
+  ['cross-env'],
+];
+
+/** Wrappers that take their own arguments and run the command after `--`. */
+const SEPARATOR_WRAPPERS: readonly (readonly string[])[] = [
+  ['dotenv'],
+  ['dotenvx', 'run'],
+  ['env-cmd'],
+];
+
+interface Word {
+  readonly text: string;
+  readonly end: number;
+}
+
+function wordsOf(script: string, start: number, end: number): Word[] {
+  return [...script.slice(start, end).matchAll(/\S+/g)].map((match) => ({
+    text: match[0],
+    end: start + match.index + match[0].length,
+  }));
+}
+
+function commandsOf(script: string): Word[][] {
+  const commands: Word[][] = [];
+  let start = 0;
+  for (const operator of script.matchAll(SHELL_OPERATOR)) {
+    commands.push(wordsOf(script, start, operator.index));
+    start = operator.index + operator[0].length;
+  }
+  commands.push(wordsOf(script, start, script.length));
+  return commands;
+}
+
+function wrapperAt(
+  words: readonly Word[],
+  at: number,
+  wrappers: readonly (readonly string[])[],
+): readonly string[] | undefined {
+  return wrappers.find((wrapper) =>
+    wrapper.every((part, offset) => words[at + offset]?.text === part),
+  );
+}
 
 /**
- * `prisma` at command position: the start of the script, after a shell
- * operator, after `--`, or after a package-manager runner, with any run of
- * `NAME=value` assignments in between. Followed by whitespace or the end, so
- * `prisma7`, `prisma@7`, and `prisma-erd` are left alone.
+ * The `prisma` word that runs as the command starting at `at`: skips
+ * `NAME=value` assignments, then either is `prisma` or unwraps a recognised
+ * wrapper and looks again at the command it runs.
  */
-const PRISMA_AT_COMMAND_POSITION = new RegExp(
-  String.raw`(^|&&|\|\||;|\||--|\b${RUNNER})(\s*${ENV_ASSIGNMENTS})prisma(?=\s|$)`,
-  'g',
-);
+function prismaCommandWord(words: readonly Word[], at: number): Word | undefined {
+  let index = at;
+  while (ENV_ASSIGNMENT.test(words[index]?.text ?? '')) {
+    index += 1;
+  }
+  const word = words[index];
+  if (word?.text === 'prisma') {
+    return word;
+  }
+  const prefix = wrapperAt(words, index, PREFIX_WRAPPERS);
+  if (prefix !== undefined) {
+    return prismaCommandWord(words, index + prefix.length);
+  }
+  const separated = wrapperAt(words, index, SEPARATOR_WRAPPERS);
+  if (separated === undefined) {
+    return undefined;
+  }
+  const separator = words.findIndex(
+    (candidate, position) => position >= index + separated.length && candidate.text === '--',
+  );
+  return separator === -1 ? undefined : prismaCommandWord(words, separator + 1);
+}
 
+/**
+ * Rewrites `prisma` to `prisma7` wherever it is the command a script runs: at
+ * the start of the script or after `&&`, `||`, `;`, or `|`, behind any
+ * `NAME=value` assignments and recognised wrappers. `prisma` as an argument,
+ * and words that only start with it (`prisma@7`, `prisma-erd`), are left alone.
+ */
 export function rewritePrismaBinary(script: string): string {
-  return script.replace(PRISMA_AT_COMMAND_POSITION, '$1$2prisma7');
+  const ends = commandsOf(script)
+    .map((words) => prismaCommandWord(words, 0)?.end)
+    .filter((end) => end !== undefined);
+  return ends.reduceRight(
+    (rewritten, end) => `${rewritten.slice(0, end)}7${rewritten.slice(end)}`,
+    script,
+  );
 }
 
 /**
