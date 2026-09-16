@@ -69,3 +69,11 @@ Checking needs the target package: the refusal rules ship only in `@prisma/orm-p
 ### D9. The cutover step points at the Postgres README (added 2026-09-16)
 
 The guide's cutover section describes `contract infer` plus hand edits, the workflow `prisma7Schema` replaces. Until `contract convert` exists, init's last next step points at the `prisma7Schema` section of the `@prisma/orm-postgres` README.
+
+### D10. Init is target-agnostic (Will, 2026-09-16)
+
+Will: "Our init command cannot be target specific." Slice 1 as built maps `datasource.provider` to a target, refuses Mongo by name, lists `postgresql` as supported, names the PostgreSQL guide in its next steps, and the schema check proposed in D8 imported `@prisma/orm-postgres`. All of it goes. The Prisma 7 source in each target package already refuses a schema whose provider does not match (`PRISMA7_PROVIDER_MISMATCH`), so init does not need the provider.
+
+Shape: the target comes from `--target` or the existing target question; init installs the chosen target package as it already does, loads that package's `/config` entrypoint through the import-specifier resolver it already uses to write the config, and if the package exports `prisma7Schema` runs that source against the schema before any edit, stopping with the source's own diagnostics on refusal. A package without `prisma7Schema` gets one generic refusal. Next steps name only generic commands and point at the chosen package's README. Supersedes D6 (Mongo needs no init change once `@prisma/orm-mongo/config` exports `prisma7Schema`) and the install question in D8 (the check uses the package init installs anyway, loaded after install and before the edits).
+
+Open: whether the 17 target branches init already has on `main` (starter schemas, facade package names, target labels, `--probe-db` driver) move behind the target packages in this project, or only this PR stops adding more. **Awaiting Will.**
