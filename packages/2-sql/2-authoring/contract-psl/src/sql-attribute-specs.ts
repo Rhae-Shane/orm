@@ -193,7 +193,8 @@ function scalarDefaultArms(
   registries: ControlDefaultRegistries,
 ): readonly [ArgType<DefaultArgValue, AttributeCtx>, ...ArgType<DefaultArgValue, AttributeCtx>[]] {
   const literal = () => oneOf(str(), numLiteral(), bool());
-  const tagArm = taggedLiteral([...registries.defaultLiteralTagRegistry.keys()]);
+  const tags = [...registries.defaultLiteralTagRegistry.keys()];
+  const tagArms = tags.length > 0 ? [taggedLiteral(tags)] : [];
   const funcArms = [...registries.defaultFunctionRegistry.entries()].map(([name, entry]) =>
     funcCall(
       name,
@@ -204,8 +205,8 @@ function scalarDefaultArms(
     ),
   );
   return isList
-    ? [list(literal()), ...funcArms, tagArm]
-    : [str(), numLiteral(), bool(), ...funcArms, tagArm];
+    ? [list(literal()), ...funcArms, ...tagArms]
+    : [str(), numLiteral(), bool(), ...funcArms, ...tagArms];
 }
 
 function noEnumMember(): RejectingArgType<never, AttributeCtx> {

@@ -268,6 +268,21 @@ describe('sqlAttributeSpecs.field.default', () => {
     ]);
   });
 
+  it('omits the tagged-literal arm when no tag is registered', () => {
+    const noTags = fieldSpecContext({
+      symbols: symbolTable,
+      model,
+      field: field(model, 'id'),
+      controlMutationDefaults: {
+        defaultFunctionRegistry: controlMutationDefaults.defaultFunctionRegistry,
+        defaultLiteralTagRegistry: new Map(),
+      },
+    });
+    const value = oneOfMetadata(positionalType(sqlAttributeSpecs.field.default(noTags)));
+    expect(value.alternatives.map((alt) => alt.kind)).not.toContain('taggedLiteral');
+    expect(value.label).not.toContain('`...`');
+  });
+
   it('exposes list default alternatives without hiding registry function calls', () => {
     const listCtx = fieldSpecContext({
       symbols: symbolTable,

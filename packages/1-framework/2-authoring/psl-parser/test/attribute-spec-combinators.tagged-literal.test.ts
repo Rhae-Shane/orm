@@ -55,6 +55,18 @@ describe('oneOf with a tagged literal alternative', () => {
     }
   });
 
+  it('returns the first specific failure when several alternatives produce one', () => {
+    const twoTagArms = oneOf(taggedLiteral(['sql']), taggedLiteral(['pg.sql']));
+    const { expr, ctx } = argOf('other`x`');
+    const result = twoTagArms.parse(expr, ctx);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure).toEqual([
+        expect.objectContaining({ message: 'Unknown literal tag "other". Known tags: sql.' }),
+      ]);
+    }
+  });
+
   it('keeps the generic list when no alternative fails with a specific code', () => {
     const { expr, ctx } = argOf('42');
     const result = type.parse(expr, ctx);

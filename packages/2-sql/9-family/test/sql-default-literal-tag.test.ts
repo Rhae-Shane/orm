@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createBuiltinLikeControlMutationDefaults } from '../../2-authoring/contract-psl/test/fixtures';
 import {
   checkSqlDefaultBody,
   sqlDefaultLiteralTagEntry,
@@ -31,6 +32,7 @@ describe('checkSqlDefaultBody', () => {
     ['dollar quoting', '$$x$$'],
     ['a subquery', '(select 1)'],
     ['an upper-case subquery', '(SELECT 1)'],
+    ['the word select inside a SQL string literal', "'no select here'"],
   ])('rejects %s', (_name, body) => {
     expect(checkSqlDefaultBody(body)).toBe(REJECTION);
   });
@@ -68,5 +70,17 @@ describe('sqlDefaultLiteralTagEntry', () => {
         span,
       },
     });
+  });
+});
+
+describe('the contract-psl fixture registry mirrors the family entry', () => {
+  const fixtureEntry =
+    createBuiltinLikeControlMutationDefaults().defaultLiteralTagRegistry.get('sql');
+  const familyEntry = sqlDefaultLiteralTagEntry('sql`...`');
+
+  it.each([['x; y'], ['now()'], ["'no select here'"], ['']])('lowers %j the same way', (body) => {
+    expect(fixtureEntry?.lower({ literal: { tag: 'sql', body, span }, context })).toEqual(
+      familyEntry.lower({ literal: { tag: 'sql', body, span }, context }),
+    );
   });
 });

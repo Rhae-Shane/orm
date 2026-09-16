@@ -98,6 +98,12 @@ describe('buildColumnDefaultSql', () => {
     );
   });
 
+  it('rejects a dollar-quoted body with CONTRACT.DEFAULT_INVALID, the same rule as Postgres', () => {
+    expect(() => buildColumnDefaultSql({ kind: 'function', expression: '$$x$$' })).toThrow(
+      expect.objectContaining({ code: 'CONTRACT.DEFAULT_INVALID' }),
+    );
+  });
+
   it('rejects unsafe default expressions', () => {
     expect(() =>
       buildColumnDefaultSql({ kind: 'function', expression: 'foo(); DROP TABLE' }),
