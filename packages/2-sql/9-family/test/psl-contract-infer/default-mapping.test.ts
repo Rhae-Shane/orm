@@ -113,7 +113,7 @@ describe('mapDefault', () => {
       });
     });
 
-    it('prints a string with its quotes, newlines, and tabs escaped', () => {
+    it('escapes backslash, quotes, newline, and carriage return and keeps a tab as written', () => {
       expect(
         mapDefault({ kind: 'literal', value: 'line 1\nline 2\t"quoted"' }, { codec: text }),
       ).toEqual({ attribute: '@default("line 1\\nline 2\t\\"quoted\\"")' });
