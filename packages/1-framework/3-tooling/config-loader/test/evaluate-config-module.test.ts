@@ -101,9 +101,11 @@ describe('evaluateConfigModule', () => {
     'maps an unresolvable import to CONFIG.EVALUATION_FAILED',
     async () => {
       const configPath = join(tempDir, 'prisma.config.ts');
+      // Not `prisma/config`: the workspace's pnpm store hoists a Prisma 7 for the
+      // examples, and jiti's resolver falls back to it.
       writeFileSync(
         configPath,
-        "import { defineConfig } from 'prisma/config';\nexport default defineConfig({});\n",
+        "import { defineConfig } from 'a-package-that-is-not-installed/config';\nexport default defineConfig({});\n",
         'utf-8',
       );
 
