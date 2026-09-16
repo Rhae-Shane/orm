@@ -220,8 +220,51 @@ describe('addModelMaps', () => {
     strictEqual(addModelMaps(input), input);
   });
 
+  it('handles an indented header whose brace sits on the next line', () => {
+    const input = [
+      'namespace auth {',
+      '  model UserProfile',
+      '  {',
+      '    id Int @id',
+      '  }',
+      '}',
+      '',
+    ].join('\n');
+    const expected = [
+      'namespace auth {',
+      '  model UserProfile',
+      '  {',
+      '    id Int @id',
+      '    @@map("userProfile")',
+      '  }',
+      '}',
+      '',
+    ].join('\n');
+    strictEqual(addModelMaps(input), expected);
+  });
+
+  it('handles a header whose body starts on the same line', () => {
+    const input = ['model UserProfile {   id Int @id', '  email String', '}', ''].join('\n');
+    const expected = [
+      'model UserProfile {   id Int @id',
+      '  email String',
+      '  @@map("userProfile")',
+      '}',
+      '',
+    ].join('\n');
+    strictEqual(addModelMaps(input), expected);
+    const mapped = ['model TeamMember {   @@map("team_member")', '  id Int @id', '}', ''].join(
+      '\n',
+    );
+    strictEqual(addModelMaps(mapped), mapped);
+  });
+
+  it('refuses a model block that never closes', () => {
+    throws(() => addModelMaps('model UserProfile {\n  id Int @id\n'), UnhandledModelError);
+  });
+
   it('refuses a model header it does not understand instead of skipping it', () => {
-    const input = ['model UserProfile', '{', '  id Int @id', '}', ''].join('\n');
+    const input = ['model UserProfile extends', '{', '  id Int @id', '}', ''].join('\n');
     throws(
       () => addModelMaps(input),
       (error) => {

@@ -20,10 +20,10 @@ import { glob } from 'node:fs/promises';
 import { argv, exit, stderr, stdout } from 'node:process';
 import { fileURLToPath } from 'node:url';
 
-const MODEL_HEADER = /^(\s*)model\s+([A-Za-z_][A-Za-z0-9_]*)\s*\{\s*(\/\/.*)?$/;
-const SINGLE_LINE_MODEL = /^(\s*model\s+([A-Za-z_][A-Za-z0-9_]*)\s*\{)(.*?)(\s*\}\s*)$/;
-const UNHANDLED_MODEL =
-  /^(\s*model\s+[A-Za-z_][A-Za-z0-9_]*\s*\{|model\s+[A-Za-z_][A-Za-z0-9_]*\s*)$/;
+const MODEL_LINE = /^\s*model\s/;
+const MODEL_START = /^(\s*)model\s+([A-Za-z_][A-Za-z0-9_]*)\s*(\{)?(.*)$/;
+const OPEN_BRACE_LINE = /^\s*\{\s*(\/\/.*)?$/;
+const BLANK_OR_COMMENT = /^\s*(\/\/.*)?$/;
 const BLOCK_CLOSE = /^\s*\}\s*$/;
 const MAP_ATTRIBUTE = /^\s*@@map\s*\(/;
 const BASE_ATTRIBUTE = /^\s*@@base\s*\(/;
@@ -41,12 +41,44 @@ function bodyIndent(lines, start, end, headerIndent) {
   return `${headerIndent}  `;
 }
 
-function addMapToSingleLineModel(line) {
-  const match = SINGLE_LINE_MODEL.exec(line);
-  if (!match) return line;
-  const [, open, modelName, body, close] = match;
+function stripCr(line) {
+  return line.replace(/\r$/, '');
+}
+
+/**
+ * Classifies the `model` line at `index`. Returns the header indent, the model
+ * name, the index of the first body line, any body text that shares the
+ * header line, and whether the whole block sits on this one line.
+ */
+function readModelStart(lines, index) {
+  const match = MODEL_START.exec(stripCr(lines[index]));
+  if (!match) return undefined;
+  const [, indent, modelName, brace, rest] = match;
+  if (brace === undefined) {
+    if (!BLANK_OR_COMMENT.test(rest)) return undefined;
+    const next = lines[index + 1];
+    if (next === undefined || !OPEN_BRACE_LINE.test(stripCr(next))) return undefined;
+    return { indent, modelName, bodyStart: index + 2, inlineBody: '', singleLine: false };
+  }
+  const closeAt = rest.lastIndexOf('}');
+  if (closeAt !== -1 && /^\s*$/.test(rest.slice(closeAt + 1))) {
+    return { indent, modelName, bodyStart: index + 1, inlineBody: rest, singleLine: true };
+  }
+  return {
+    indent,
+    modelName,
+    bodyStart: index + 1,
+    inlineBody: BLANK_OR_COMMENT.test(rest) ? '' : rest,
+    singleLine: false,
+  };
+}
+
+function addMapToSingleLineModel(line, modelName) {
+  const raw = stripCr(line);
+  const closeAt = raw.lastIndexOf('}');
+  const body = raw.slice(0, closeAt);
   if (OWN_STORAGE_ATTRIBUTE.test(body)) return line;
-  return `${open}${body} @@map("${lowerFirst(modelName)}")${close}`;
+  return `${body.trimEnd()} @@map("${lowerFirst(modelName)}") ${line.slice(closeAt)}`;
 }
 
 /** Thrown when a `model` line is written in a shape the codemod does not recognise. */
@@ -64,26 +96,35 @@ export function addModelMaps(source) {
   const unhandled = [];
   let i = 0;
   while (i < lines.length) {
-    const header = MODEL_HEADER.exec(lines[i].replace(/\r$/, ''));
-    if (!header) {
-      const line = lines[i].replace(/\r$/, '');
-      if (UNHANDLED_MODEL.test(line) && !SINGLE_LINE_MODEL.test(line)) unhandled.push(i + 1);
-      out.push(addMapToSingleLineModel(lines[i]));
+    if (!MODEL_LINE.test(lines[i])) {
+      out.push(lines[i]);
       i += 1;
       continue;
     }
-    const [, headerIndent, modelName] = header;
-    let close = i + 1;
+    const start = readModelStart(lines, i);
+    if (start === undefined) {
+      unhandled.push(i + 1);
+      out.push(lines[i]);
+      i += 1;
+      continue;
+    }
+    if (start.singleLine) {
+      out.push(addMapToSingleLineModel(lines[i], start.modelName));
+      i += 1;
+      continue;
+    }
+    let close = start.bodyStart;
     while (close < lines.length && !BLOCK_CLOSE.test(lines[close])) close += 1;
     if (close >= lines.length) {
+      unhandled.push(i + 1);
       out.push(...lines.slice(i));
       break;
     }
-    const body = lines.slice(i + 1, close);
-    out.push(lines[i], ...body);
+    const body = [start.inlineBody, ...lines.slice(start.bodyStart, close)];
+    out.push(...lines.slice(i, close));
     if (!body.some((line) => MAP_ATTRIBUTE.test(line) || BASE_ATTRIBUTE.test(line))) {
-      const indent = bodyIndent(lines, i + 1, close, headerIndent);
-      out.push(`${indent}@@map("${lowerFirst(modelName)}")${newline}`);
+      const indent = bodyIndent(lines, start.bodyStart, close, start.indent);
+      out.push(`${indent}@@map("${lowerFirst(start.modelName)}")${newline}`);
     }
     out.push(lines[close]);
     i = close + 1;
