@@ -213,15 +213,34 @@ describe('PSL number defaults keep every digit', () => {
 });
 
 describe('PSL number defaults on codecs that do not hold numbers', () => {
-  it('fail emit on a Postgres bytea column, as before', async () => {
-    await expect(
-      authorSqlContractFromPsl('model Payload {\n  id Int @id\n  data Bytes @default(1234)\n}'),
-    ).rejects.toThrow('The first argument must be of type string');
+  it('are reported at the @default on a Postgres bytea column, in the codec words', async () => {
+    const result = await authorSqlContractFromPsl(
+      'model Payload {\n  id Int @id\n  data Bytes @default(1234)\n}',
+    );
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_INVALID_DEFAULT_LITERAL',
+        message:
+          'Field "Payload.data": @default(1234) is not a value of pg/bytea@1: pg/bytea@1 reads a string literal; got a number 1234',
+        span: expect.objectContaining({ start: expect.objectContaining({ line: 3, column: 14 }) }),
+      }),
+    ]);
   });
 
-  it('fail emit on a SQLite datetime column, as before', async () => {
-    await expect(
-      authorSqliteContractFromPsl('model Event {\n  id Int @id\n  at DateTime @default(0)\n}'),
-    ).rejects.toThrow('toISOString is not a function');
+  it('are reported at the @default on a SQLite datetime column, in the codec words', async () => {
+    const result = await authorSqliteContractFromPsl(
+      'model Event {\n  id Int @id\n  at DateTime @default(0)\n}',
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_INVALID_DEFAULT_LITERAL',
+        message:
+          'Field "Event.at": @default(0) is not a value of sqlite/datetime@1: sqlite/datetime@1 reads a string literal; got a number 0',
+        span: expect.objectContaining({ start: expect.objectContaining({ line: 3, column: 15 }) }),
+      }),
+    ]);
   });
 });

@@ -126,6 +126,7 @@ function valueItems(
     case 'num':
       return scalarItems(input, type.value === undefined ? [] : [String(type.value)]);
     case 'bool':
+    case 'literal':
       return scalarItems(input, ['true', 'false']);
     case 'fieldRef':
     case 'referencedFieldRef':
@@ -135,7 +136,6 @@ function valueItems(
     case 'entityRef':
     case 'int':
     case 'json':
-    case 'literal':
     case 'rejecting':
       return [];
   }
