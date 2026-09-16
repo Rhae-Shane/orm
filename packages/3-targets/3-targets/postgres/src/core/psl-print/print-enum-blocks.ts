@@ -1,7 +1,9 @@
+import { toEnumName } from '@internal/family-sql/psl-infer';
 import type { PslExtensionBlock } from '@internal/framework-components/psl-ast';
 import type { StorageColumn } from '@internal/sql-contract/types';
 import type { PostgresNativeEnum } from '../postgres-native-enum';
 import { buildNativeEnumBlock } from '../psl-infer/infer-enum-blocks';
+import { createUniqueFieldName } from '../psl-infer/infer-names';
 
 export interface NativeEnumEmission {
   readonly blocks: readonly PslExtensionBlock[];
@@ -22,8 +24,10 @@ function sameValues(left: readonly unknown[], right: readonly unknown[]): boolea
  * set is the only place the authored name survives. A column typed by the enum
  * names its value set directly. An enum no column refers to is matched to the
  * one unclaimed value set that holds exactly its members, in order; if no value
- * set matches, or more than one does, the block keeps the type name. `@@map`
- * carries the physical type name whenever the two differ.
+ * set matches, or more than one does, the block name is derived from the
+ * physical type name the way `contract infer` derives one, and kept apart from
+ * every other block name in the namespace. `@@map` carries the physical type
+ * name whenever the two differ.
  */
 export function buildNativeEnumBlocksForNamespace(input: {
   readonly namespaceId: string;
@@ -54,14 +58,26 @@ export function buildNativeEnumBlocksForNamespace(input: {
     nameByEntry.set(entryName, fromColumn);
   }
 
+  const unmatched: { entryName: string; nativeEnum: PostgresNativeEnum }[] = [];
   for (const { entryName, nativeEnum } of unreferenced) {
     const candidates = [...input.valueSets]
       .filter(([name, values]) => !claimed.has(name) && sameValues(values, nativeEnum.members))
       .map(([name]) => name);
     const exact = candidates.find((name) => name === entryName);
     const chosen = exact ?? (candidates.length === 1 ? candidates[0] : undefined);
-    if (chosen !== undefined) claimed.add(chosen);
-    nameByEntry.set(entryName, chosen ?? nativeEnum.typeName);
+    if (chosen === undefined) {
+      unmatched.push({ entryName, nativeEnum });
+      continue;
+    }
+    claimed.add(chosen);
+    nameByEntry.set(entryName, chosen);
+  }
+
+  const blockNames = new Set(nameByEntry.values());
+  for (const { entryName, nativeEnum } of unmatched) {
+    const derived = createUniqueFieldName(toEnumName(nativeEnum.typeName).name, blockNames);
+    blockNames.add(derived);
+    nameByEntry.set(entryName, derived);
   }
 
   const blocks: PslExtensionBlock[] = [];

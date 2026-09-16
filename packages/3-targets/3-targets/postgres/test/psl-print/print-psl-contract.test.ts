@@ -639,7 +639,7 @@ describe('native enum blocks', () => {
     ).toEqual(['native_enum Role user = "user" ADMIN = "ADMIN" @@map("user_role")']);
   });
 
-  it('keeps a type name when two unreferenced enums share their members', () => {
+  it('derives a block name from the type name when two unreferenced enums share their members', () => {
     expect(
       enumBlocks({
         nativeEnums: {
@@ -648,6 +648,33 @@ describe('native enum blocks', () => {
         },
         valueSets: { Role: { values: ['A', 'B'] }, OtherRole: { values: ['A', 'B'] } },
       }),
-    ).toEqual(['native_enum user_role A = "A" B = "B"', 'native_enum other_role A = "A" B = "B"']);
+    ).toEqual([
+      'native_enum UserRole A = "A" B = "B" @@map("user_role")',
+      'native_enum OtherRole A = "A" B = "B" @@map("other_role")',
+    ]);
+  });
+
+  it('writes a type name PSL cannot read as an identifier as a mapped block name', () => {
+    expect(
+      enumBlocks({
+        nativeEnums: { 'order status': { typeName: 'order status', members: ['A'] } },
+        valueSets: {},
+      }),
+    ).toEqual(['native_enum OrderStatus A = "A" @@map("order status")']);
+  });
+
+  it('keeps a derived block name apart from a block name a value set already claimed', () => {
+    expect(
+      enumBlocks({
+        nativeEnums: {
+          'order status': { typeName: 'order status', members: ['A'] },
+          order_status: { typeName: 'order_status', members: ['B'] },
+        },
+        valueSets: { OrderStatus: { values: ['B'] } },
+      }),
+    ).toEqual([
+      'native_enum OrderStatus2 A = "A" @@map("order status")',
+      'native_enum OrderStatus B = "B" @@map("order_status")',
+    ]);
   });
 });
