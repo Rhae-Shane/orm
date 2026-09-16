@@ -247,11 +247,11 @@ A model declares an empty unique constraint (a unique with no fields), raised du
 
 ### CONTRACT.DEFAULT_INVALID
 
-A field's default declaration is invalid: `defaultSql` is used on an enum field, a field declares both `default` and `executionDefaults`, or a field is nullable while carrying `executionDefaults`. Raised while authoring/building a SQL contract. Payload: `modelName`, `fieldName`, `reason`. Also raised by the Postgres adapter's DDL renderer when a hand-authored `col(...)` pairs an `autoincrement()` default with a type that isn't `SERIAL`/`BIGSERIAL`/`SMALLSERIAL` (or their `SERIAL4`/`SERIAL8`/`SERIAL2` aliases). Meta in that case: `nativeType`. Also raised by the TypeScript `sql` template tag when the body cannot be canonicalized (`sql\`...\` default rejected: the body contains \`${\`.`, `... the body contains a NUL character.`, `... the body exceeds 65536 bytes.`; meta: `reason`, `offset`) or fails the SQL body check (`Default SQL must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.`; meta: `reason: 'unsafe-sql'`, `expression`), and by both the Postgres and SQLite migration planners when a function default in the contract fails that same check at DDL time (meta: `expression`).
+A field's default declaration is invalid: `defaultSql` is used on an enum field, a field declares both `default` and `executionDefaults`, or a field is nullable while carrying `executionDefaults`. Raised while authoring/building a SQL contract. Payload: `modelName`, `fieldName`, `reason`. Also raised by the Postgres adapter's DDL renderer when a hand-authored `col(...)` pairs an `autoincrement()` default with a type that isn't `SERIAL`/`BIGSERIAL`/`SMALLSERIAL` (or their `SERIAL4`/`SERIAL8`/`SERIAL2` aliases). Meta in that case: `nativeType`. Also raised by the TypeScript `sql` template tag when the body cannot be canonicalized (`` sql`...` default rejected: the body contains `${`. ``, `... the body contains a NUL character.`, `... the body exceeds 65536 bytes.`; meta: `reason`, `offset`) or fails the SQL body check (`Default SQL must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.`; meta: `reason: 'unsafe-sql'`, `expression`), and by both the Postgres and SQLite migration planners when a function default in the contract fails that same check at DDL time (meta: `expression`).
 
 ### CONTRACT.DEFAULT_SQL_INTERPOLATION
 
-The TypeScript `sql` template tag was called with interpolated values: `sql\`...\` does not support interpolation; write the SQL as one literal.` Interpolation is already a type error (`...values: readonly never[]`); this is the runtime backstop. Meta: `interpolations` (how many values were passed).
+The TypeScript `sql` template tag was called with interpolated values: `` sql`...` does not support interpolation; write the SQL as one literal. `` Interpolation is already a type error (`...values: readonly never[]`); this is the runtime backstop. Meta: `interpolations` (how many values were passed).
 
 ### CONTRACT.ENTITY_KIND_INVALID
 
@@ -585,7 +585,7 @@ A tagged literal's canonical body is larger than 65536 UTF-8 bytes: `Tagged lite
 
 ### PSL_INVALID_DEFAULT_SQL
 
-A `@default(sql`...`)` body fails the SQL family's body check: `Default SQL must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.` This is the rule the migration planners apply at DDL time, run at authoring time so it has a source span. Reported at the literal.
+A `` @default(sql`...`) `` body fails the SQL family's body check: `Default SQL must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.` This is the rule the migration planners apply at DDL time, run at authoring time so it has a source span. Reported at the literal.
 
 ## ORM
 

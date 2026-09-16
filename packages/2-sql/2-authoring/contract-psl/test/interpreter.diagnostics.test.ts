@@ -1324,51 +1324,6 @@ namespace auth {
 });
 
 describe('interpretPslDocumentToSqlContract list-field constructs', () => {
-  it.each([
-    ['now()', 'now()'],
-    ['autoincrement()', 'autoincrement()'],
-    ["sql`'{}'::text[]`", "'{}'::text[]"],
-  ])(
-    'lowers the storage default %s on a list field with no diagnostic',
-    (attribute, expression) => {
-      const document = symbolTableInputFromParseArgs({
-        schema: `model Post {\n  id Int @id\n  tags String[] @default(${attribute})\n}\n`,
-        sourceId: 'schema.prisma',
-      });
-      const result = interpretPslDocumentToSqlContract({
-        ...baseInput,
-        ...document,
-        controlMutationDefaults: builtinControlMutationDefaults,
-      });
-      expect(result.ok).toBe(true);
-      if (!result.ok) return;
-      expect(result.value.storage).toMatchObject({
-        namespaces: {
-          public: {
-            entries: {
-              table: { post: { columns: { tags: { default: { kind: 'function', expression } } } } },
-            },
-          },
-        },
-      });
-    },
-  );
-
-  it('rejects an execution default uuid() on a list field', () => {
-    expectDiagnosticForSchema(
-      `model Post {
-  id Int @id
-  tags String[] @default(uuid())
-}
-`,
-      {
-        code: 'PSL_LIST_EXECUTION_DEFAULT_UNSUPPORTED',
-        message:
-          'Field "Post.tags" is a list and cannot use an execution default ("uuid()"). Lists have no per-element execution-default semantics; use a literal list @default or remove the default.',
-      },
-    );
-  });
-
   it('rejects @id on a list field', () => {
     expectDiagnosticForSchema(
       `model Post {

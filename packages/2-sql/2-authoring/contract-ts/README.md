@@ -61,13 +61,13 @@ Direct imports expose the base structural helpers. Use this surface when you wan
 
 Built-in ID helpers from `@internal/ids` already return the generated-field spec accepted by `field.generated(...)`, so `field.generated(uuidv4())` is a valid structural DSL call.
 
-Storage defaults are values passed to `.default(...)`: a literal, `now()`, `autoincrement()`, `genRandomUuid()` (from the Postgres contract builder), or raw SQL written with the `sql` template tag, `.default(sql`gen_random_uuid()`)`. The `sql` body is canonicalized like PSL's `@default(sql`...`)` and used verbatim; interpolation is a type error. `.defaultSql('...')` still works but is deprecated and is removed in 8.0.0.
+Storage defaults are values passed to `.default(...)`: a literal, `now()`, `autoincrement()`, `genRandomUuid()` (from the Postgres contract builder), or raw SQL written with the `sql` template tag, `` .default(sql`gen_random_uuid()`) ``. The `sql` body is canonicalized like PSL's `` @default(sql`...`) `` and used verbatim; interpolation is a type error. `.defaultSql('...')` still works but is deprecated and is removed in 8.0.0.
 
 ```typescript
 import { textColumn, timestamptzColumn } from '@internal/adapter-postgres/column-types';
 import sqlFamily from '@internal/family-sql/pack';
 import { uuidv4 } from '@internal/ids';
-import { defineContract, field, model, rel, now } from '@internal/sql-contract-ts/contract-builder';
+import { defineContract, field, model, now, rel } from '@internal/sql-contract-ts/contract-builder';
 import postgresPack from '@internal/target-postgres/pack';
 
 const User = model('User', {
