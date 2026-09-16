@@ -245,6 +245,10 @@ A Mongo model's collection attachment is wrong: the model declares `indexes`, `c
 
 A model declares an empty unique constraint (a unique with no fields), raised during SQL contract lowering (meta: `modelName`). Also raised when a CHECK constraint reaches SQLite migration DDL rendering — the SQLite target does not support CHECK constraints, and `sql.checkConstraint` is a Postgres-only capability. A `@@check` is refused earlier, by the PSL capability gate; a `check()` declared through the TypeScript builder is not, because capabilities reach the contract only after it is built, so this is where a SQLite `check()` is refused (meta: `constraintName`, and `tableName` where available).
 
+### CONTRACT.CONVERT_UNSUPPORTED
+
+`contract convert` cannot print the loaded contract as a Prisma 8 PSL file: either the configured target has no `printPslContract` hook on its descriptor (meta: `targetId`), or the contract holds something Prisma 8 PSL has no spelling for — a column whose native type is outside the target's type map, a generated value the target cannot author, a to-one relation with no foreign key behind it, or one model name declared in more than one namespace (a relation's target is resolved by model name alone, so the two would read back as one). Meta at the shape sites: `coordinate`, `nativeType`, `onCreate`, `onUpdate`, `model`, `field`, `modelName`, `namespaces`.
+
 ### CONTRACT.DEFAULT_INVALID
 
 A field's default declaration is invalid: `defaultSql` is used on an enum field, a field declares both `default` and `executionDefaults`, or a field is nullable while carrying `executionDefaults`. Raised while authoring/building a SQL contract. Payload: `modelName`, `fieldName`, `reason`. Also raised by the Postgres adapter's DDL renderer when a hand-authored `col(...)` pairs an `autoincrement()` default with a type that isn't `SERIAL`/`BIGSERIAL`/`SMALLSERIAL` (or their `SERIAL4`/`SERIAL8`/`SERIAL2` aliases). Meta in that case: `nativeType`.

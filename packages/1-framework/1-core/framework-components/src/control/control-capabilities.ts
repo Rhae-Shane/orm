@@ -66,7 +66,7 @@ export function hasPslContractPrint<TFamilyId extends string, TSchemaIR>(
 ): instance is ControlFamilyInstance<TFamilyId, TSchemaIR> & PslContractPrintCapable {
   return (
     'printPslContract' in instance &&
-    typeof (instance as Record<string, unknown>)['printPslContract'] === 'function'
+    typeof Reflect.get(instance, 'printPslContract') === 'function'
   );
 }
 

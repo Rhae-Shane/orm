@@ -281,6 +281,8 @@ export interface SqlControlFamilyInstance
 
   inferPslContract(schemaIR: SqlSchemaIRNode): PslDocumentAst;
 
+  printPslContract(contract: Contract<SqlStorage>): PslDocumentAst;
+
   lowerAst(
     ast: AnyQueryAst | DdlNode,
     context: LowererContext<unknown>,
