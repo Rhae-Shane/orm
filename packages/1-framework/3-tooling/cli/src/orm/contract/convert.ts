@@ -155,6 +155,7 @@ export function createContractConvertCommand({
         const { stack, contract } = await loadContractSource({
           config: ctx.config,
           contractConfig,
+          signal: ctx.signal,
         });
         const pslContractAst = client.printPslContract(contract);
         if (pslContractAst === undefined) {
