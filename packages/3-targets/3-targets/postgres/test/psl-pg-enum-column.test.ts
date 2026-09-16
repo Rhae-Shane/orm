@@ -163,6 +163,7 @@ describe('PSL pg.enum(Ref) field resolution', () => {
 
     const ns = result.value.storage.namespaces['auth'] as PostgresSchema;
     const authTable = ns.table['AuthSession'];
+    expect(authTable).toBeDefined();
     expect(authTable?.checks ?? []).toEqual([]);
   });
 
