@@ -311,20 +311,27 @@ export function errorInitFlagConflict(options: {
   });
 }
 
+// biome-ignore lint/plugin/no-family-vocabulary: names the provider on purpose — the supported list a user-facing error shows
 const PRISMA7_SUPPORTED_PROVIDERS = ['postgresql'] as const;
 
 /** The Prisma 7 schema's provider is `mongodb`, which the Prisma 7 path does not support yet. */
+// biome-ignore lint/plugin/no-family-vocabulary: names the provider on purpose — the user-facing refusal of a MongoDB Prisma 7 schema
 export function errorInitPrisma7MongoUnsupported(options: {
   readonly schemaPath: string;
 }): CliStructuredError {
   return new CliStructuredError(
+    // biome-ignore lint/plugin/no-family-vocabulary: names the provider on purpose — the refusal's public error code
     'CLI.INIT_PRISMA7_MONGO_UNSUPPORTED',
     // biome-ignore lint/plugin/no-family-vocabulary: names the provider on purpose — user-facing error about the schema's datasource
     'MongoDB Prisma 7 schemas are not supported yet',
     {
+      // biome-ignore lint/plugin/no-family-vocabulary: names the provider on purpose — user-facing error text
       why: `\`${options.schemaPath}\` declares \`provider = "mongodb"\`. Using a Prisma 7 schema as the Prisma 8 contract source is available for PostgreSQL first; MongoDB support is coming.`,
+      // biome-ignore lint/plugin/no-family-vocabulary: names the provider on purpose — user-facing error text
       fix: 'Run `prisma orm init` without `--from-prisma7-schema` to start a fresh Prisma 8 contract, or wait for the MongoDB Prisma 7 source.',
+      // biome-ignore lint/plugin/no-family-vocabulary: names the provider on purpose — the refusal's public error code
       docsUrl: docsUrlFor('CLI.INIT_PRISMA7_MONGO_UNSUPPORTED'),
+      // biome-ignore lint/plugin/no-family-vocabulary: names the provider on purpose — the provider in the error payload
       meta: { schemaPath: options.schemaPath, provider: 'mongodb' },
     },
   );

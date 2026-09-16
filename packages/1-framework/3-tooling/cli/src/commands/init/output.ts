@@ -134,6 +134,7 @@ export function buildNextSteps(options: {
   return steps;
 }
 
+// biome-ignore lint/plugin/no-family-vocabulary: names the target on purpose — the title of the public upgrade guide
 export const PRISMA7_UPGRADE_GUIDE_TITLE = 'Prisma ORM 7 to 8 (PostgreSQL)';
 export const DB_SIGN_STEP =
   'Adopt your existing database: `prisma db sign` verifies it against the contract and records the signing marker and the `db` ref. It makes no change to the database schema.';

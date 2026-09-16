@@ -6,6 +6,7 @@ import {
   errorInitMissingFlags,
   errorInitPrisma7ConfigCollision,
   errorInitPrisma7ConfigUnreadable,
+  // biome-ignore lint/plugin/no-family-vocabulary: names the provider on purpose — the user-facing refusal of a MongoDB Prisma 7 schema
   errorInitPrisma7MongoUnsupported,
   errorInitPrisma7ProviderUnsupported,
   errorInitPrisma7SchemaInvalid,
@@ -287,10 +288,15 @@ function targetFromProvider(
   schema: Extract<Prisma7SchemaDetection, { readonly kind: 'datasource' }>,
 ): TargetId {
   switch (schema.provider) {
+    // biome-ignore lint/plugin/no-family-vocabulary: names the provider on purpose — maps the Prisma 7 schema's datasource provider to a target
     case 'postgresql':
+    // biome-ignore lint/plugin/no-family-vocabulary: names the provider on purpose — maps the Prisma 7 schema's datasource provider to a target
     case 'postgres':
+      // biome-ignore lint/plugin/no-family-vocabulary: names the provider on purpose — maps the Prisma 7 schema's datasource provider to a target
       return 'postgres';
+    // biome-ignore lint/plugin/no-family-vocabulary: names the provider on purpose — maps the Prisma 7 schema's datasource provider to a target
     case 'mongodb':
+      // biome-ignore lint/plugin/no-family-vocabulary: names the provider on purpose — maps the Prisma 7 schema's datasource provider to a target
       throw errorInitPrisma7MongoUnsupported({ schemaPath: schema.path });
     default:
       throw errorInitPrisma7ProviderUnsupported({
