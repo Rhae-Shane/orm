@@ -115,7 +115,7 @@ describe('TaggedLiteral parsing', () => {
     const result = parse(source);
     expect(result.diagnostics.map((d) => d.code)).toEqual(['PSL_TAGGED_LITERAL_FENCE_EXPECTED']);
     expect(result.diagnostics[0]?.message).toBe(
-      'Expected the literal fence to follow the tag "sql" directly, with no space between',
+      'Expected the literal fence to follow the tag "sql" directly',
     );
     expect(highlight(result.sourceFile, result.diagnostics[0]!.range)).toMatchInlineSnapshot(`
       "
@@ -146,6 +146,38 @@ describe('TaggedLiteral parsing', () => {
     expect(taggedDefault('sql`gen_random_uuid()`').literal.body()).toBe(
       taggedDefault('sql"gen_random_uuid()"').literal.body(),
     );
+  });
+
+  it('resolves escapes before the interpolation check, so an escaped dollar still fails', () => {
+    const backtick = taggedDefault('sql`\\$' + '{x}`');
+    expect(backtick.literal.rawBody()).toBe('\\$' + '{x}');
+    expect(backtick.literal.body()).toBeUndefined();
+    const quote = taggedDefault('sql"$' + '{x}"');
+    expect(quote.literal.body()).toBeUndefined();
+  });
+
+  it('reports a bare unterminated backtick with no tag at the opening backtick', () => {
+    const source = 'model T {\n  id String @default(`abc\n}\n';
+    const result = parse(source);
+    const diagnostic = result.diagnostics.find(
+      (d) => d.code === 'PSL_UNTERMINATED_TEMPLATE_LITERAL',
+    );
+    expect(diagnostic?.message).toBe('Unterminated template literal');
+    expect(highlight(result.sourceFile, diagnostic!.range)).toMatchInlineSnapshot(`
+      "
+      model T {
+        id String @default(\`abc
+                           ~
+      }
+
+      "
+    `);
+    expect(printSyntax(result.document.syntax)).toBe(source);
+  });
+
+  it('reports an unterminated backtick at the top level', () => {
+    const result = parse('`oops');
+    expect(result.diagnostics.map((d) => d.code)).toContain('PSL_UNTERMINATED_TEMPLATE_LITERAL');
   });
 
   it('leaves body() undefined when the body contains ${', () => {

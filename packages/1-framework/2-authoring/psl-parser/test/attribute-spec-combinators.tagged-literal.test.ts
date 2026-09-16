@@ -120,6 +120,17 @@ describe('taggedLiteral', () => {
     }
   });
 
+  it('reports interpolation for an escaped dollar and for a quote fence', () => {
+    for (const source of ['sql`\\$' + '{x}`', 'sql"$' + '{x}"']) {
+      const { expr, ctx } = argOf(source);
+      const result = type.parse(expr, ctx);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.failure[0]?.code).toBe('PSL_TAGGED_LITERAL_INTERPOLATION');
+      }
+    }
+  });
+
   it('reports a NUL character', () => {
     const { expr, ctx } = argOf('sql`a\0b`');
     const result = type.parse(expr, ctx);

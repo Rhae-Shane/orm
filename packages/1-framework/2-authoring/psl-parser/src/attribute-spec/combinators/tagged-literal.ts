@@ -1,3 +1,4 @@
+import { TAGGED_LITERAL_MAX_BYTES } from '@internal/framework-components/control';
 import type { PslDiagnostic, PslDiagnosticCode } from '@internal/framework-components/psl-ast';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { nodePslSpan } from '../../resolve';
@@ -11,6 +12,7 @@ const CANONICALIZATION_FAILURES: Record<
 > = {
   interpolation: {
     code: 'PSL_TAGGED_LITERAL_INTERPOLATION',
+    // Split so biome's noTemplateCurlyInString does not read the literal `${` as a template mistake.
     message: 'Tagged literals do not support $' + '{...} interpolation.',
   },
   nul: {
@@ -19,7 +21,7 @@ const CANONICALIZATION_FAILURES: Record<
   },
   'too-large': {
     code: 'PSL_TAGGED_LITERAL_TOO_LARGE',
-    message: 'Tagged literal exceeds 65536 bytes.',
+    message: `Tagged literal exceeds ${TAGGED_LITERAL_MAX_BYTES} bytes.`,
   },
 };
 

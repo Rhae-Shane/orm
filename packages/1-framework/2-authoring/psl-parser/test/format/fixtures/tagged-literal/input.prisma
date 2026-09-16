@@ -6,4 +6,6 @@ model Token {
       SELECT   1
         FROM   t   -- keep   this   spacing
   `)
+  after   Int      @default(0)
+  z       Boolean?
 }

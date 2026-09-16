@@ -1,3 +1,7 @@
+/**
+ * Every failure `offset` is an index into the resolved text the function was
+ * given, including `too-large`, whose limit is measured on the canonical body.
+ */
 export type TaggedLiteralCanonicalization =
   | { readonly ok: true; readonly body: string }
   | {
@@ -10,6 +14,13 @@ export const TAGGED_LITERAL_MAX_BYTES = 65536;
 
 const BLANK_LINE = /^[ \t]*$/;
 const LEADING_INDENT = /^[ \t]*/;
+const LINE_BREAK = /\r\n|\r|\n/g;
+
+interface Line {
+  readonly text: string;
+  /** Where `text` starts in the resolved input. */
+  readonly start: number;
+}
 
 /**
  * Turns the escape-resolved text of a tagged literal into its canonical body:
@@ -27,38 +38,60 @@ export function canonicalizeTaggedLiteralBody(resolved: string): TaggedLiteralCa
   if (nul !== -1) {
     return { ok: false, reason: 'nul', offset: nul };
   }
-  const lines = resolved.replace(/\r\n?/g, '\n').split('\n');
-  if (lines.length > 0 && BLANK_LINE.test(lines[0] ?? '')) {
+  const lines = splitLines(resolved);
+  if (lines.length > 0 && BLANK_LINE.test(lines[0]?.text ?? '')) {
     lines.shift();
   }
-  if (lines.length > 0 && BLANK_LINE.test(lines.at(-1) ?? '')) {
+  if (lines.length > 0 && BLANK_LINE.test(lines.at(-1)?.text ?? '')) {
     lines.pop();
   }
-  const body = dedent(lines).join('\n');
-  const excess = offsetWhereBytesExceed(body, TAGGED_LITERAL_MAX_BYTES);
+  const indent = commonIndent(lines);
+  const bodyLines = lines.map((line) =>
+    BLANK_LINE.test(line.text)
+      ? { text: '', start: line.start }
+      : { text: line.text.slice(indent), start: line.start + indent },
+  );
+  const excess = offsetWhereBytesExceed(bodyLines, TAGGED_LITERAL_MAX_BYTES);
   if (excess !== undefined) {
     return { ok: false, reason: 'too-large', offset: excess };
   }
-  return { ok: true, body };
+  return { ok: true, body: bodyLines.map((line) => line.text).join('\n') };
 }
 
-function dedent(lines: readonly string[]): string[] {
+function splitLines(text: string): Line[] {
+  const lines: Line[] = [];
+  let start = 0;
+  for (const match of text.matchAll(LINE_BREAK)) {
+    lines.push({ text: text.slice(start, match.index), start });
+    start = match.index + match[0].length;
+  }
+  lines.push({ text: text.slice(start), start });
+  return lines;
+}
+
+function commonIndent(lines: readonly Line[]): number {
   let indent = Number.POSITIVE_INFINITY;
   for (const line of lines) {
-    if (BLANK_LINE.test(line)) continue;
-    indent = Math.min(indent, LEADING_INDENT.exec(line)?.[0].length ?? 0);
+    if (BLANK_LINE.test(line.text)) continue;
+    indent = Math.min(indent, LEADING_INDENT.exec(line.text)?.[0].length ?? 0);
   }
-  if (!Number.isFinite(indent)) indent = 0;
-  return lines.map((line) => (BLANK_LINE.test(line) ? '' : line.slice(indent)));
+  return Number.isFinite(indent) ? indent : 0;
 }
 
-function offsetWhereBytesExceed(text: string, limit: number): number | undefined {
+/** The resolved-text offset of the first character that pushes the body past `limit` bytes. */
+function offsetWhereBytesExceed(lines: readonly Line[], limit: number): number | undefined {
   let bytes = 0;
-  let offset = 0;
-  for (const char of text) {
-    bytes += utf8Length(char.codePointAt(0) ?? 0);
-    if (bytes > limit) return offset;
-    offset += char.length;
+  for (const [index, line] of lines.entries()) {
+    if (index > 0) {
+      bytes += 1;
+      if (bytes > limit) return line.start;
+    }
+    let column = 0;
+    for (const char of line.text) {
+      bytes += utf8Length(char.codePointAt(0) ?? 0);
+      if (bytes > limit) return line.start + column;
+      column += char.length;
+    }
   }
   return undefined;
 }

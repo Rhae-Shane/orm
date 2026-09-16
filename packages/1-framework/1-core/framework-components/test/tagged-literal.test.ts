@@ -73,6 +73,15 @@ describe('canonicalizeTaggedLiteralBody', () => {
     });
   });
 
+  it('reports the too-large offset in the resolved text, like the other reasons', () => {
+    const resolved = `\n  ${'a'.repeat(MAX_BYTES)}b\n`;
+    expect(canonicalizeTaggedLiteralBody(resolved)).toEqual({
+      ok: false,
+      reason: 'too-large',
+      offset: resolved.indexOf('b'),
+    });
+  });
+
   it('measures the size after dedenting', () => {
     const indented = `  ${'a'.repeat(MAX_BYTES)}`;
     expect(canonicalizeTaggedLiteralBody(indented)).toEqual({

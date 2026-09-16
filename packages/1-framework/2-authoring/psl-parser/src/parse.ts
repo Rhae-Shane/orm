@@ -160,8 +160,7 @@ export class Cursor {
     this.flushTrivia();
     const token = this.#tokenizer.peek();
     if (token.kind === 'Eof') return token;
-    this.#builder.token(token.kind, token.text);
-    this.#advance();
+    this.#consume(token);
     return token;
   }
 
@@ -171,9 +170,23 @@ export class Cursor {
       if (token.kind === 'Eof' || token.kind === 'Newline' || token.kind === 'RBrace') {
         return;
       }
-      this.#builder.token(token.kind, token.text);
-      this.#advance();
+      this.#consume(token);
     }
+  }
+
+  /**
+   * An unterminated backtick fence is the one `Invalid` token the tokenizer
+   * describes precisely, so it is reported here, wherever it is consumed.
+   */
+  #consume(token: Token): void {
+    if (isOpeningBacktick(token)) {
+      this.diagnostic('PSL_UNTERMINATED_TEMPLATE_LITERAL', 'Unterminated template literal', {
+        offset: this.#offset,
+        length: 1,
+      });
+    }
+    this.#builder.token(token.kind, token.text);
+    this.#advance();
   }
 
   flushTrivia(): void {
@@ -339,17 +352,12 @@ export function parseTaggedLiteral(cursor: Cursor): GreenNode | undefined {
   if (!adjacent) {
     cursor.diagnostic(
       'PSL_TAGGED_LITERAL_FENCE_EXPECTED',
-      `Expected the literal fence to follow the tag "${lastSegmentText}" directly, with no space between`,
+      `Expected the literal fence to follow the tag "${lastSegmentText}" directly`,
       lastSegmentMark,
     );
   }
   cursor.bump();
-  if (isOpeningBacktick(fence)) {
-    cursor.diagnostic('PSL_UNTERMINATED_TEMPLATE_LITERAL', 'Unterminated template literal', {
-      offset: fenceMark.offset,
-      length: 1,
-    });
-  } else if (fence.kind === 'StringLiteral' && !isTerminatedStringLiteral(fence.text)) {
+  if (fence.kind === 'StringLiteral' && !isTerminatedStringLiteral(fence.text)) {
     cursor.diagnostic('PSL_UNTERMINATED_STRING', 'Unterminated string literal', fenceMark);
   }
   return cursor.finishNode();
