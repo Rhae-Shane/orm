@@ -9,18 +9,26 @@ export interface NativeEnumEmission {
   readonly blockNamesByTypeName: ReadonlyMap<string, string>;
 }
 
+function sameValues(left: readonly unknown[], right: readonly unknown[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
 /**
  * Builds one `native_enum` block per enum type a namespace declares.
  *
- * The block's name is the name of the value set the enum derives, because that
- * is what a column referring to the enum points at: a column typed by the enum
- * names it directly, and an enum no column uses keeps the name its value set
- * carries. `@@map` carries the physical type name whenever the two differ.
+ * The block's name is the name of the value set the enum derives, never the
+ * physical type name: a contract keys a native enum by its type name and keys
+ * the value set it derives by the name the schema gave the enum, so the value
+ * set is the only place the authored name survives. A column typed by the enum
+ * names its value set directly. An enum no column refers to is matched to the
+ * one unclaimed value set that holds exactly its members, in order; if no value
+ * set matches, or more than one does, the block keeps the type name. `@@map`
+ * carries the physical type name whenever the two differ.
  */
 export function buildNativeEnumBlocksForNamespace(input: {
   readonly namespaceId: string;
   readonly nativeEnums: ReadonlyMap<string, PostgresNativeEnum>;
-  readonly valueSetNames: ReadonlySet<string>;
+  readonly valueSets: ReadonlyMap<string, readonly unknown[]>;
   readonly columns: readonly StorageColumn[];
 }): NativeEnumEmission {
   const valueSetNamesByTypeName = new Map<string, string>();
@@ -29,19 +37,40 @@ export function buildNativeEnumBlocksForNamespace(input: {
     if (valueSetName === undefined) continue;
     valueSetNamesByTypeName.set(column.nativeType, valueSetName);
   }
+  const claimed = new Set(valueSetNamesByTypeName.values());
 
-  const blocks: PslExtensionBlock[] = [];
+  const unreferenced: { entryName: string; nativeEnum: PostgresNativeEnum }[] = [];
   const blockNamesByTypeName = new Map<string, string>();
+  const nameByEntry = new Map<string, string>();
   for (const [entryName, nativeEnum] of input.nativeEnums) {
     const { typeName } = nativeEnum;
-    const qualifiedTypeName = `${input.namespaceId}.${typeName}`;
-    const blockName =
+    const fromColumn =
       valueSetNamesByTypeName.get(typeName) ??
-      valueSetNamesByTypeName.get(qualifiedTypeName) ??
-      (input.valueSetNames.has(entryName) ? entryName : typeName);
+      valueSetNamesByTypeName.get(`${input.namespaceId}.${typeName}`);
+    if (fromColumn === undefined) {
+      unreferenced.push({ entryName, nativeEnum });
+      continue;
+    }
+    nameByEntry.set(entryName, fromColumn);
+  }
+
+  for (const { entryName, nativeEnum } of unreferenced) {
+    const candidates = [...input.valueSets]
+      .filter(([name, values]) => !claimed.has(name) && sameValues(values, nativeEnum.members))
+      .map(([name]) => name);
+    const exact = candidates.find((name) => name === entryName);
+    const chosen = exact ?? (candidates.length === 1 ? candidates[0] : undefined);
+    if (chosen !== undefined) claimed.add(chosen);
+    nameByEntry.set(entryName, chosen ?? nativeEnum.typeName);
+  }
+
+  const blocks: PslExtensionBlock[] = [];
+  for (const [entryName, nativeEnum] of input.nativeEnums) {
+    const { typeName } = nativeEnum;
+    const blockName = nameByEntry.get(entryName) ?? typeName;
     blocks.push(buildNativeEnumBlock(blockName, typeName, nativeEnum.members));
     blockNamesByTypeName.set(typeName, blockName);
-    blockNamesByTypeName.set(qualifiedTypeName, blockName);
+    blockNamesByTypeName.set(`${input.namespaceId}.${typeName}`, blockName);
   }
   return { blocks, blockNamesByTypeName };
 }

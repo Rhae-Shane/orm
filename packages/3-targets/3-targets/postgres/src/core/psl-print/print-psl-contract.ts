@@ -349,7 +349,12 @@ export function printPostgresPslContract(contract: Contract<SqlStorage>): PslDoc
     const enums = buildNativeEnumBlocksForNamespace({
       namespaceId,
       nativeEnums,
-      valueSetNames: new Set(Object.keys(namespace.entries.valueSet ?? {})),
+      valueSets: new Map(
+        Object.entries(namespace.entries.valueSet ?? {}).map(([name, valueSet]) => [
+          name,
+          valueSet.values,
+        ]),
+      ),
       columns: models
         .filter((entry) => entry.namespaceId === namespaceId)
         .flatMap((entry) => Object.values(entry.table.columns)),

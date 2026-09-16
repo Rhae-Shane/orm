@@ -6,7 +6,13 @@ import type {
   ExecutionMutationDefault,
 } from '@internal/contract/types';
 import { asNamespaceId } from '@internal/contract/types';
-import type { PslAttribute, PslField, PslModel } from '@internal/framework-components/psl-ast';
+import type {
+  PslAttribute,
+  PslExtensionBlock,
+  PslField,
+  PslModel,
+} from '@internal/framework-components/psl-ast';
+import { namespacePslExtensionBlocks } from '@internal/framework-components/psl-ast';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { blindCast } from '@internal/utils/casts';
 import { createSqlContract } from '@repo/test-utils';
@@ -432,5 +438,126 @@ describe('relations', () => {
   it('prints the other side as a list with no arguments', () => {
     const models = postAndUser({ onDelete: 'cascade', onUpdate: 'cascade' });
     expect(models[0]?.fields.map(fieldText)[1]).toBe('posts Post[]');
+  });
+});
+
+describe('native enum blocks', () => {
+  function blockText(block: PslExtensionBlock): string {
+    const members = Object.entries(block.parameters).map(([name, value]) =>
+      value.kind === 'value' ? `${name} = ${value.raw}` : name,
+    );
+    const attributes = block.blockAttributes.map((attribute) =>
+      attributeText({ ...attribute, target: 'model' }),
+    );
+    return [`${block.keyword} ${block.name}`, ...members, ...attributes].join(' ');
+  }
+
+  function enumBlocks(input: {
+    readonly nativeEnums: Record<string, { readonly typeName: string; readonly members: string[] }>;
+    readonly valueSets: Record<string, { readonly values: string[] }>;
+    readonly columns?: Record<string, unknown>;
+    readonly fields?: Record<string, { readonly column: string }>;
+  }): readonly string[] {
+    const fields = input.fields ?? { id: { column: 'id' } };
+    const domainNamespace: ApplicationDomainNamespace = {
+      models: {
+        Widget: {
+          storage: { table: 'widget', namespaceId: 'public', fields },
+          fields: Object.fromEntries(Object.keys(fields).map((name) => [name, INT_FIELD])),
+          relations: {},
+        },
+      },
+    };
+    const json = createSqlContract({
+      namespaces: { public: domainNamespace },
+      storage: {
+        namespaces: {
+          public: {
+            id: 'public',
+            entries: {
+              table: {
+                widget: table({
+                  columns: input.columns ?? { id: INT_COLUMN },
+                  primaryKey: { columns: ['id'] },
+                }),
+              },
+              native_enum: Object.fromEntries(
+                Object.entries(input.nativeEnums).map(([name, value]) => [
+                  name,
+                  { kind: 'postgres-enum', ...value },
+                ]),
+              ),
+              valueSet: Object.fromEntries(
+                Object.entries(input.valueSets).map(([name, value]) => [
+                  name,
+                  { kind: 'valueSet', ...value },
+                ]),
+              ),
+            },
+          },
+        },
+      },
+    });
+    const contract = new PostgresContractSerializer().deserializeContract(json);
+    const ast = printPostgresPslContract(
+      blindCast<Contract<SqlStorage>, 'the Postgres serializer yields a SQL contract'>(contract),
+    );
+    return ast.namespaces
+      .flatMap((namespace) => namespacePslExtensionBlocks(namespace))
+      .map(blockText);
+  }
+
+  it('names a mapped enum no column refers to after its value set, not its type', () => {
+    expect(
+      enumBlocks({
+        nativeEnums: { user_role: { typeName: 'user_role', members: ['user', 'ADMIN'] } },
+        valueSets: { Role: { values: ['user', 'ADMIN'] } },
+      }),
+    ).toEqual(['native_enum Role user = "user" ADMIN = "ADMIN" @@map("user_role")']);
+  });
+
+  it('leaves an unmapped enum no column refers to named after its type', () => {
+    expect(
+      enumBlocks({
+        nativeEnums: { Unused: { typeName: 'Unused', members: ['A', 'B'] } },
+        valueSets: { Unused: { values: ['A', 'B'] } },
+      }),
+    ).toEqual(['native_enum Unused A = "A" B = "B"']);
+  });
+
+  it('names a mapped enum a column refers to after the value set the column names', () => {
+    expect(
+      enumBlocks({
+        nativeEnums: { user_role: { typeName: 'user_role', members: ['user', 'ADMIN'] } },
+        valueSets: { Role: { values: ['user', 'ADMIN'] } },
+        columns: {
+          id: INT_COLUMN,
+          role: {
+            nativeType: 'user_role',
+            codecId: 'pg/enum@1',
+            nullable: false,
+            valueSet: {
+              plane: 'storage',
+              namespaceId: 'public',
+              entityKind: 'valueSet',
+              entityName: 'Role',
+            },
+          },
+        },
+        fields: { id: { column: 'id' }, role: { column: 'role' } },
+      }),
+    ).toEqual(['native_enum Role user = "user" ADMIN = "ADMIN" @@map("user_role")']);
+  });
+
+  it('keeps a type name when two unreferenced enums share their members', () => {
+    expect(
+      enumBlocks({
+        nativeEnums: {
+          user_role: { typeName: 'user_role', members: ['A', 'B'] },
+          other_role: { typeName: 'other_role', members: ['A', 'B'] },
+        },
+        valueSets: { Role: { values: ['A', 'B'] }, OtherRole: { values: ['A', 'B'] } },
+      }),
+    ).toEqual(['native_enum user_role A = "A" B = "B"', 'native_enum other_role A = "A" B = "B"']);
   });
 });

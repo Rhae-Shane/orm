@@ -123,7 +123,6 @@ The converter prints the loaded contract as a Prisma 8 schema and the round-trip
 - A generator the Postgres printer has no PSL form for (none of the Prisma 7 generators, which all print).
 - A database-side default on a list column (`@default(dbgenerated("ARRAY[...]::text[]"))`). The PSL reader refuses it with `PSL_LIST_EXECUTION_DEFAULT_UNSUPPORTED`, although it is a storage default. Every Prisma 7 list default is one. In `contract-psl/src/psl-field-resolution.ts`. Exists on `main`.
 - A nullable list type (`Tag[]?`). The PSL printer writes `[]` or `?`, never both, while every Prisma 7 list column is nullable. In `@internal/psl-printer`. Exists on `main`; the same defect makes `contract infer` print nullable lists as required.
-- A mapped enum no column uses (`enum Role { ... @@map("user_role") }` with no field of type `Role`). The printer learns the Prisma-side name from a column that carries the enum, so with no such column it names the block after the database type and the contract reads back with the value set keyed `user_role` rather than `Role`. The converter writes the file rather than refusing, so the storage hash changes. Found while trying the `relations` integration fixture as the convert journey.
 - Type parameters on a list field (`Decimal @db.Numeric(65,30)[]`). The PSL reader keeps precision and scale on the storage column but drops them from the domain field's type. In `contract-psl/src/interpreter.ts`, `patchModelDomainFields`. Exists on `main`.
 
 ### Found outside this project's scope
