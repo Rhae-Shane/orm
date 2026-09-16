@@ -194,7 +194,7 @@ interface Codec<Id, TTraits, TWire, TInput> {
 
 The codec never sees the fence, and a number's digits reach it verbatim: a big integer or a decimal is never converted to a JavaScript number before the codec reads it. The PSL interpreter passes each `@default` literal to the column codec's `decodePsl` and stores the result through `encodeJson`; a literal the codec refuses is the diagnostic `PSL_INVALID_DEFAULT_LITERAL`, carrying the codec's message. The `contract infer` printer calls `encodePsl` on the value `decodeJson` read from the contract and writes the literal with the fence and escapes added.
 
-The `PslLiteralCodec` interface sketched above is not a separate entity and never was: it is the consumer's view of the same codec, the dependency inversion the "Single interface with all boundaries" alternative describes. That alternative is therefore no longer rejected for PSL. It stays rejected for DDL: `encodeDdl` and `decodeDdl` are not built, and that decision is recorded in the project's deferred list ([item 3](../../../projects/remove-dbgenerated/deferred.md#3-encodeddl-and-decodeddl-on-codecs)).
+The `PslLiteralCodec` interface sketched above is not a separate entity and never was: it is the consumer's view of the same codec, the dependency inversion the "Single interface with all boundaries" alternative describes. That alternative is therefore no longer rejected for PSL. It stays rejected for DDL: `encodeDdl` and `decodeDdl` are not built. Until they are, a raw SQL default carries any value the JSON and PSL forms cannot express, and the Prisma 7 contract source keeps turning `Bytes` and `DateTime` literal defaults into raw SQL expressions, because verification cannot yet compare those as typed values.
 
 ### The rule for a codec's PSL form
 
@@ -205,7 +205,7 @@ One rule, applied to every codec, keyed on the JSON form `encodeJson` produces:
 - A JSON boolean is a boolean literal.
 - A JSON object, array, or null is a string literal holding the JSON text: `{ kind: 'string', text: JSON.stringify(json) }`, which `decodePsl` parses and hands to `decodeJson`. The JSON codecs, `arktype/json@1`, `pg/vector@1`, and the Mongo vector codec take this form.
 
-The shared pairs in `@internal/framework-components/codec` implement the rule: `encodeStringPsl`/`decodeStringPsl`, `encodeNumberPsl`/`decodeNumberPsl`, `decodeWholeNumberPsl`, `encodeFloatPsl`/`decodeFloatPsl`, `encodeBooleanPsl`/`decodeBooleanPsl`, and `encodeJsonTextPsl`/`decodeJsonTextPsl`. Every decode error has one shape, `<codecId> reads a <kind> literal; got a <kind> <text>`, so the interpreter's diagnostic names the codec.
+The shared pairs in `@internal/framework-components/codec` implement the rule: `encodeStringPsl`/`decodeStringPsl`, `encodeNumberPsl`/`decodeNumberPsl`, `decodeWholeNumberPsl`, `encodeFloatPsl`/`decodeFloatPsl`, `encodeBooleanPsl`/`decodeBooleanPsl`, and `encodeJsonTextPsl`/`decodeJsonTextPsl`. Every decode error has one shape, `<codecId> reads <what it reads>; got <the literal it got>` (for example `pg/int4@1 reads a whole number literal; got a number 1.5`, `pg/float8@1 reads a number literal or "NaN", "Infinity", "-Infinity"; got a boolean true`, `pg/jsonb@1 reads a string literal holding JSON text; got a number 1`), so the interpreter's diagnostic names the codec.
 
 ```ts
 class PgTextCodec extends CodecImpl<'pg/text@1', readonly ['equality', 'order', 'textual'], string, string> {
