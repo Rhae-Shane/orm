@@ -65,7 +65,7 @@ describe('interpretPslDocumentToSqlContract list-column defaults', () => {
         namespaces: {
           public: {
             entries: {
-              table: { post: { columns: { tags: { default: { kind: 'function', expression } } } } },
+              table: { Post: { columns: { tags: { default: { kind: 'function', expression } } } } },
             },
           },
         },
