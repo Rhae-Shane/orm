@@ -8,6 +8,7 @@ import type {
 } from '@internal/family-sql/control';
 import {
   controlPolicyForCall,
+  detectTableNameCaseChanges,
   extractCodecControlHooks,
   partitionCallsByControlPolicy,
   partitionIssuesByControlPolicy,
@@ -36,6 +37,7 @@ import { PostgresRlsPolicy } from '../postgres-rls-policy';
 import { postgresNodeStorageCoordinate } from '../schema-ir/node-storage-coordinate';
 import { PostgresDatabaseSchemaNode } from '../schema-ir/postgres-database-schema-node';
 import { PostgresPolicySchemaNode } from '../schema-ir/postgres-policy-schema-node';
+import { PostgresTableSchemaNode } from '../schema-ir/postgres-table-schema-node';
 import type { SqlSchemaDiffNode } from '../schema-ir/schema-node-kinds';
 import {
   renderPostgresSuppression,
@@ -247,6 +249,19 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
       schema: options.schema,
     });
     const schemaIssues = [...namespaceIssues, ...gated];
+
+    const caseChangeConflicts = detectTableNameCaseChanges({
+      issues: gated,
+      tableOf: (issue) => {
+        const node = issueNode(issue);
+        return node !== undefined && PostgresTableSchemaNode.is(node) ? node : undefined;
+      },
+      namespaceIdOf: (issue) =>
+        resolveNamespaceIdForDdlSchema(options.contract, issueSchemaName(issue) ?? schemaName),
+    });
+    if (caseChangeConflicts.length > 0) {
+      return plannerFailure(caseChangeConflicts);
+    }
 
     // Index rename post-pass (the policy pass's structure, generalized): a
     // `not-found` and a `not-expected` index that are one rename collapse

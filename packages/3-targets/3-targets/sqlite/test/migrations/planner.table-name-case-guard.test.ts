@@ -101,18 +101,19 @@ function planFromLive(previousTable: string, nextTable: string) {
 
 describe('SQLite planner table-name case guard', () => {
   it('refuses to drop userProfile and create UserProfile with the same columns', () => {
-    const plan = planFromLive('userProfile', 'UserProfile');
+    const result = planFromLive('userProfile', 'UserProfile')();
 
-    expect(plan).toThrow();
-    let thrown: unknown;
-    try {
-      plan();
-    } catch (error) {
-      thrown = error;
-    }
-    expect(thrown).toMatchObject({ code: 'MIGRATION.TABLE_NAME_CASE_CHANGED' });
-    expect(thrown).toMatchObject({ message: expect.stringContaining('UserProfile') });
-    expect(thrown).toMatchObject({ message: expect.stringContaining('@@map("userProfile")') });
+    expect(result.kind).toBe('failure');
+    if (result.kind !== 'failure') return;
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        kind: 'tableNameCaseChanged',
+        summary: expect.stringContaining('UserProfile'),
+        why: expect.stringContaining('@@map("userProfile")'),
+        meta: expect.objectContaining({ code: 'MIGRATION.TABLE_NAME_CASE_CHANGED' }),
+      }),
+    ]);
+    expect(result.conflicts[0]?.summary).toContain('MIGRATION.TABLE_NAME_CASE_CHANGED');
   });
 
   it('plans a normal drop and create when the new table name is unrelated', async () => {

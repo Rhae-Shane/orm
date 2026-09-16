@@ -442,7 +442,7 @@ model Comment {
     if (!result.ok) return;
 
     expect(result.value.roots).toEqual({ UserProfile: crossRef('UserProfile', 'public') });
-    expect(Object.keys(result.value.storage.namespaces['public']!.entries.table ?? {})).toEqual([
+    expect(Object.keys(result.value.storage.namespaces['public']!.entries['table'] ?? {})).toEqual([
       'UserProfile',
     ]);
   });
