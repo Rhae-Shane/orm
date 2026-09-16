@@ -439,8 +439,9 @@ describe('createPostgresDefaultLiteralTagRegistry', () => {
   });
 
   it('is wired as the adapter descriptor tag registry', () => {
-    expect([
-      ...postgresAdapterDescriptor.controlMutationDefaults.defaultLiteralTagRegistry.keys(),
-    ]).toEqual(['sql', 'pg.sql']);
+    const registries = postgresAdapterDescriptor.controlMutationDefaults;
+    if (registries === undefined)
+      throw new Error('the adapter descriptor declares mutation defaults');
+    expect([...registries.defaultLiteralTagRegistry.keys()]).toEqual(['sql', 'pg.sql']);
   });
 });

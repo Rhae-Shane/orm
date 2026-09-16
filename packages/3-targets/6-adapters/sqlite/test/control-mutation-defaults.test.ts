@@ -103,9 +103,10 @@ describe('createSqliteDefaultLiteralTagRegistry', () => {
   });
 
   it('is wired as the adapter descriptor tag registry', () => {
-    expect([
-      ...sqliteAdapterDescriptor.controlMutationDefaults.defaultLiteralTagRegistry.keys(),
-    ]).toEqual(['sql', 'sqlite.sql']);
+    const registries = sqliteAdapterDescriptor.controlMutationDefaults;
+    if (registries === undefined)
+      throw new Error('the adapter descriptor declares mutation defaults');
+    expect([...registries.defaultLiteralTagRegistry.keys()]).toEqual(['sql', 'sqlite.sql']);
   });
 });
 
