@@ -446,8 +446,8 @@ describe('native enum blocks', () => {
     const members = Object.entries(block.parameters).map(([name, value]) =>
       value.kind === 'value' ? `${name} = ${value.raw}` : name,
     );
-    const attributes = block.blockAttributes.map((attribute) =>
-      attributeText({ ...attribute, target: 'model' }),
+    const attributes = block.blockAttributes.map(
+      (attribute) => `@@${attribute.name}(${attribute.args.map((arg) => arg.value).join(', ')})`,
     );
     return [`${block.keyword} ${block.name}`, ...members, ...attributes].join(' ');
   }
