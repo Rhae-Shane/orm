@@ -91,23 +91,6 @@ function copyFixture(): void {
   installFakePrisma7();
 }
 
-/**
- * The config init writes calls `prisma7Schema` from the facade's `/config`
- * entrypoint, which the facade on this branch does not export yet. A re-init
- * evaluates that config, so the entrypoint is shimmed under the project's own
- * `node_modules` until the Prisma 7 contract source lands on main.
- */
-function installFakeFacadeConfig(): void {
-  writeProjectFile(
-    'node_modules/@prisma/orm-postgres/package.json',
-    JSON.stringify({ name: '@prisma/orm-postgres', exports: { './config': './config.js' } }),
-  );
-  writeProjectFile(
-    'node_modules/@prisma/orm-postgres/config.js',
-    'export const defineConfig = (c) => c;\nexport const prisma7Schema = (schema, options) => ({ schema, ...options });\n',
-  );
-}
-
 function hashTree(dir: string): string {
   const hash = createHash('sha256');
   for (const entry of readdirSync(dir, { withFileTypes: true, recursive: true })) {
@@ -425,7 +408,6 @@ describe('the Prisma 7 scaffold', () => {
       're-initialises an already set up fixture without touching what Prisma 7 owns',
       async () => {
         copyFixture();
-        installFakeFacadeConfig();
         const token = basename(projectDir);
         await harness().run(['orm', 'init', ...FROM_PRISMA7, '--confirm', token, ...SKIP_INSTALL], {
           cwd: projectDir,
