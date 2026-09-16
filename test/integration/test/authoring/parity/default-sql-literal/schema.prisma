@@ -6,4 +6,6 @@ model T {
   createdAt DateTime @default(pg.sql`now()`)
   tags      String[] @default(sql`'{}'::text[]`)
   ident     String   @default(gen_random_uuid())
+
+  @@map("t")
 }
