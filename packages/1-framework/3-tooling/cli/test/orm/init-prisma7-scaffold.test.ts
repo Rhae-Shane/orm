@@ -405,6 +405,42 @@ describe('the Prisma 7 scaffold', () => {
     );
 
     it(
+      'reaches the same end state through the two questions',
+      async () => {
+        copyFixture();
+
+        const run = await harness().run(['orm', 'init', ...SKIP_INSTALL], {
+          cwd: projectDir,
+          isTty: { stdin: true },
+          answers: [true, basename(projectDir), false],
+        });
+
+        expect(run.exitCode).toBe(0);
+        expect(readdirSync(join(projectDir, 'prisma')).sort()).toEqual([
+          'migrations',
+          'schema.prisma',
+        ]);
+        expect(readProjectFile('prisma7.config.ts')).toContain("from '@prisma/prisma7/config'");
+        expect(readProjectFile('prisma.config.ts')).toContain('prisma7Schema(');
+        expect(existsSync(join(projectDir, 'src/prisma/db.ts'))).toBe(true);
+        expect(existsSync(join(projectDir, '.env'))).toBe(false);
+        expect(readManifestScripts()).toEqual(FIXTURE_SCRIPTS_AFTER);
+        expect(run.presented?.data).toMatchObject({
+          authoring: 'prisma7',
+          schemaPath: 'prisma/schema.prisma',
+          filesRenamed: [{ from: 'prisma.config.ts', to: 'prisma7.config.ts' }],
+          prisma7: {
+            schemaPath: 'prisma/schema.prisma',
+            configRenamedTo: 'prisma7.config.ts',
+            scriptsRewritten: ['generate', 'migrate', 'studio'],
+            packagesMoved: ['@prisma/prisma7@7'],
+          },
+        });
+      },
+      timeouts.coldTransformImport,
+    );
+
+    it(
       're-initialises an already set up fixture without touching what Prisma 7 owns',
       async () => {
         copyFixture();
