@@ -61,7 +61,7 @@ export function detectTableNameCaseChanges(input: {
     conflicts.push({
       kind: 'tableNameCaseChanged',
       summary: `${TABLE_NAME_CASE_CHANGED_CODE}: table "${create.tableName}" would be created and table "${drop.tableName}" dropped. Prisma 8 changed the default table name: a model with no @@map now names its table verbatim, so model ${create.tableName} points at "${create.tableName}" instead of "${drop.tableName}".`,
-      why: `To keep table "${drop.tableName}" and its rows, add @@map("${drop.tableName}") to model ${create.tableName} (or run the add-model-map codemod over the schema) and plan again. Prisma 8 has no rename-table operation yet, so a deliberate rename to "${create.tableName}" cannot be planned safely: keep @@map("${drop.tableName}") for now and make the rename a separate change once one exists, or move the rows yourself, drop "${drop.tableName}", and plan again.`,
+      why: `To keep table "${drop.tableName}" and its rows, add @@map("${drop.tableName}") to model ${create.tableName} (or run the add-model-map codemod over the schema) and plan again. Prisma 8 has no rename-table operation, so a deliberate rename is done by hand: run ALTER TABLE "${drop.tableName}" RENAME TO "${create.tableName}" (schema-qualified where applicable), after which the plan is empty.`,
       location: {
         namespaceId: create.namespaceId,
         entityKind: 'table',

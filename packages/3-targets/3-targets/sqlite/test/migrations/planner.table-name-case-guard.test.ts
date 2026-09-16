@@ -137,6 +137,7 @@ describe('SQLite planner table-name case guard', () => {
       }),
     ]);
     expect(result.conflicts[0]?.summary).toContain('MIGRATION.TABLE_NAME_CASE_CHANGED');
+    expect(result.conflicts[0]?.why).toContain('ALTER TABLE "userProfile" RENAME TO "UserProfile"');
   });
 
   it('still refuses when UserProfile also gained a column', () => {
