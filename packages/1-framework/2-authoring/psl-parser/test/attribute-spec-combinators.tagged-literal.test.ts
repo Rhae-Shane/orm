@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FieldAttributeCtx } from '../src/exports';
-import { taggedLiteral } from '../src/exports';
+import { oneOf, str, taggedLiteral } from '../src/exports';
 import { Cursor, parse, parseAttribute } from '../src/parse';
 import type { SourceFile } from '../src/source-file';
 import { buildSymbolTable } from '../src/symbol-table';
@@ -37,6 +37,36 @@ function argOf(exprSource: string): { expr: ExpressionAst; ctx: FieldAttributeCt
   if (!expr) throw new Error('expected an argument expression');
   return { expr, ctx: makeCtx(cursor.sourceFile) };
 }
+
+describe('oneOf with a tagged literal alternative', () => {
+  const type = oneOf(str(), taggedLiteral(['sql']));
+
+  it('surfaces the one alternative-specific failure instead of the generic list', () => {
+    const { expr, ctx } = argOf('pg.sql`x`');
+    const result = type.parse(expr, ctx);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure).toEqual([
+        expect.objectContaining({
+          code: 'PSL_UNKNOWN_DEFAULT_LITERAL_TAG',
+          message: 'Unknown literal tag "pg.sql". Known tags: sql.',
+        }),
+      ]);
+    }
+  });
+
+  it('keeps the generic list when no alternative fails with a specific code', () => {
+    const { expr, ctx } = argOf('42');
+    const result = type.parse(expr, ctx);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure[0]).toMatchObject({
+        code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+        message: 'Expected one of: string | sql`...`',
+      });
+    }
+  });
+});
 
 describe('taggedLiteral', () => {
   const type = taggedLiteral(['sql', 'pg.sql']);

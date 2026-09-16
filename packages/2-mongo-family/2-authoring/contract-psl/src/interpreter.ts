@@ -25,7 +25,7 @@ import {
   isAuthoringEntityTypeDescriptor,
 } from '@internal/framework-components/authoring';
 import type { CodecLookup } from '@internal/framework-components/codec';
-import type { ControlMutationDefaultRegistry } from '@internal/framework-components/control';
+import type { ControlDefaultRegistries } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
   applyPolymorphicScopeToMongoIndex,
@@ -92,7 +92,7 @@ export interface InterpretPslDocumentToMongoContractInput {
   readonly sourceFile: SourceFile;
   readonly sourceId: string;
   readonly scalarTypeCodecIds: ReadonlyMap<string, string>;
-  readonly controlMutationDefaults: ControlMutationDefaultRegistry;
+  readonly controlMutationDefaults: ControlDefaultRegistries;
   readonly codecLookup?: CodecLookup;
   readonly seedDiagnostics?: readonly ContractSourceDiagnostic[];
   readonly authoringContributions?: AuthoringContributions;

@@ -38,6 +38,7 @@ import type {
   TargetPackRef,
 } from '@internal/framework-components/components';
 import type {
+  ControlDefaultLiteralTagRegistry,
   ControlMutationDefaultRegistry,
   ControlMutationDefaults,
   MutationDefaultGeneratorDescriptor,
@@ -627,6 +628,7 @@ interface BuildModelNodeInput {
   readonly targetId: string;
   readonly authoringContributions: AuthoringContributions | undefined;
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
+  readonly defaultLiteralTagRegistry: ControlDefaultLiteralTagRegistry;
   readonly generatorDescriptorById: ReadonlyMap<string, MutationDefaultGeneratorDescriptor>;
   readonly scalarColumnDescriptors: ReadonlyMap<string, ColumnDescriptor>;
   readonly sourceId: string;
@@ -738,6 +740,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
     familyId: input.familyId,
     targetId: input.targetId,
     defaultFunctionRegistry: input.defaultFunctionRegistry,
+    defaultLiteralTagRegistry: input.defaultLiteralTagRegistry,
     generatorDescriptorById: input.generatorDescriptorById,
     diagnostics,
     sourceId,
@@ -1147,7 +1150,10 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         spec: specFactory({
           symbols: input.symbolTable,
           model,
-          controlMutationDefaults: input.defaultFunctionRegistry,
+          controlMutationDefaults: {
+            defaultFunctionRegistry: input.defaultFunctionRegistry,
+            defaultLiteralTagRegistry: input.defaultLiteralTagRegistry,
+          },
         }),
         model,
         sourceFile: input.sourceFile,
@@ -2164,6 +2170,8 @@ export function interpretPslDocumentToSqlContract(
     input.composedExtensionContracts;
   const defaultFunctionRegistry: ControlMutationDefaultRegistry =
     input.controlMutationDefaults?.defaultFunctionRegistry ?? new Map();
+  const defaultLiteralTagRegistry: ControlDefaultLiteralTagRegistry =
+    input.controlMutationDefaults?.defaultLiteralTagRegistry ?? new Map();
   const generatorDescriptors = input.controlMutationDefaults?.generatorDescriptors ?? [];
   const generatorDescriptorById = new Map<string, MutationDefaultGeneratorDescriptor>();
   for (const descriptor of generatorDescriptors) {
@@ -2476,6 +2484,7 @@ export function interpretPslDocumentToSqlContract(
       targetId: input.target.targetId,
       authoringContributions: input.authoringContributions,
       defaultFunctionRegistry,
+      defaultLiteralTagRegistry,
       generatorDescriptorById,
       scalarColumnDescriptors: input.scalarColumnDescriptors,
       sourceId,

@@ -7,6 +7,7 @@ import type { AuthoringContributions } from '@internal/framework-components/auth
 import type { CodecLookup } from '@internal/framework-components/codec';
 import type { CapabilityMatrix } from '@internal/framework-components/components';
 import type {
+  ControlDefaultLiteralTagRegistry,
   ControlMutationDefaultRegistry,
   MutationDefaultGeneratorDescriptor,
 } from '@internal/framework-components/control';
@@ -58,6 +59,7 @@ function lowerEnumDefaultForField(input: {
   readonly enumHandle: EnumTypeHandle;
   readonly sourceId: string;
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
+  readonly defaultLiteralTagRegistry: ControlDefaultLiteralTagRegistry;
   readonly diagnostics: ContractSourceDiagnostic[];
 }): LoweredFieldDefault {
   const { field, model, sourceFile, enumHandle, sourceId, diagnostics } = input;
@@ -69,7 +71,10 @@ function lowerEnumDefaultForField(input: {
       symbols: input.symbolTable,
       model,
       field,
-      controlMutationDefaults: input.defaultFunctionRegistry,
+      controlMutationDefaults: {
+        defaultFunctionRegistry: input.defaultFunctionRegistry,
+        defaultLiteralTagRegistry: input.defaultLiteralTagRegistry,
+      },
     }),
   );
   const interpreted = interpretFieldAttribute({
@@ -158,6 +163,7 @@ export interface CollectResolvedFieldsInput {
   readonly familyId: string;
   readonly targetId: string;
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
+  readonly defaultLiteralTagRegistry: ControlDefaultLiteralTagRegistry;
   readonly generatorDescriptorById: ReadonlyMap<string, MutationDefaultGeneratorDescriptor>;
   readonly diagnostics: ContractSourceDiagnostic[];
   readonly sourceId: string;
@@ -397,6 +403,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
     familyId,
     targetId,
     defaultFunctionRegistry,
+    defaultLiteralTagRegistry,
     generatorDescriptorById,
     diagnostics,
     sourceId,
@@ -585,6 +592,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
             enumHandle,
             sourceId,
             defaultFunctionRegistry,
+            defaultLiteralTagRegistry,
             diagnostics,
           })
         : lowerDefaultForField({
@@ -598,13 +606,13 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
             generatorDescriptorById,
             sourceId,
             defaultFunctionRegistry,
+            defaultLiteralTagRegistry,
             codecLookup,
             diagnostics,
           })
       : {};
     const loweredOnCreate = loweredDefault.executionDefaults?.onCreate;
-    const loweredFunctionDefault = loweredDefault.defaultValue?.kind === 'function';
-    if (isListField && (loweredOnCreate || loweredFunctionDefault)) {
+    if (isListField && loweredOnCreate) {
       const defaultExpression =
         defaultAttribute?.args.find((arg) => arg.kind === 'positional')?.value.trim() ??
         'this function';

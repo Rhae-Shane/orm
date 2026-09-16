@@ -1,5 +1,5 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
-import type { ControlMutationDefaultRegistry } from '@internal/framework-components/control';
+import type { ControlDefaultRegistries } from '@internal/framework-components/control';
 import type {
   ContributedPslDiagnosticCode,
   PslDiagnostic,
@@ -21,6 +21,7 @@ import type {
   PslSpan,
   RejectingArgType,
   SymbolTable,
+  TaggedLiteralValue,
   TypedFuncCall,
 } from '@internal/psl-parser';
 import {
@@ -41,6 +42,7 @@ import {
   record,
   referencedFieldRef,
   str,
+  taggedLiteral,
 } from '@internal/psl-parser';
 import type {
   AstNode,
@@ -183,14 +185,16 @@ type DefaultArgValue =
   | NumLiteral
   | boolean
   | (string | NumLiteral | boolean)[]
-  | TypedFuncCall;
+  | TypedFuncCall
+  | TaggedLiteralValue;
 
 function scalarDefaultArms(
   isList: boolean,
-  registry: ControlMutationDefaultRegistry,
+  registries: ControlDefaultRegistries,
 ): readonly [ArgType<DefaultArgValue, AttributeCtx>, ...ArgType<DefaultArgValue, AttributeCtx>[]] {
   const literal = () => oneOf(str(), numLiteral(), bool());
-  const funcArms = [...registry.entries()].map(([name, entry]) =>
+  const tagArm = taggedLiteral([...registries.defaultLiteralTagRegistry.keys()]);
+  const funcArms = [...registries.defaultFunctionRegistry.entries()].map(([name, entry]) =>
     funcCall(
       name,
       blindCast<
@@ -199,7 +203,9 @@ function scalarDefaultArms(
       >(entry.signature),
     ),
   );
-  return isList ? [list(literal()), ...funcArms] : [str(), numLiteral(), bool(), ...funcArms];
+  return isList
+    ? [list(literal()), ...funcArms, tagArm]
+    : [str(), numLiteral(), bool(), ...funcArms, tagArm];
 }
 
 function noEnumMember(): RejectingArgType<never, AttributeCtx> {
@@ -623,7 +629,7 @@ export type SqlRelationOutput = InferAttr<typeof relationFieldSpec>;
 export function modelSpecContext(input: {
   readonly symbols: SymbolTable;
   readonly model: ModelSymbol;
-  readonly controlMutationDefaults: ControlMutationDefaultRegistry;
+  readonly controlMutationDefaults: ControlDefaultRegistries;
 }): AttributeSpecContext {
   return {
     symbols: input.symbols,
@@ -636,7 +642,7 @@ export function fieldSpecContext(input: {
   readonly symbols: SymbolTable;
   readonly model: ModelSymbol;
   readonly field: FieldSymbol;
-  readonly controlMutationDefaults: ControlMutationDefaultRegistry;
+  readonly controlMutationDefaults: ControlDefaultRegistries;
 }): FieldAttributeSpecContext {
   return {
     symbols: input.symbols,

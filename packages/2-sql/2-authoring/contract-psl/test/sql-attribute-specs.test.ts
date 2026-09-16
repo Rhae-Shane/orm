@@ -21,7 +21,7 @@ import {
 } from '../src/sql-attribute-specs';
 import { buildSymbolTableInput, createBuiltinLikeControlMutationDefaults } from './fixtures';
 
-const controlMutationDefaults = createBuiltinLikeControlMutationDefaults().defaultFunctionRegistry;
+const controlMutationDefaults = createBuiltinLikeControlMutationDefaults();
 
 function project(schema: string, modelName: string) {
   const input = buildSymbolTableInput(schema);
@@ -250,6 +250,8 @@ describe('sqlAttributeSpecs.field.default', () => {
       'funcCall',
       'funcCall',
       'funcCall',
+      'funcCall',
+      'taggedLiteral',
     ]);
     const uuid = value.alternatives.find(
       (alt): alt is FuncCallMetadata<FieldAttributeCtx> =>
@@ -279,8 +281,24 @@ describe('sqlAttributeSpecs.field.default', () => {
     expect(listDefault).toMatchObject({ kind: 'list' });
     expect(listDefault.of).toMatchObject({ kind: 'oneOf' });
     expect(
-      value.alternatives.slice(1).map((alt) => (alt as FuncCallMetadata<FieldAttributeCtx>).name),
-    ).toEqual(['autoincrement', 'now', 'uuid', 'cuid', 'ulid', 'nanoid', 'dbgenerated']);
+      value.alternatives
+        .filter((alt) => alt.kind === 'funcCall')
+        .map((alt) => (alt as FuncCallMetadata<FieldAttributeCtx>).name),
+    ).toEqual([
+      'autoincrement',
+      'now',
+      'gen_random_uuid',
+      'uuid',
+      'cuid',
+      'ulid',
+      'nanoid',
+      'dbgenerated',
+    ]);
+    expect(value.alternatives.at(-1)).toMatchObject({
+      kind: 'taggedLiteral',
+      label: 'sql`...`',
+      tags: ['sql', 'pg.sql'],
+    });
   });
 
   it('exposes enum default alternatives and empty-enum rejection metadata', () => {

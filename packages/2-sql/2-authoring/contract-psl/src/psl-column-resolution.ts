@@ -24,7 +24,10 @@ import {
 } from '@internal/framework-components/authoring';
 import type { AnyCodecDescriptor, CodecLookup } from '@internal/framework-components/codec';
 import type {
+  ControlDefaultLiteralTagRegistry,
   ControlMutationDefaultRegistry,
+  DefaultFunctionLoweringContext,
+  LoweredDefaultResult,
   MutationDefaultGeneratorDescriptor,
 } from '@internal/framework-components/control';
 import type {
@@ -34,6 +37,7 @@ import type {
   PslSpan,
   ResolvedTypeConstructorCall,
   SymbolTable,
+  TaggedLiteralValue,
 } from '@internal/psl-parser';
 import type { SourceFile } from '@internal/psl-parser/syntax';
 import type {
@@ -698,6 +702,21 @@ export function resolveFieldTypeDescriptor(input: {
   return { ok: true, descriptor };
 }
 
+/** The attribute spec only accepts registered tags, so a missing entry is a wiring bug, not user input. */
+function lowerTaggedLiteral(
+  literal: TaggedLiteralValue,
+  registry: ControlDefaultLiteralTagRegistry,
+  context: DefaultFunctionLoweringContext,
+): LoweredDefaultResult {
+  const entry = registry.get(literal.tag);
+  if (entry === undefined) {
+    throw new InternalError(
+      `Default literal tag "${literal.tag}" was accepted by the attribute spec but has no registry entry`,
+    );
+  }
+  return entry.lower({ literal, context });
+}
+
 export function lowerDefaultForField(input: {
   readonly modelName: string;
   readonly fieldName: string;
@@ -709,6 +728,7 @@ export function lowerDefaultForField(input: {
   readonly generatorDescriptorById: ReadonlyMap<string, MutationDefaultGeneratorDescriptor>;
   readonly sourceId: string;
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
+  readonly defaultLiteralTagRegistry: ControlDefaultLiteralTagRegistry;
   readonly codecLookup: CodecLookup | undefined;
   readonly diagnostics: ContractSourceDiagnostic[];
 }): {
@@ -722,7 +742,10 @@ export function lowerDefaultForField(input: {
       symbols: input.symbolTable,
       model: input.model,
       field: input.field,
-      controlMutationDefaults: input.defaultFunctionRegistry,
+      controlMutationDefaults: {
+        defaultFunctionRegistry: input.defaultFunctionRegistry,
+        defaultLiteralTagRegistry: input.defaultLiteralTagRegistry,
+      },
     }),
   );
   const interpreted = interpretFieldAttribute({
@@ -753,16 +776,20 @@ export function lowerDefaultForField(input: {
   }
 
   if (typeof value === 'object') {
-    const lowered = lowerDefaultFunctionWithRegistry({
-      call: value,
-      registry: input.defaultFunctionRegistry,
-      context: {
-        sourceId: input.sourceId,
-        modelName: input.modelName,
-        fieldName: input.fieldName,
-        columnCodecId: input.columnDescriptor.codecId,
-      },
-    });
+    const context: DefaultFunctionLoweringContext = {
+      sourceId: input.sourceId,
+      modelName: input.modelName,
+      fieldName: input.fieldName,
+      columnCodecId: input.columnDescriptor.codecId,
+    };
+    const lowered =
+      'tag' in value
+        ? lowerTaggedLiteral(value, input.defaultLiteralTagRegistry, context)
+        : lowerDefaultFunctionWithRegistry({
+            call: value,
+            registry: input.defaultFunctionRegistry,
+            context,
+          });
 
     if (!lowered.ok) {
       input.diagnostics.push(lowered.diagnostic);
