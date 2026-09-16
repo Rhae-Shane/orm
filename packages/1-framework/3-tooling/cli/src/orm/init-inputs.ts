@@ -13,7 +13,12 @@ import {
   errorInitStrictProbeWithoutProbe,
   errorInitUserAborted,
 } from '../commands/init/errors';
-import { resolveAuthoring, resolveTarget, validateSchemaPath } from '../commands/init/input-values';
+import {
+  resolveAuthoring,
+  resolveTarget,
+  targetFromProviderName,
+  validateSchemaPath,
+} from '../commands/init/input-values';
 import {
   detectPrisma7Project,
   type Prisma7Detection,
@@ -287,23 +292,17 @@ async function choosePrisma7Path(ctx: {
 function targetFromProvider(
   schema: Extract<Prisma7SchemaDetection, { readonly kind: 'datasource' }>,
 ): TargetId {
-  switch (schema.provider) {
-    // biome-ignore lint/plugin/no-family-vocabulary: names the provider on purpose — maps the Prisma 7 schema's datasource provider to a target
-    case 'postgresql':
-    // biome-ignore lint/plugin/no-family-vocabulary: names the provider on purpose — maps the Prisma 7 schema's datasource provider to a target
-    case 'postgres':
-      // biome-ignore lint/plugin/no-family-vocabulary: names the provider on purpose — maps the Prisma 7 schema's datasource provider to a target
-      return 'postgres';
-    // biome-ignore lint/plugin/no-family-vocabulary: names the provider on purpose — maps the Prisma 7 schema's datasource provider to a target
-    case 'mongodb':
-      // biome-ignore lint/plugin/no-family-vocabulary: names the provider on purpose — maps the Prisma 7 schema's datasource provider to a target
-      throw errorInitPrisma7MongoUnsupported({ schemaPath: schema.path });
-    default:
-      throw errorInitPrisma7ProviderUnsupported({
-        schemaPath: schema.path,
-        provider: schema.provider,
-      });
+  const target =
+    schema.provider === undefined ? undefined : targetFromProviderName(schema.provider);
+  if (target === undefined) {
+    throw errorInitPrisma7ProviderUnsupported({
+      schemaPath: schema.path,
+      provider: schema.provider,
+    });
   }
+  // biome-ignore lint/plugin/no-family-vocabulary: names the target on purpose — the Prisma 7 path refuses a MongoDB schema with its own user-facing error
+  if (target === 'mongo') throw errorInitPrisma7MongoUnsupported({ schemaPath: schema.path });
+  return target;
 }
 
 function sideBySidePlan(detection: Prisma7Detection): Prisma7SideBySidePlan | null {
