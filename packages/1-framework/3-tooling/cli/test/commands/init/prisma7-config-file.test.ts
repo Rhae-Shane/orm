@@ -1,3 +1,4 @@
+import { timeouts } from '@repo/test-utils';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import { prisma7ConfigFile } from '../../../src/commands/init/templates/code-templates';
@@ -45,7 +46,7 @@ function configLiterals(source: string): {
   };
 }
 
-describe('prisma7ConfigFile', () => {
+describe('prisma7ConfigFile', { timeout: timeouts.typeScriptCompilation }, () => {
   it.each([
     ['a plain path', 'prisma/schema.prisma', 'src/prisma'],
     ['a single quote', "prisma/O'Reilly/schema.prisma", "src/O'Reilly"],

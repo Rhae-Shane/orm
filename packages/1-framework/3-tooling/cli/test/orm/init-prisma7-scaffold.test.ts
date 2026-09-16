@@ -135,7 +135,7 @@ const FIXTURE_SCRIPTS_AFTER = {
 };
 
 describe('the Prisma 7 scaffold', () => {
-  describe('files written', () => {
+  describe('files written', { timeout: timeouts.coldTransformImport }, () => {
     it('points the config at the schema through prisma7Schema and writes db.ts under src/prisma', () => {
       copyFixture();
 
@@ -206,7 +206,7 @@ describe('the Prisma 7 scaffold', () => {
     });
   });
 
-  describe('the side-by-side edits', () => {
+  describe('the side-by-side edits', { timeout: timeouts.coldTransformImport }, () => {
     it('renames the Prisma 7 config, rewrites its import, and writes its own config in its place', () => {
       copyFixture();
       const original = readProjectFile('prisma.config.ts');
