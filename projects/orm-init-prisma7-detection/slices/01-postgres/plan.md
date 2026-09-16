@@ -21,3 +21,9 @@
 ## Open items
 
 - Dispatch 5 ran after PR #30287 merged; the merged `prisma7Schema` takes one argument and the facade owns `output`, which the template now reflects.
+
+## Added 2026-09-16: user-acceptability fixes (PR back to draft)
+
+6. **Check the schema before editing the project.** Outcome: on the Prisma 7 path, init loads `prisma7Schema` from the project's installed target package and runs the source against the schema before renaming the config, rewriting scripts, or swapping `prisma`; a schema the source refuses stops init with the source's diagnostics, exit 2. Where the target package is installed for the check is the open decision in `design-notes.md` D8 (recommended: a temporary directory, so the project is untouched). Builds on: 5. Hands to: 7. Focus: `orm/init.ts` step order, a new check module beside `init-emit.ts` that loads the config entrypoint from the project the way `commands/init/probe-db.ts` loads the driver, a new error code, tests including a fixture schema with a `view`. Open decision for Will: what init may do before the check (see `design-notes.md` D8).
+
+7. **Cutover next step and re-run QA.** Outcome: the last next step points at the Postgres README's `prisma7Schema` section instead of the guide's cutover (which is `contract infer` plus hand edits); manual QA re-run adds an unsupported-schema scenario and checks in a real terminal whether a successful run exits after printing Done. Builds on: 6. Hands to: slice DoD.

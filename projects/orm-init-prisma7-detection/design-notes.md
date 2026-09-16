@@ -59,3 +59,13 @@ Will: leave init alone, it does what it does now. The docs brief in this directo
 
 - Whether `contract convert` should be named in init's next steps once it exists is the parallel project's call at its close-out.
 - The `prisma/config` import (init writes `@prisma/cli-engine` today; the published `prisma` package re-exports it as `prisma/config`) is an orphan slice outside this project.
+
+### D8. Init checks the schema before it edits anything (added 2026-09-16)
+
+Manual review after the end-to-end proof: init renamed the config, swapped `prisma`, and rewrote scripts before `contract emit` could report a construct the Prisma 7 source refuses. For a construct with no fix (a view, `Unsupported(...)`), the user's project was changed for nothing. The source's refusals are permanent for some constructs, so waiting for them to be lifted is not an option; init must find out first.
+
+Checking needs the target package: the refusal rules ship only in `@prisma/orm-postgres`, and the CLI is family-blind, so it carries none of that code and reaches it only through an installed target package. Options: (1) install the target package into a temporary directory, check there, delete it, so a refused schema leaves the project untouched, at the cost of one extra download on success; with `--skip-install` the check is skipped with a warning; (2) install it into the project first, leaving one unused dependency on refusal; (3) bundle the source into the CLI, which breaks the family-blind CLI. Recommended: (1). **Awaiting Will's decision.**
+
+### D9. The cutover step points at the Postgres README (added 2026-09-16)
+
+The guide's cutover section describes `contract infer` plus hand edits, the workflow `prisma7Schema` replaces. Until `contract convert` exists, init's last next step points at the `prisma7Schema` section of the `@prisma/orm-postgres` README.
