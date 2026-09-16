@@ -4,16 +4,14 @@ import type { SqlPlannerConflict } from './types';
 
 export const TABLE_NAME_CASE_CHANGED_CODE = 'MIGRATION.TABLE_NAME_CASE_CHANGED';
 
-/** The two facts the guard needs about a table the plan would drop or create. */
+/** The one fact the guard needs about a table the plan would drop or create. */
 export interface TableNameCaseGuardTable {
   readonly name: string;
-  readonly columns: Readonly<Record<string, unknown>>;
 }
 
 interface PlannedTable {
   readonly namespaceId: string;
   readonly tableName: string;
-  readonly columnKey: string;
 }
 
 function lowerFirst(value: string): string {
@@ -21,19 +19,16 @@ function lowerFirst(value: string): string {
 }
 
 function plannedTable(node: TableNameCaseGuardTable, namespaceId: string): PlannedTable {
-  return {
-    namespaceId,
-    tableName: node.name,
-    columnKey: Object.keys(node.columns).sort().join('\u0000'),
-  };
+  return { namespaceId, tableName: node.name };
 }
 
 /**
  * Finds every (drop `X`, create `Y`) pair in the same namespace where `X` is
- * `Y` with its first letter lowered and both tables carry the same column
- * names. That shape is the signature of a schema upgraded across the release
- * in which a model with no `@@map` stopped lowering the first letter of its
- * table name: planning it would drop the user's table and recreate it empty.
+ * `Y` with its first letter lowered. That shape is the signature of a schema
+ * upgraded across the release in which a model with no `@@map` stopped
+ * lowering the first letter of its table name: planning it would drop the
+ * user's table and recreate it empty. Columns are deliberately not compared,
+ * so a user who also changed a field in the same upgrade is still protected.
  *
  * Returns one conflict per pair, carrying `MIGRATION.TABLE_NAME_CASE_CHANGED`
  * in `meta.code`, or an empty array when the plan has no such pair.
@@ -60,14 +55,13 @@ export function detectTableNameCaseChanges(input: {
     const drop = dropped.find(
       (candidate) =>
         candidate.namespaceId === create.namespaceId &&
-        candidate.tableName === lowerFirst(create.tableName) &&
-        candidate.columnKey === create.columnKey,
+        candidate.tableName === lowerFirst(create.tableName),
     );
     if (drop === undefined) continue;
     conflicts.push({
       kind: 'tableNameCaseChanged',
       summary: `${TABLE_NAME_CASE_CHANGED_CODE}: table "${create.tableName}" would be created and table "${drop.tableName}" dropped. Prisma 8 changed the default table name: a model with no @@map now names its table verbatim, so model ${create.tableName} points at "${create.tableName}" instead of "${drop.tableName}".`,
-      why: `To keep the existing table "${drop.tableName}" and its rows, add @@map("${drop.tableName}") to model ${create.tableName} (or run the add-model-map codemod over the schema). To rename the table knowingly, drop it yourself first and plan again.`,
+      why: `To keep table "${drop.tableName}" and its rows, add @@map("${drop.tableName}") to model ${create.tableName} (or run the add-model-map codemod over the schema) and plan again. Prisma 8 has no rename-table operation yet, so a deliberate rename to "${create.tableName}" cannot be planned safely: keep @@map("${drop.tableName}") for now and make the rename a separate change once one exists, or move the rows yourself, drop "${drop.tableName}", and plan again.`,
       location: {
         namespaceId: create.namespaceId,
         entityKind: 'table',

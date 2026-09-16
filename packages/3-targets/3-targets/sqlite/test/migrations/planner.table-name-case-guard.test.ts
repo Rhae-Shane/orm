@@ -32,7 +32,14 @@ const DESTRUCTIVE_POLICY = {
   allowedOperationClasses: ['additive', 'widening', 'destructive'] as const,
 };
 
-function contractWithTable(tableName: string): Contract<SqlStorage> {
+interface ContractOptions {
+  readonly extraColumn?: string;
+}
+
+function contractWithTable(
+  tableName: string,
+  { extraColumn }: ContractOptions = {},
+): Contract<SqlStorage> {
   return {
     target: 'sqlite',
     targetFamily: 'sql',
@@ -48,6 +55,15 @@ function contractWithTable(tableName: string): Contract<SqlStorage> {
                 columns: {
                   id: { nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false },
                   email: { nativeType: 'text', codecId: 'sqlite/text@1', nullable: false },
+                  ...(extraColumn === undefined
+                    ? {}
+                    : {
+                        [extraColumn]: {
+                          nativeType: 'text',
+                          codecId: 'sqlite/text@1',
+                          nullable: true,
+                        },
+                      }),
                 },
                 primaryKey: { columns: ['id'], name: `${tableName}_pkey` },
                 uniques: [],
@@ -67,30 +83,37 @@ function contractWithTable(tableName: string): Contract<SqlStorage> {
   };
 }
 
-function liveSchemaWithTable(tableName: string): SqlSchemaIR {
+function liveSchema(tableNames: readonly string[]): SqlSchemaIR {
   return new SqlSchemaIR({
-    tables: {
-      [tableName]: {
-        name: tableName,
-        columns: {
-          id: { name: 'id', nativeType: 'integer', nullable: false },
-          email: { name: 'email', nativeType: 'text', nullable: false },
+    tables: Object.fromEntries(
+      tableNames.map((tableName) => [
+        tableName,
+        {
+          name: tableName,
+          columns: {
+            id: { name: 'id', nativeType: 'integer', nullable: false },
+            email: { name: 'email', nativeType: 'text', nullable: false },
+          },
+          primaryKey: { columns: ['id'], name: `${tableName}_pkey` },
+          foreignKeys: [],
+          uniques: [],
+          indexes: [],
         },
-        primaryKey: { columns: ['id'], name: `${tableName}_pkey` },
-        foreignKeys: [],
-        uniques: [],
-        indexes: [],
-      },
-    },
+      ]),
+    ),
   });
 }
 
-function planFromLive(previousTable: string, nextTable: string) {
+function planFromLive(
+  previousTables: readonly string[],
+  nextTable: string,
+  options: ContractOptions = {},
+) {
   const planner = createSqliteMigrationPlanner(stubLowerer);
   return () =>
     planner.plan({
-      contract: contractWithTable(nextTable),
-      schema: liveSchemaWithTable(previousTable),
+      contract: contractWithTable(nextTable, options),
+      schema: liveSchema(previousTables),
       policy: DESTRUCTIVE_POLICY,
       fromContract: null,
       frameworkComponents: [],
@@ -100,8 +123,8 @@ function planFromLive(previousTable: string, nextTable: string) {
 }
 
 describe('SQLite planner table-name case guard', () => {
-  it('refuses to drop userProfile and create UserProfile with the same columns', () => {
-    const result = planFromLive('userProfile', 'UserProfile')();
+  it('refuses to drop userProfile and create UserProfile', () => {
+    const result = planFromLive(['userProfile'], 'UserProfile')();
 
     expect(result.kind).toBe('failure');
     if (result.kind !== 'failure') return;
@@ -116,8 +139,34 @@ describe('SQLite planner table-name case guard', () => {
     expect(result.conflicts[0]?.summary).toContain('MIGRATION.TABLE_NAME_CASE_CHANGED');
   });
 
+  it('still refuses when UserProfile also gained a column', () => {
+    const result = planFromLive(['userProfile'], 'UserProfile', { extraColumn: 'nickname' })();
+
+    expect(result.kind).toBe('failure');
+    if (result.kind !== 'failure') return;
+    expect(result.conflicts.map((conflict) => conflict.kind)).toEqual(['tableNameCaseChanged']);
+  });
+
+  it('plans nothing once the model maps back to userProfile', async () => {
+    const result = planFromLive(['userProfile'], 'userProfile')();
+
+    expect(result.kind).toBe('success');
+    if (result.kind !== 'success') return;
+    expect(await Promise.all(result.plan.operations)).toEqual([]);
+  });
+
+  it('plans a plain create against an empty database', async () => {
+    const result = planFromLive([], 'UserProfile')();
+
+    expect(result.kind).toBe('success');
+    if (result.kind !== 'success') return;
+    const ids = (await Promise.all(result.plan.operations)).map((op) => op.id);
+    expect(ids).toContain('table.UserProfile');
+    expect(ids.some((id) => id.startsWith('dropTable.'))).toBe(false);
+  });
+
   it('plans a normal drop and create when the new table name is unrelated', async () => {
-    const result = planFromLive('userProfile', 'Accounts')();
+    const result = planFromLive(['userProfile'], 'Accounts')();
 
     expect(result.kind).toBe('success');
     if (result.kind !== 'success') return;
