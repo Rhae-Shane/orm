@@ -116,14 +116,16 @@ Recorded so they are not lost; each becomes its own project when scheduled.
 
 ### What `contract convert` cannot write yet
 
-The converter prints the loaded contract as a Prisma 8 schema and the round-trip test reads it back through the Prisma 8 PSL source. These are the cases where the Prisma 8 schema language or its reader cannot carry what the Prisma 7 contract holds. Each is a Prisma 8 feature to build, not a converter defect; the converter refuses the first three with `CONTRACT.CONVERT_UNSUPPORTED` rather than writing a file that reads back differently.
+The converter prints the loaded contract as a Prisma 8 schema and the round-trip test reads it back through the Prisma 8 PSL source. These are the cases where the Prisma 8 schema language or its reader cannot carry what the Prisma 7 contract holds. Each is a Prisma 8 feature to build, not a converter defect. A converted file must never read back as a different contract, so the converter refuses every one of them with `CONTRACT.CONVERT_UNSUPPORTED` and writes no file.
 
 - A `Json` or `Jsonb` column whose default is an object or array literal. The PSL reader treats `@default("...")` on a Json field as a string, so there is no way to write the parsed value.
 - One model name declared in two namespaces. The PSL reader keys relation targets, junction detection and id columns by model name alone (`contract-psl/src/interpreter.ts`, `fkRelationsByDeclaringModel`, `modelIdColumns`), so the two models read back as one.
 - A generator the Postgres printer has no PSL form for (none of the Prisma 7 generators, which all print).
-- A database-side default on a list column (`@default(dbgenerated("ARRAY[...]::text[]"))`). The PSL reader refuses it with `PSL_LIST_EXECUTION_DEFAULT_UNSUPPORTED`, although it is a storage default. Every Prisma 7 list default is one. In `contract-psl/src/psl-field-resolution.ts`. Exists on `main`.
-- A nullable list type (`Tag[]?`). The PSL printer writes `[]` or `?`, never both, while every Prisma 7 list column is nullable. In `@internal/psl-printer`. Exists on `main`; the same defect makes `contract infer` print nullable lists as required.
-- Type parameters on a list field (`Decimal @db.Numeric(65,30)[]`). The PSL reader keeps precision and scale on the storage column but drops them from the domain field's type. In `contract-psl/src/interpreter.ts`, `patchModelDomainFields`. Exists on `main`.
+- A database-side default on a list column (`@default(dbgenerated("ARRAY[...]::text[]"))`). The PSL reader refuses it with `PSL_LIST_EXECUTION_DEFAULT_UNSUPPORTED`, although it is a storage default. Every Prisma 7 list default is one. In `contract-psl/src/psl-field-resolution.ts`. Exists on `main`. Reached only through a list column, which the converter already refuses for the two reader defects below.
+- A nullable list type (`Tag[]?`). The PSL printer writes `[]` or `?`, never both, while every Prisma 7 list column is nullable. In `@internal/psl-printer`. Exists on `main`; the same defect makes `contract infer` print nullable lists as required. The converter refuses the column, naming it, until this is fixed.
+- Type parameters on a list field (`Decimal @db.Numeric(65,30)[]`). The PSL reader keeps precision and scale on the storage column but drops them from the domain field's type. In `contract-psl/src/interpreter.ts`, `patchModelDomainFields`. Exists on `main`. The converter refuses the column, naming it, until this is fixed.
+
+Because every Prisma 7 list column is nullable, a Prisma 7 schema with any list column is refused today. The refusal names the first such column, so the user learns which schema shape blocks the conversion instead of receiving a file that reads back differently.
 
 ### Found outside this project's scope
 

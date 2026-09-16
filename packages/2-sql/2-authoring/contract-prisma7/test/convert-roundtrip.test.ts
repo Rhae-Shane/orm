@@ -19,33 +19,70 @@ const cases = readdirSync(fixturesDir, { withFileTypes: true })
   .sort();
 
 const NULLABLE_LIST =
-  'the printer cannot print a nullable list type, so a list column comes back not nullable';
+  'the printer cannot print a nullable list type, so a list column would come back not nullable';
 const LOST_LIST_TYPE_PARAMS =
   'the PSL source drops type.typeParams from the domain field of a scalar list column';
 
 /** Why each fixture does not round-trip yet, naming every cause it has. */
 const expectedFailures: ReadonlyMap<string, readonly string[]> = new Map([
-  ['dbgenerated-without-expression-optional', [NULLABLE_LIST]],
   [
     'defaults',
     [
       'a Json object literal default is refused, because PSL reads a quoted default back as a string',
     ],
   ],
-  ['enum-native', [NULLABLE_LIST, LOST_LIST_TYPE_PARAMS]],
   [
     'junction-name-in-other-schema',
     ['one model name in two namespaces cannot be written in a Prisma 8 schema'],
   ],
-  ['list-defaults', ['the PSL source refuses a function default on a list column']],
-  ['native-types-accepted', [NULLABLE_LIST, LOST_LIST_TYPE_PARAMS]],
-  ['number-default-spellings', [NULLABLE_LIST]],
-  ['number-defaults', [NULLABLE_LIST, LOST_LIST_TYPE_PARAMS]],
   [
     'relation-name-in-two-schemas',
     ['one model name in two namespaces cannot be written in a Prisma 8 schema'],
   ],
-  ['scalars', [NULLABLE_LIST, LOST_LIST_TYPE_PARAMS]],
+]);
+
+/**
+ * Fixtures the printer refuses rather than write a file that would read back as
+ * a different contract, with the column it stops on and every reason it has.
+ */
+const refusedListColumns: ReadonlyMap<
+  string,
+  { readonly column: string; readonly reasons: readonly string[] }
+> = new Map([
+  [
+    'dbgenerated-without-expression-optional',
+    { column: '"public"."T"."list"', reasons: [NULLABLE_LIST] },
+  ],
+  [
+    'enum-native',
+    { column: '"public"."User"."roleList"', reasons: [NULLABLE_LIST, LOST_LIST_TYPE_PARAMS] },
+  ],
+  [
+    'list-defaults',
+    {
+      column: '"public"."Lists"."bl"',
+      reasons: [NULLABLE_LIST, 'the PSL source refuses a function default on a list column'],
+    },
+  ],
+  [
+    'native-types-accepted',
+    {
+      column: '"public"."NativeTypes"."varCharList"',
+      reasons: [NULLABLE_LIST, LOST_LIST_TYPE_PARAMS],
+    },
+  ],
+  [
+    'number-default-spellings',
+    { column: '"public"."Spellings"."mixed"', reasons: [NULLABLE_LIST] },
+  ],
+  [
+    'number-defaults',
+    { column: '"public"."Decimals"."list"', reasons: [NULLABLE_LIST, LOST_LIST_TYPE_PARAMS] },
+  ],
+  [
+    'scalars',
+    { column: '"public"."Scalars"."stringList"', reasons: [NULLABLE_LIST, LOST_LIST_TYPE_PARAMS] },
+  ],
 ]);
 
 function prisma7SchemaPath(caseName: string): string {
@@ -83,6 +120,16 @@ async function roundTrip(caseName: string): Promise<void> {
 
 describe('a printed Prisma 7 contract reads back as the same contract', () => {
   for (const caseName of cases) {
+    const refused = refusedListColumns.get(caseName);
+    if (refused !== undefined) {
+      it(`${caseName} is refused at ${refused.column} (${refused.reasons.join('; ')})`, async () => {
+        await expect(roundTrip(caseName)).rejects.toMatchObject({
+          code: 'CONTRACT.CONVERT_UNSUPPORTED',
+          message: expect.stringContaining(refused.column),
+        });
+      });
+      continue;
+    }
     const reasons = expectedFailures.get(caseName);
     if (reasons !== undefined) {
       it.fails(`${caseName} (${reasons.join('; ')})`, async () => {

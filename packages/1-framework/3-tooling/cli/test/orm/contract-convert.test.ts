@@ -317,6 +317,33 @@ describe('contract convert', () => {
     expect(mocks.close).toHaveBeenCalled();
   });
 
+  it('writes no file at the output path when the target refuses a lossy list column', async () => {
+    const dir = await projectDir();
+    mocks.printPslContract.mockImplementation(() => {
+      throw structuredError(
+        'CONTRACT.CONVERT_UNSUPPORTED',
+        'contract convert: column "public"."Scalars"."stringList" is a nullable list, which cannot be written in Prisma 8 PSL.',
+        {
+          why: 'A field type is written as a list or as optional, never as both.',
+          fix: 'Make the column not null before converting.',
+          meta: { coordinate: '"public"."Scalars"."stringList"' },
+        },
+      );
+    });
+
+    const run = await harness(ormConfig(dir)).run(
+      ['contract', 'convert', '--output', 'contract.prisma', '--json'],
+      { cwd: dir },
+    );
+
+    expect(run.exitCode).toBe(2);
+    expect(erroredEnvelope(run).error).toMatchObject({
+      code: 'CONTRACT.CONVERT_UNSUPPORTED',
+      summary: expect.stringContaining('"public"."Scalars"."stringList"'),
+    });
+    expect(await readdir(dir)).not.toContain('contract.prisma');
+  });
+
   it('reports the code, summary and next actions of a refusal the target raised', async () => {
     const dir = await projectDir();
     mocks.printPslContract.mockImplementation(() => {
