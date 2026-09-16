@@ -8,7 +8,7 @@
  * the full `supported` schema. Four things are refused with exit 2 and no file
  * written: a config on any other contract source, a Prisma 7 schema Prisma 8
  * cannot read, an output path that is the schema being read, and a schema
- * holding a default that cannot be written in Prisma 8 PSL.
+ * holding a column that cannot be written in Prisma 8 PSL.
  */
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { withClient } from '@repo/test-utils';
@@ -210,7 +210,7 @@ withTempDir(({ createTempDir }) => {
       expect(existsSync(join(ctx.testDir, 'contract.prisma'))).toBe(false);
     });
 
-    it('refuses a JSON object literal default it cannot write and writes nothing', async () => {
+    it('refuses the first column it cannot write and writes nothing', async () => {
       const ctx = setupPrisma7Project(createTempDir, NO_DATABASE, {
         copyFrom: join(PRISMA7_FIXTURES, 'supported-verify/schema.prisma'),
       });
@@ -220,7 +220,7 @@ withTempDir(({ createTempDir }) => {
       expect(convert.exitCode, output(convert)).toBe(2);
       const { code, summary } = errorOf(convert);
       expect(code).toBe('CONTRACT.CONVERT_UNSUPPORTED');
-      expect(summary).toContain('"Defaults"."jsonLiteral"');
+      expect(summary).toContain('"Scalars"."stringList"');
       expect(existsSync(join(ctx.testDir, 'contract.prisma'))).toBe(false);
     });
   });
