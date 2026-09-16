@@ -63,7 +63,6 @@ export const prisma7PostgresBinding = {
     readonly nativeType: string;
     readonly typeParams?: Readonly<Record<string, unknown>> | undefined;
   }) => {
-    if (nativeType === 'json' || nativeType === 'jsonb') return { kind: 'json' } as const;
     if (nativeType === 'bytea') {
       return {
         kind: 'sqlExpression',

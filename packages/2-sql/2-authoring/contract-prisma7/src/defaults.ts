@@ -1,6 +1,6 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
-import type { ExecutionMutationDefaultValue, JsonValue } from '@internal/contract/types';
-import type { CodecLookup } from '@internal/framework-components/codec';
+import type { ExecutionMutationDefaultValue } from '@internal/contract/types';
+import type { CodecLookup, PslLiteral } from '@internal/framework-components/codec';
 import type { ControlMutationDefaults } from '@internal/framework-components/control';
 import type { FieldSymbol, PslSpan, ResolvedAttribute } from '@internal/psl-parser';
 import type { ExpressionAst } from '@internal/psl-parser/syntax';
@@ -13,12 +13,12 @@ import {
   printSyntax,
   StringLiteralExprAst,
 } from '@internal/psl-parser/syntax';
-import { numberLiteralDefault } from '@internal/sql-contract-psl/resolution';
 import type {
   AuthoredColumnDefault,
   AuthoredColumnDefaultLiteralValue,
 } from '@internal/sql-contract-ts/contract-builder';
 import { blindCast } from '@internal/utils/casts';
+import { InternalError } from '@internal/utils/internal-error';
 import { prisma7Diagnostic } from './diagnostics';
 import type { Prisma7LiteralDefaultForm } from './target-binding';
 
@@ -102,9 +102,9 @@ export function lowerPrisma7Default(
   }
 
   const rawLiteral =
-    input.literalForm?.kind === 'sqlExpression'
-      ? sqlExpressionDefault(expression, input.literalForm, input.field.list)
-      : undefined;
+    input.literalForm === undefined
+      ? undefined
+      : sqlExpressionDefault(expression, input.literalForm, input.field.list);
   if (rawLiteral === 'unreadable') {
     return unknown('holds a value this contract source does not read.', attribute.span);
   }
@@ -115,65 +115,111 @@ export function lowerPrisma7Default(
     };
   }
 
-  const scalar = scalarValue(expression, input, unknown);
+  const scalar = literalValue(expression, input, unknown);
   if (scalar === undefined) return undefined;
   return { storage: { kind: 'literal', value: scalar }, onCreate: undefined };
 }
 
-function scalarValue(
+function pslLiteral(expression: ExpressionAst): PslLiteral | undefined {
+  const text = StringLiteralExprAst.cast(expression.syntax)?.value();
+  if (text !== undefined) return { kind: 'string', text };
+  const digits = NumberLiteralExprAst.cast(expression.syntax)?.token()?.text;
+  if (digits !== undefined) return { kind: 'number', text: digits };
+  const flag = BooleanLiteralExprAst.cast(expression.syntax)?.value();
+  if (flag !== undefined) return { kind: 'boolean', text: flag ? 'true' : 'false' };
+  return undefined;
+}
+
+/** The literal read through the column codec, or an enum member's storage value. */
+function literalValue(
   expression: ExpressionAst,
   input: LowerPrisma7DefaultInput,
   unknown: (reason: string, span: PslSpan) => undefined,
 ): AuthoredColumnDefaultLiteralValue | undefined {
   const span = input.attribute.span;
-  const isJson = input.literalForm?.kind === 'json';
+  const source = printSyntax(expression.syntax).trim();
+  const codec = input.codecLookup.get(input.codecId);
+  if (codec === undefined) {
+    throw new InternalError(
+      `Field "${input.modelName}.${input.field.name}" resolved to codec "${input.codecId}", but the codec lookup has no codec for it. The lookup that resolved the column must also carry its codec.`,
+    );
+  }
+  const decode = (literal: PslLiteral): AuthoredColumnDefaultLiteralValue | undefined => {
+    try {
+      return blindCast<
+        AuthoredColumnDefaultLiteralValue,
+        'decodePsl returns the codec its own value type, which the contract builder hands back to the same codec through encodeJson'
+      >(codec.decodePsl(literal));
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      input.diagnostics.push(
+        prisma7Diagnostic(
+          'PSL.PRISMA7_UNKNOWN_DEFAULT',
+          `Field "${input.modelName}.${input.field.name}": @default(${source}) is not a value of ${input.codecId}: ${reason}`,
+          input.sourceId,
+          span,
+        ),
+      );
+      return undefined;
+    }
+  };
   const jsonNull = (holds: string): undefined => {
     input.diagnostics.push(
       prisma7Diagnostic(
         'PSL.PRISMA7_JSON_NULL_DEFAULT_UNSUPPORTED',
-        `Field "${input.modelName}.${input.field.name}": @default(${printSyntax(expression.syntax).trim()}) ${holds} the JSON value null, which the contract cannot tell apart from SQL NULL. Remove the @default or give it another JSON value; either changes the column default on Prisma 7's next migration.`,
+        `Field "${input.modelName}.${input.field.name}": @default(${source}) ${holds} the JSON value null, which the contract cannot tell apart from SQL NULL. Remove the @default or give it another JSON value; either changes the column default on Prisma 7's next migration.`,
         input.sourceId,
         span,
       ),
     );
     return undefined;
   };
+  const isJson = input.field.typeName === 'Json';
   const array = ArrayLiteralAst.cast(expression.syntax);
   if (array !== undefined) {
     const values: AuthoredColumnDefaultLiteralValue[] = [];
     for (const element of array.elements()) {
-      const value = elementValue(element, input);
+      const member = IdentifierAst.cast(element.syntax)?.name();
+      const literal = member === undefined ? pslLiteral(element) : undefined;
+      const value =
+        member !== undefined
+          ? input.enumMembers?.get(member)
+          : literal === undefined
+            ? undefined
+            : decode(literal);
       if (value === undefined) {
-        return unknown(
-          rejectedNumberReason(element, input) ?? 'lists may only hold literals or enum members.',
-          span,
-        );
+        return literal === undefined
+          ? unknown('lists may only hold literals or enum members.', span)
+          : undefined;
       }
       values.push(value);
     }
     if (isJson && values.includes(null)) return jsonNull('holds');
     return values;
   }
-  const value = elementValue(expression, input);
-  if (isJson && value === null) return jsonNull('is');
-  if (value !== undefined) return value;
-  const numberReason = rejectedNumberReason(expression, input);
-  if (numberReason !== undefined) return unknown(numberReason, span);
-  const identifier = IdentifierAst.cast(expression.syntax)?.name();
-  if (identifier !== undefined) {
+  const member = IdentifierAst.cast(expression.syntax)?.name();
+  if (member !== undefined) {
+    const value = input.enumMembers?.get(member);
+    if (value !== undefined) return value;
     return unknown(
       input.enumMembers === undefined
-        ? `refers to "${identifier}", but the field is not an enum.`
-        : `refers to "${identifier}", which is not a member of the field's enum.`,
+        ? `refers to "${member}", but the field is not an enum.`
+        : `refers to "${member}", which is not a member of the field's enum.`,
       span,
     );
   }
-  return unknown('holds a value this contract source does not read.', span);
+  const literal = pslLiteral(expression);
+  if (literal === undefined) {
+    return unknown('holds a value this contract source does not read.', span);
+  }
+  const value = decode(literal);
+  if (isJson && value === null) return jsonNull('is');
+  return value;
 }
 
 function sqlExpressionDefault(
   expression: ExpressionAst,
-  form: Extract<Prisma7LiteralDefaultForm, { readonly kind: 'sqlExpression' }>,
+  form: Prisma7LiteralDefaultForm,
   isList: boolean,
 ): { readonly expression: string } | 'unreadable' | undefined {
   const array = isList ? ArrayLiteralAst.cast(expression.syntax) : undefined;
@@ -191,63 +237,6 @@ function sqlExpressionDefault(
     literals.push(literal);
   }
   return { expression: form.list(literals) };
-}
-
-/** The Prisma 7 scalars whose number defaults must be whole numbers, as each is named in a message. */
-const WHOLE_NUMBER_SCALARS: Readonly<Record<string, string>> = {
-  Int: 'an Int',
-  BigInt: 'a BigInt',
-};
-
-const WHOLE_NUMBER_TEXT = /^-?\d+$/;
-
-/** The number literal the column codec reads neither as a number nor as text, such as `1.5` for a `BigInt`, which Prisma 7 rejects too. */
-function rejectedNumberReason(
-  expression: ExpressionAst,
-  input: LowerPrisma7DefaultInput,
-): string | undefined {
-  const text = NumberLiteralExprAst.cast(expression.syntax)?.token()?.text;
-  if (text === undefined || numberValue(text, input) !== undefined) return undefined;
-  const { typeName } = input.field;
-  const wholeNumberScalar = Object.hasOwn(WHOLE_NUMBER_SCALARS, typeName)
-    ? WHOLE_NUMBER_SCALARS[typeName]
-    : undefined;
-  return wholeNumberScalar === undefined
-    ? `holds ${text}, which is not a valid ${typeName} value.`
-    : `holds ${text}, which is not an integer; ${wholeNumberScalar} default must be a whole number.`;
-}
-
-/** A number default for the field: Prisma 7 accepts only whole numbers for `Int` and `BigInt`. */
-function numberValue(
-  text: string,
-  input: LowerPrisma7DefaultInput,
-): AuthoredColumnDefaultLiteralValue | undefined {
-  if (Object.hasOwn(WHOLE_NUMBER_SCALARS, input.field.typeName) && !WHOLE_NUMBER_TEXT.test(text)) {
-    return undefined;
-  }
-  return numberLiteralDefault(text, input.codecId, input.codecLookup);
-}
-
-function elementValue(
-  expression: ExpressionAst,
-  input: LowerPrisma7DefaultInput,
-): AuthoredColumnDefaultLiteralValue | undefined {
-  const member = IdentifierAst.cast(expression.syntax)?.name();
-  if (member !== undefined) return input.enumMembers?.get(member);
-  const number = NumberLiteralExprAst.cast(expression.syntax)?.token()?.text;
-  if (number !== undefined) return numberValue(number, input);
-  const text = StringLiteralExprAst.cast(expression.syntax)?.value();
-  if (text !== undefined) {
-    if (input.literalForm?.kind === 'json') {
-      try {
-        return blindCast<JsonValue, 'JSON.parse yields a JSON value'>(JSON.parse(text));
-      } catch {
-        return undefined;
-      }
-    }
-    return text;
-  }
-  return BooleanLiteralExprAst.cast(expression.syntax)?.value();
 }
 
 function lowerFunction(

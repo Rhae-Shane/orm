@@ -132,6 +132,13 @@ describe('Decimal and BigInt number defaults', () => {
   });
 });
 
+describe('JSON string defaults', () => {
+  it('lower to the JSON document the string holds, through the column codec', async () => {
+    const { columns } = await loadFixtureTable('defaults', 'Defaults');
+    expect(columns['jsonLiteral']?.['default']).toEqual({ kind: 'literal', value: { a: 1 } });
+  });
+});
+
 describe('Number defaults on String, Bytes, DateTime and Boolean fields', () => {
   it('are rejected, as Prisma 7 rejects them', async () => {
     const schemaPath = join(fixturesDir, 'number-default-spellings', 'other-types.prisma');
@@ -141,10 +148,10 @@ describe('Number defaults on String, Bytes, DateTime and Boolean fields', () => 
     expect(
       result.ok ? [] : result.failure.diagnostics.map((diagnostic) => diagnostic.message),
     ).toEqual([
-      'Field "OtherTypes.name": @default holds 5, which is not a valid String value.',
-      'Field "OtherTypes.payload": @default holds 1234, which is not a valid Bytes value.',
-      'Field "OtherTypes.at": @default holds 0, which is not a valid DateTime value.',
-      'Field "OtherTypes.flag": @default holds 1, which is not a valid Boolean value.',
+      'Field "OtherTypes.name": @default(5) is not a value of pg/text@1: pg/text@1 reads a string literal; got a number 5',
+      'Field "OtherTypes.payload": @default(1234) is not a value of pg/bytea@1: pg/bytea@1 reads a string literal; got a number 1234',
+      'Field "OtherTypes.at": @default(0) is not a value of pg/timestamp-temporal@1: pg/timestamp-temporal@1 reads a string literal; got a number 0',
+      'Field "OtherTypes.flag": @default(1) is not a value of pg/bool@1: pg/bool@1 reads a boolean literal; got a number 1',
     ]);
   });
 });

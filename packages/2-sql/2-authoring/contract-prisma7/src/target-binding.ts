@@ -8,18 +8,14 @@ export interface Prisma7ColumnType {
   readonly typeParams?: Readonly<Record<string, unknown>> | undefined;
 }
 
-/** How a literal `@default` is read for a column whose codec does not take the value as written. */
-export type Prisma7LiteralDefaultForm =
-  /** A string holding JSON text, parsed. */
-  | { readonly kind: 'json' }
-  /** A string, carried as the SQL expression of the default the database stores. */
-  | {
-      readonly kind: 'sqlExpression';
-      /** The SQL literal for one written value, or `undefined` when the text is not a value of the column's type. */
-      readonly literal: (text: string) => string | undefined;
-      /** The SQL expression for a list default made of `literal` results. */
-      readonly list: (literals: readonly string[]) => string;
-    };
+/** How a literal `@default` is read for a column whose codec does not take the value as written: a string, carried as the SQL expression of the default the database stores. */
+export type Prisma7LiteralDefaultForm = {
+  readonly kind: 'sqlExpression';
+  /** The SQL literal for one written value, or `undefined` when the text is not a value of the column's type. */
+  readonly literal: (text: string) => string | undefined;
+  /** The SQL expression for a list default made of `literal` results. */
+  readonly list: (literals: readonly string[]) => string;
+};
 
 /** Everything a target supplies to the Prisma 7 interpreter. */
 export interface Prisma7TargetBinding {
