@@ -374,6 +374,41 @@ describe('generated values', () => {
       ),
     ).toBe('value temporal.timestamp(3, onCreate: now, onUpdate: now)');
   });
+
+  it('refuses a column that pairs the wall-clock-now generator with a different one', () => {
+    const timestamp = {
+      nativeType: 'timestamp',
+      codecId: 'pg/timestamp-temporal@1',
+      nullable: false,
+    };
+    const refusal = (phases: Record<string, unknown>): unknown => {
+      try {
+        withGenerator(timestamp, phases);
+      } catch (error) {
+        return error;
+      }
+      return undefined;
+    };
+
+    expect(
+      refusal({
+        onCreate: { kind: 'generator', id: 'plainDateTimeNow' },
+        onUpdate: { kind: 'generator', id: 'uuidv4' },
+      }),
+    ).toMatchObject({
+      code: 'CONTRACT.CONVERT_UNSUPPORTED',
+      message: expect.stringContaining('"public"."widget"."value"'),
+    });
+    expect(
+      refusal({
+        onCreate: { kind: 'generator', id: 'uuidv4' },
+        onUpdate: { kind: 'generator', id: 'plainDateTimeNow' },
+      }),
+    ).toMatchObject({
+      code: 'CONTRACT.CONVERT_UNSUPPORTED',
+      message: expect.stringContaining('"public"."widget"."value"'),
+    });
+  });
 });
 
 describe('relations', () => {

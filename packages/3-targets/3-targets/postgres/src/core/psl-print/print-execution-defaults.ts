@@ -68,6 +68,17 @@ export function printExecutionDefault(input: {
     const onCreate = onCreateId === nowGeneratorId;
     const onUpdate = onUpdateId === nowGeneratorId;
     if (onCreate || onUpdate) {
+      if ((onCreateId !== undefined && !onCreate) || (onUpdateId !== undefined && !onUpdate)) {
+        throw postgresError(
+          'CONTRACT.CONVERT_UNSUPPORTED',
+          `contract convert: column ${coordinate} takes the wall-clock-now generator in one phase and "${onCreate ? onUpdateId : onCreateId}" in the other, which cannot be written in Prisma 8 PSL.`,
+          {
+            why: 'The temporal preset a now generator is authored through writes each phase as `now`, so the other generator would be dropped from the written file.',
+            fix: 'Author the Prisma 8 contract by hand for this column.',
+            meta: { coordinate, onCreate: onCreateId, onUpdate: onUpdateId },
+          },
+        );
+      }
       return { kind: 'temporal', phases: { presetName, onCreate, onUpdate } };
     }
   }
