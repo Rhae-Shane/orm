@@ -240,11 +240,13 @@ describe('detectPrisma7Project', () => {
     );
 
     it(
-      'carries an unresolvable prisma/config import as a warning',
+      'carries an unresolvable config import as a warning',
       async () => {
         writeProjectFile(
           'prisma.config.ts',
-          "import { defineConfig } from 'prisma/config';\nexport default defineConfig({ schema: 'prisma/schema.prisma' });\n",
+          // Not `prisma/config`: the workspace's pnpm store hoists a Prisma 7 for the
+          // examples, and the loader's resolver falls back to it.
+          "import { defineConfig } from 'a-package-that-is-not-installed/config';\nexport default defineConfig({ schema: 'prisma/schema.prisma' });\n",
         );
 
         const detection = await detect();
