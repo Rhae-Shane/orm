@@ -21,19 +21,25 @@ const SHELL_OPERATOR = /&&|\|\||;|\|/g;
 
 const ENV_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
 
+interface PrefixWrapper {
+  readonly words: readonly string[];
+  /** Flags that may follow the wrapper because they do not change whose `prisma` runs. */
+  readonly flags: readonly string[];
+}
+
 /** Wrappers whose next word, after any `NAME=value` assignments, is the command they run. */
-const PREFIX_WRAPPERS: readonly (readonly string[])[] = [
-  ['pnpm', 'exec'],
-  ['pnpm', 'dlx'],
-  ['pnpm'],
-  ['yarn', 'exec'],
-  ['yarn', 'dlx'],
-  ['yarn'],
-  ['bun', 'x'],
-  ['bun'],
-  ['bunx'],
-  ['npx'],
-  ['cross-env'],
+const PREFIX_WRAPPERS: readonly PrefixWrapper[] = [
+  { words: ['pnpm', 'exec'], flags: [] },
+  { words: ['pnpm', 'dlx'], flags: [] },
+  { words: ['pnpm'], flags: [] },
+  { words: ['yarn', 'exec'], flags: [] },
+  { words: ['yarn', 'dlx'], flags: [] },
+  { words: ['yarn'], flags: [] },
+  { words: ['bun', 'x'], flags: ['--bun'] },
+  { words: ['bun'], flags: [] },
+  { words: ['bunx'], flags: ['--bun'] },
+  { words: ['npx'], flags: ['-y', '--yes'] },
+  { words: ['cross-env'], flags: [] },
 ];
 
 /** Wrappers that take their own arguments and run the command after `--`. */
@@ -66,14 +72,8 @@ function commandsOf(script: string): Word[][] {
   return commands;
 }
 
-function wrapperAt(
-  words: readonly Word[],
-  at: number,
-  wrappers: readonly (readonly string[])[],
-): readonly string[] | undefined {
-  return wrappers.find((wrapper) =>
-    wrapper.every((part, offset) => words[at + offset]?.text === part),
-  );
+function startsWithWords(words: readonly Word[], at: number, expected: readonly string[]): boolean {
+  return expected.every((part, offset) => words[at + offset]?.text === part);
 }
 
 /**
@@ -90,11 +90,15 @@ function prismaCommandWord(words: readonly Word[], at: number): Word | undefined
   if (word?.text === 'prisma') {
     return word;
   }
-  const prefix = wrapperAt(words, index, PREFIX_WRAPPERS);
+  const prefix = PREFIX_WRAPPERS.find((wrapper) => startsWithWords(words, index, wrapper.words));
   if (prefix !== undefined) {
-    return prismaCommandWord(words, index + prefix.length);
+    let next = index + prefix.words.length;
+    while (prefix.flags.includes(words[next]?.text ?? '')) {
+      next += 1;
+    }
+    return prismaCommandWord(words, next);
   }
-  const separated = wrapperAt(words, index, SEPARATOR_WRAPPERS);
+  const separated = SEPARATOR_WRAPPERS.find((wrapper) => startsWithWords(words, index, wrapper));
   if (separated === undefined) {
     return undefined;
   }

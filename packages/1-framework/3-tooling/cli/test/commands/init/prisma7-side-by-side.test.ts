@@ -19,6 +19,18 @@ describe('rewritePrismaBinary', () => {
       `${NODE_PACKAGE_RUNNER} prisma migrate deploy`,
       `${NODE_PACKAGE_RUNNER} prisma7 migrate deploy`,
     ],
+    [
+      'after the Node package runner and -y',
+      `${NODE_PACKAGE_RUNNER} -y prisma migrate deploy`,
+      `${NODE_PACKAGE_RUNNER} -y prisma7 migrate deploy`,
+    ],
+    [
+      'after the Node package runner and --yes',
+      `${NODE_PACKAGE_RUNNER} --yes prisma migrate deploy`,
+      `${NODE_PACKAGE_RUNNER} --yes prisma7 migrate deploy`,
+    ],
+    ['after bunx --bun', 'bunx --bun prisma migrate dev', 'bunx --bun prisma7 migrate dev'],
+    ['after bun x --bun', 'bun x --bun prisma migrate dev', 'bun x --bun prisma7 migrate dev'],
     ['after yarn', 'yarn prisma generate', 'yarn prisma7 generate'],
     ['after yarn exec', 'yarn exec prisma generate', 'yarn exec prisma7 generate'],
     ['after yarn dlx', 'yarn dlx prisma generate', 'yarn dlx prisma7 generate'],
@@ -81,6 +93,9 @@ describe('rewritePrismaBinary', () => {
       `echo ${NODE_PACKAGE_RUNNER} prisma generate`,
     ],
     ['prisma after the -- of a command that is not a wrapper', 'vitest -- prisma'],
+    ['the prisma of another pnpm workspace package', 'pnpm --filter x exec prisma generate'],
+    ['the prisma of another yarn workspace package', 'yarn workspace x prisma generate'],
+    ['prisma after a runner flag that is not recognised', 'bunx --silent prisma generate'],
   ])('leaves %s alone', (_case, script) => {
     expect(rewritePrismaBinary(script)).toBe(script);
   });
