@@ -20,4 +20,4 @@
 
 ## Open items
 
-- Dispatch 5 waits for PR #30287. Dispatches 1 to 4 do not import `prisma7Schema`; the config template writes its name as text.
+- Dispatch 5 ran after PR #30287 merged; the merged `prisma7Schema` takes one argument and the facade owns `output`, which the template now reflects.

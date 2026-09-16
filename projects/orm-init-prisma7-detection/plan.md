@@ -11,7 +11,7 @@ Two slices, one per family. Slice 1 delivers the whole Postgres path: detection,
 
 ### Stack
 
-1. **Slice `01-postgres`** — `slices/01-postgres/` — **dispatches 1 to 4 built and reviewed; draft PR https://github.com/prisma/orm/pull/30291; dispatch 5 waits for PR #30287**
+1. **Slice `01-postgres`** — `slices/01-postgres/` — **all five dispatches built; end-to-end proof green after #30287 merged; PR https://github.com/prisma/orm/pull/30291**
    - **Outcome:** a Prisma 7 Postgres project run through `orm init` ends up as § At a glance in the spec, and `db sign` succeeds against the database its Prisma 7 migrations built.
    - **Builds on:** [PR #30287](https://github.com/prisma/orm/pull/30287) merged (`prisma7Schema` in `@prisma/orm-postgres/config`).
    - **Hands to:** the detection, consent, config-evaluation, and scaffold code paths parameterised by target; the fixture project layout; the next-steps text.
