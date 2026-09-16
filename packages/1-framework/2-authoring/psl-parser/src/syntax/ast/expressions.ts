@@ -1,3 +1,6 @@
+import type { TaggedLiteralCanonicalization } from '@internal/framework-components/control';
+import { canonicalizeTaggedLiteralBody } from '@internal/framework-components/control';
+import { isTerminatedStringLiteral } from '../../tokenizer';
 import type { AstNode } from '../ast-helpers';
 import { filterChildren, findChildToken, findFirstChild } from '../ast-helpers';
 import { SyntaxNode, type SyntaxToken } from '../red';
@@ -170,6 +173,96 @@ export class StringLiteralExprAst implements AstNode {
   }
 }
 
+export type TaggedLiteralFence = 'backtick' | 'quote';
+
+const BACKTICK_ESCAPES: ReadonlySet<string> = new Set(['`', '\\', '$']);
+
+function resolveBacktickEscapes(raw: string): string {
+  let out = '';
+  let i = 0;
+  while (i < raw.length) {
+    const ch = raw.charAt(i);
+    const next = raw.charAt(i + 1);
+    if (ch === '\\' && BACKTICK_ESCAPES.has(next)) {
+      out += next;
+      i += 2;
+      continue;
+    }
+    out += ch;
+    i++;
+  }
+  return out;
+}
+
+function isTerminatedFence(text: string): boolean {
+  if (text.startsWith('`')) return text.length >= 2 && text.endsWith('`');
+  return isTerminatedStringLiteral(text);
+}
+
+/**
+ * `tag`body`` or `tag"body"`. The tag is one or more identifiers joined by
+ * dots; the fence token holds the body with its fences. `body()` is the
+ * canonical text shared with the TypeScript `sql` tag.
+ */
+export class TaggedLiteralExprAst implements AstNode {
+  readonly syntax: SyntaxNode;
+
+  constructor(syntax: SyntaxNode) {
+    this.syntax = syntax;
+  }
+
+  *segments(): Iterable<IdentifierAst> {
+    yield* filterChildren(this.syntax, IdentifierAst.cast);
+  }
+
+  tag(): string {
+    const names: string[] = [];
+    for (const segment of this.segments()) {
+      const name = segment.name();
+      if (name !== undefined) names.push(name);
+    }
+    return names.join('.');
+  }
+
+  fenceToken(): SyntaxToken | undefined {
+    for (const child of this.syntax.children()) {
+      if (child instanceof SyntaxNode) continue;
+      if (child.kind === 'TemplateLiteral' || child.kind === 'StringLiteral') return child;
+      if (child.kind === 'Invalid' && child.text.startsWith('`')) return child;
+    }
+    return undefined;
+  }
+
+  fence(): TaggedLiteralFence | undefined {
+    const text = this.fenceToken()?.text;
+    if (text === undefined) return undefined;
+    return text.startsWith('`') ? 'backtick' : 'quote';
+  }
+
+  /** The text between the fences, escapes not yet resolved. */
+  rawBody(): string {
+    const text = this.fenceToken()?.text ?? '';
+    return isTerminatedFence(text) ? text.slice(1, -1) : text.slice(1);
+  }
+
+  canonicalization(): TaggedLiteralCanonicalization {
+    const raw = this.rawBody();
+    const resolved =
+      this.fence() === 'quote' ? decodeStringLiteral(raw) : resolveBacktickEscapes(raw);
+    return canonicalizeTaggedLiteralBody(resolved);
+  }
+
+  /** The canonical body, or `undefined` when canonicalization fails. */
+  body(): string | undefined {
+    const result = this.canonicalization();
+    return result.ok ? result.body : undefined;
+  }
+
+  static cast(node: SyntaxNode): TaggedLiteralExprAst | undefined {
+    return node.kind === 'TaggedLiteral' ? new TaggedLiteralExprAst(node) : undefined;
+  }
+}
+
 export class NumberLiteralExprAst implements AstNode {
   readonly syntax: SyntaxNode;
 
@@ -309,6 +402,7 @@ export type ExpressionAst =
   | FunctionCallAst
   | ArrayLiteralAst
   | StringLiteralExprAst
+  | TaggedLiteralExprAst
   | NumberLiteralExprAst
   | BooleanLiteralExprAst
   | ObjectLiteralExprAst
@@ -319,6 +413,7 @@ export function castExpression(node: SyntaxNode): ExpressionAst | undefined {
     FunctionCallAst.cast(node) ??
     ArrayLiteralAst.cast(node) ??
     StringLiteralExprAst.cast(node) ??
+    TaggedLiteralExprAst.cast(node) ??
     NumberLiteralExprAst.cast(node) ??
     BooleanLiteralExprAst.cast(node) ??
     ObjectLiteralExprAst.cast(node) ??

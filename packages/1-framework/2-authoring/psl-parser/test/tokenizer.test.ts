@@ -245,6 +245,62 @@ describe('Tokenizer', () => {
   });
 });
 
+describe('template literals', () => {
+  it('scans a single-line backtick fence as one token, fences included', () => {
+    expect(tokenize('sql`gen_random_uuid()`')).toMatchInlineSnapshot(`
+      "Ident          "sql"
+      TemplateLiteral"\`gen_random_uuid()\`"
+      Eof            """
+    `);
+  });
+
+  it('spans multiple lines', () => {
+    const source = 'sql`\n  now()\n`';
+    assertLossless(source);
+    expect(tokenize(source)).toMatchInlineSnapshot(`
+      "Ident          "sql"
+      TemplateLiteral"\`\\n  now()\\n\`"
+      Eof            """
+    `);
+  });
+
+  it('treats a backslash-escaped backtick as part of the body', () => {
+    expect(tokenize('`a\\`b`')).toMatchInlineSnapshot(`
+      "TemplateLiteral"\`a\\\\\`b\`"
+      Eof            """
+    `);
+  });
+
+  it('lets an escaped backslash precede the closing backtick', () => {
+    expect(tokenize('`a\\\\` x')).toMatchInlineSnapshot(`
+      "TemplateLiteral"\`a\\\\\\\\\`"
+      Whitespace     " "
+      Ident          "x"
+      Eof            """
+    `);
+  });
+
+  it('keeps a dollar escape inside the body', () => {
+    expect(tokenize('`\\$' + '{x}`')).toMatchInlineSnapshot(`
+      "TemplateLiteral"\`\\\\\${x}\`"
+      Eof            """
+    `);
+  });
+
+  it('makes an unterminated template literal an Invalid token for the rest of the source', () => {
+    const source = '`abc\n  more\n';
+    assertLossless(source);
+    expect(tokenize(source)).toMatchInlineSnapshot(`
+      "Invalid        "\`abc\\n  more\\n"
+      Eof            """
+    `);
+  });
+
+  it('is lossless with a dotted tag and a quote fence beside it', () => {
+    assertLossless('pg.sql`a` sql"b"');
+  });
+});
+
 describe('isTerminatedStringLiteral', () => {
   it('treats a literal with a closing quote as terminated', () => {
     expect(isTerminatedStringLiteral('"ok"')).toBe(true);

@@ -36,7 +36,8 @@ export type ArgTypeKind =
   | 'record'
   | 'referencedFieldRef'
   | 'rejecting'
-  | 'str';
+  | 'str'
+  | 'taggedLiteral';
 
 export type ArgTypeContext = 'attribute' | 'field' | 'model';
 
@@ -181,6 +182,18 @@ export type StrArgType<
   Ctx extends AttributeCtx = AttributeCtx,
 > = string extends T ? UnrestrictedStrArgType<Ctx> : FixedStrArgType<T, Ctx>;
 
+export interface TaggedLiteralValue {
+  readonly tag: string;
+  readonly body: string;
+  readonly span: PslSpan;
+}
+
+export interface TaggedLiteralArgType<Ctx extends AttributeCtx = AttributeCtx>
+  extends ArgTypeOutput<TaggedLiteralValue, Ctx> {
+  readonly kind: 'taggedLiteral';
+  readonly tags: readonly string[];
+}
+
 export interface ArgType<T, Ctx extends AttributeCtx> extends ArgTypeOutput<T, Ctx> {
   readonly kind: ArgTypeKind;
 }
@@ -223,7 +236,8 @@ export type InspectableArgType<Ctx extends AttributeCtx> =
   | ReferencedFieldRefArgType<FieldAttributeCtx & Ctx>
   | RejectingArgType<never, Ctx>
   | FixedStrArgType<string, Ctx>
-  | UnrestrictedStrArgType<Ctx>;
+  | UnrestrictedStrArgType<Ctx>
+  | TaggedLiteralArgType<Ctx>;
 
 export type OptionalArgType<
   T,

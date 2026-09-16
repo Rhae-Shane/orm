@@ -136,6 +136,7 @@ function valueItems(
     case 'int':
     case 'json':
     case 'rejecting':
+    case 'taggedLiteral':
       return [];
   }
 }

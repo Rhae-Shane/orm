@@ -21,6 +21,8 @@ export type SyntaxKind =
   | 'FunctionCall'
   | 'ArrayLiteral'
   | 'StringLiteralExpr'
+  // `tag`body`` or `tag"body"`: identifier segments joined by dots, then the fence token.
+  | 'TaggedLiteral'
   | 'NumberLiteralExpr'
   | 'BooleanLiteralExpr'
   | 'ObjectLiteralExpr'

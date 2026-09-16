@@ -1,6 +1,7 @@
 export type TokenKind =
   | 'Ident'
   | 'StringLiteral'
+  | 'TemplateLiteral'
   | 'NumberLiteral'
   | 'At'
   | 'DoubleAt'
@@ -90,6 +91,7 @@ function scan(source: string, pos: number): Token {
     scanIdent(source, pos) ??
     scanNumber(source, pos) ??
     scanString(source, pos) ??
+    scanTemplateLiteral(source, pos) ??
     scanPunctuation(source, pos) ?? {
       kind: 'Invalid' as const,
       text: readChar(source, pos),
@@ -208,6 +210,28 @@ function scanString(source: string, pos: number): Token | undefined {
     end++;
   }
   return { kind: 'StringLiteral', text: source.slice(pos, end) };
+}
+
+/**
+ * A backtick fence may span lines. A backtick preceded by an odd number of
+ * backslashes is escaped and does not close it. With no closing backtick the
+ * rest of the source becomes one `Invalid` token, which the parser reports.
+ */
+function scanTemplateLiteral(source: string, pos: number): Token | undefined {
+  if (source.charAt(pos) !== '`') return undefined;
+  let end = pos + 1;
+  while (end < source.length) {
+    const c = source.charAt(end);
+    if (c === '\\' && end + 1 < source.length) {
+      end += 2;
+      continue;
+    }
+    if (c === '`') {
+      return { kind: 'TemplateLiteral', text: source.slice(pos, end + 1) };
+    }
+    end++;
+  }
+  return { kind: 'Invalid', text: source.slice(pos) };
 }
 
 /**

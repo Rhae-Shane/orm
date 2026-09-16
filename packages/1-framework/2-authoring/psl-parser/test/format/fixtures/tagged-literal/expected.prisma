@@ -1,0 +1,9 @@
+model Token {
+  id      String   @id @default(sql`gen_random_uuid()`)
+  expires DateTime @default(sql"(now() + '00:03:00'::interval)")
+  created DateTime @default(pg.sql`now()`)
+  body    String   @default(sql`
+      SELECT   1
+        FROM   t   -- keep   this   spacing
+  `)
+}

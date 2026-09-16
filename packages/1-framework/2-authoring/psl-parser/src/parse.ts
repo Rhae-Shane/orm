@@ -113,6 +113,29 @@ export class Cursor {
   }
 
   /**
+   * Whether the significant token `ahead` positions on directly follows the
+   * previous significant token, with no trivia between them.
+   */
+  isAdjacent(ahead: number): boolean {
+    let rawIndex = 0;
+    let remaining = ahead;
+    let triviaSincePrevious = false;
+    for (;;) {
+      const token = this.#tokenizer.peek(rawIndex);
+      if (token.kind === 'Eof') return false;
+      if (TRIVIA_KINDS.has(token.kind)) {
+        triviaSincePrevious = true;
+      } else if (remaining === 0) {
+        return !triviaSincePrevious;
+      } else {
+        remaining--;
+        triviaSincePrevious = false;
+      }
+      rawIndex++;
+    }
+  }
+
+  /**
    * Zero-width mark just past the last consumed significant token — anchors an
    * "expected here" diagnostic, e.g. the `{` missing after a declaration's name.
    */
@@ -196,6 +219,7 @@ export function parseExpression(cursor: Cursor): GreenNode | undefined {
     parseNumberLiteralExpr(cursor) ??
     parseArrayLiteral(cursor) ??
     parseObjectLiteralExpr(cursor) ??
+    parseTaggedLiteral(cursor) ??
     parseFunctionCall(cursor) ??
     parseBooleanLiteralExpr(cursor) ??
     parseIdentifierExpr(cursor)
@@ -265,6 +289,70 @@ function parseQualifiedSegments(cursor: Cursor, separator: 'Colon' | 'Dot'): voi
       );
     }
   }
+}
+
+function isOpeningBacktick(token: Token): boolean {
+  return token.kind === 'Invalid' && token.text.startsWith('`');
+}
+
+/**
+ * How many significant tokens the tag `Ident ('.' Ident)*` spans when a fence
+ * follows it, else `undefined`. An unterminated backtick fence arrives as an
+ * `Invalid` token and still counts, so the parser can report it.
+ */
+function taggedLiteralFenceIndex(cursor: Cursor): number | undefined {
+  if (cursor.peekKind() !== 'Ident') return undefined;
+  let index = 1;
+  while (cursor.peekKind(index) === 'Dot' && cursor.peekKind(index + 1) === 'Ident') {
+    index += 2;
+  }
+  const fence = cursor.peekToken(index);
+  if (
+    fence.kind === 'TemplateLiteral' ||
+    fence.kind === 'StringLiteral' ||
+    isOpeningBacktick(fence)
+  ) {
+    return index;
+  }
+  return undefined;
+}
+
+/**
+ * Parses `tag`body`` or `tag"body"`. Trivia between the tag and the fence is
+ * consumed into the node and reported at the last tag segment, so the rest of
+ * the line still parses.
+ */
+export function parseTaggedLiteral(cursor: Cursor): GreenNode | undefined {
+  const fenceIndex = taggedLiteralFenceIndex(cursor);
+  if (fenceIndex === undefined) return undefined;
+  const lastSegmentMark = cursor.mark(fenceIndex - 1);
+  const lastSegmentText = cursor.peekToken(fenceIndex - 1).text;
+  const adjacent = cursor.isAdjacent(fenceIndex);
+  const fenceMark = cursor.mark(fenceIndex);
+  const fence = cursor.peekToken(fenceIndex);
+  cursor.startNode('TaggedLiteral');
+  parseIdentifier(cursor);
+  while (cursor.peekKind() === 'Dot') {
+    cursor.bump();
+    parseIdentifier(cursor);
+  }
+  if (!adjacent) {
+    cursor.diagnostic(
+      'PSL_TAGGED_LITERAL_FENCE_EXPECTED',
+      `Expected the literal fence to follow the tag "${lastSegmentText}" directly, with no space between`,
+      lastSegmentMark,
+    );
+  }
+  cursor.bump();
+  if (isOpeningBacktick(fence)) {
+    cursor.diagnostic('PSL_UNTERMINATED_TEMPLATE_LITERAL', 'Unterminated template literal', {
+      offset: fenceMark.offset,
+      length: 1,
+    });
+  } else if (fence.kind === 'StringLiteral' && !isTerminatedStringLiteral(fence.text)) {
+    cursor.diagnostic('PSL_UNTERMINATED_STRING', 'Unterminated string literal', fenceMark);
+  }
+  return cursor.finishNode();
 }
 
 // Ordering among the `Ident`-leading alternatives is load-bearing: the
