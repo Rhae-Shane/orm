@@ -331,19 +331,23 @@ withTempDir(({ createTempDir }) => {
         const infer = await runContractInfer(ctx);
         expect(infer.exitCode, `contract infer\n${stripAnsi(infer.stderr)}`).toBe(0);
 
-        // Fix the one remaining unrelated emit-blocker (1:1 back-relation) so
-        // emit succeeds and verify can run. The gin/hash indexes and the tags
-        // list default are left exactly as infer printed them — postgres now
-        // registers those access methods and infer now prints a literal-list
-        // default (TML-3037), so they emit and round-trip clean against the
-        // live gin/hash indexes and the live tags default, proving those
-        // fixes too. Only the jsonb default on Users.metadata is left broken,
-        // which is what this test is for.
-        const reduced = fixOneToOneBackRelation(readContractPsl(ctx));
-        writeContractPsl(ctx, reduced);
+        const psl = readContractPsl(ctx);
+        expect(
+          psl,
+          'Users.metadata carries its jsonb default as the JSON text its codec reads',
+        ).toMatch(/metadata\s+Jsonb\s+@default\("\{\}"\)/);
+
+        // The jsonb default is left exactly as infer printed it; the one
+        // remaining unrelated emit-blocker (1:1 back-relation) is fixed so
+        // emit and verify can run.
+        writeContractPsl(ctx, fixOneToOneBackRelation(psl));
 
         const emit = await runContractEmit(ctx);
-        expect(emit.exitCode, `contract emit\n${stripAnsi(emit.stderr)}`).toBe(0);
+        expect(
+          emit.exitCode,
+          'contract emit should accept @default("{}") on Users.metadata; ' +
+            `instead got:\n${stripAnsi(emit.stderr)}\n${stripAnsi(emit.stdout)}`,
+        ).toBe(0);
 
         await expectVerifiesCleanAfterPull(ctx, 'Users.metadata');
       },
