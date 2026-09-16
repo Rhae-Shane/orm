@@ -319,12 +319,12 @@ export default definePrismaConfig({
  * The config for a project whose contract source is its Prisma 7 schema:
  * `prisma7Schema` beside `defineConfig`, from the same entrypoint, with the
  * schema path as the user gave it and the emitted artifacts under Prisma 8's
- * own directory.
+ * own directory (`output` is the directory; the facade names `contract.json`).
  */
 export function prisma7ConfigFile(
   target: TargetId,
   schemaPath: string,
-  outputPath: string,
+  outputDir: string,
   resolveImportSpecifier: ImportSpecifierResolver = keepInternalSpecifiers,
 ): string {
   const configEntrypoint = targetEntrypoint(target, 'config', resolveImportSpecifier);
@@ -334,7 +334,8 @@ import { defineConfig as ormConfig, prisma7Schema } from '${configEntrypoint}';
 
 export default definePrismaConfig({
   orm: ormConfig({
-    contract: prisma7Schema(${JSON.stringify(schemaPath).replace(/"/g, "'")}, { output: ${JSON.stringify(outputPath).replace(/"/g, "'")} }),
+    contract: prisma7Schema(${JSON.stringify(schemaPath).replace(/"/g, "'")}),
+    output: ${JSON.stringify(outputDir).replace(/"/g, "'")},
     db: {
       connection: process.env['DATABASE_URL']!,
     },

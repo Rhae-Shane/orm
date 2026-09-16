@@ -249,7 +249,7 @@ function planScaffold(ctx: {
             content: prisma7ConfigFile(
               inputs.target,
               source.schemaPath,
-              `${outputDir}/contract.json`,
+              outputDir,
               resolveImportSpecifier,
             ),
           },
