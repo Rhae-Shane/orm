@@ -22,7 +22,11 @@ import {
   isAuthoringTypeConstructorDescriptor,
   validateAuthoringHelperArguments,
 } from '@internal/framework-components/authoring';
-import type { AnyCodecDescriptor, CodecLookup } from '@internal/framework-components/codec';
+import type {
+  AnyCodecDescriptor,
+  CodecLookup,
+  PslLiteral,
+} from '@internal/framework-components/codec';
 import type {
   ControlMutationDefaultRegistry,
   MutationDefaultGeneratorDescriptor,
@@ -30,26 +34,27 @@ import type {
 import type {
   FieldSymbol,
   ModelSymbol,
-  NumLiteral,
   PslSpan,
   ResolvedTypeConstructorCall,
   SymbolTable,
 } from '@internal/psl-parser';
-import type { SourceFile } from '@internal/psl-parser/syntax';
+import { nodePslSpan } from '@internal/psl-parser';
+import type { FieldAttributeAst, SourceFile } from '@internal/psl-parser/syntax';
 import type {
   AuthoredColumnDefault,
   AuthoredColumnDefaultLiteralValue,
 } from '@internal/sql-contract-ts/contract-builder';
+import { blindCast } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
 import { contractError } from './contract-errors';
 import { lowerDefaultFunctionWithRegistry } from './default-function-registry';
-import { numberLiteralDefault } from './number-literal-default';
 
 import { mapPslHelperArgs } from './psl-authoring-arguments';
 import {
   fieldSpecContext,
   findFieldAttributeNode,
   interpretFieldAttribute,
+  PSL_INVALID_DEFAULT_LITERAL,
   sqlAttributeSpecs,
 } from './sql-attribute-specs';
 
@@ -736,79 +741,104 @@ export function lowerDefaultForField(input: {
   });
   if (interpreted === undefined) return {};
   const value = interpreted.value;
-  const literalValue = (
-    literal: string | boolean | NumLiteral,
-  ): AuthoredColumnDefaultLiteralValue =>
-    typeof literal === 'object'
-      ? (numberLiteralDefault(literal.text, input.columnDescriptor.codecId, input.codecLookup) ??
-        Number(literal.text))
-      : literal;
+  if (typeof value === 'string') return { defaultValue: { kind: 'literal', value } };
 
-  if (Array.isArray(value)) {
-    return { defaultValue: { kind: 'literal', value: value.map(literalValue) } };
-  }
-
-  if (typeof value === 'object' && 'text' in value) {
-    return { defaultValue: { kind: 'literal', value: literalValue(value) } };
-  }
-
-  if (typeof value === 'object') {
-    const lowered = lowerDefaultFunctionWithRegistry({
-      call: value,
-      registry: input.defaultFunctionRegistry,
-      context: {
+  if (Array.isArray(value) || isPslLiteral(value)) {
+    const codecId = input.columnDescriptor.codecId;
+    const codec = input.codecLookup?.get(codecId);
+    if (codec === undefined) {
+      throw new InternalError(
+        `Column "${input.modelName}.${input.fieldName}" resolved to codec "${codecId}", but the codec lookup has no codec for it. The lookup that resolved the column must also carry its codec.`,
+      );
+    }
+    try {
+      const decoded = Array.isArray(value)
+        ? value.map((element) => codec.decodePsl(element))
+        : codec.decodePsl(value);
+      return {
+        defaultValue: {
+          kind: 'literal',
+          value: blindCast<
+            AuthoredColumnDefaultLiteralValue,
+            'decodePsl returns the codec its own value type, which encodeColumnDefault hands back to the same codec through encodeJson'
+          >(decoded),
+        },
+      };
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      input.diagnostics.push({
+        code: PSL_INVALID_DEFAULT_LITERAL,
+        message: `Field "${input.modelName}.${input.fieldName}": @default(${defaultArgumentText(node, input.sourceFile)}) is not a value of ${codecId}: ${reason}`,
         sourceId: input.sourceId,
-        modelName: input.modelName,
-        fieldName: input.fieldName,
-        columnCodecId: input.columnDescriptor.codecId,
-      },
+        span: nodePslSpan(node.syntax, input.sourceFile),
+      });
+      return {};
+    }
+  }
+
+  const lowered = lowerDefaultFunctionWithRegistry({
+    call: value,
+    registry: input.defaultFunctionRegistry,
+    context: {
+      sourceId: input.sourceId,
+      modelName: input.modelName,
+      fieldName: input.fieldName,
+      columnCodecId: input.columnDescriptor.codecId,
+    },
+  });
+
+  if (!lowered.ok) {
+    input.diagnostics.push(lowered.diagnostic);
+    return {};
+  }
+
+  if (lowered.value.kind === 'storage') {
+    return { defaultValue: lowered.value.defaultValue };
+  }
+
+  const generatorDescriptor = input.generatorDescriptorById.get(lowered.value.generated.id);
+  if (!generatorDescriptor) {
+    input.diagnostics.push({
+      code: 'PSL_INVALID_DEFAULT_APPLICABILITY',
+      message: `Default generator "${lowered.value.generated.id}" is not available in the composed mutation default registry.`,
+      sourceId: input.sourceId,
+      span: value.span,
     });
-
-    if (!lowered.ok) {
-      input.diagnostics.push(lowered.diagnostic);
-      return {};
-    }
-
-    if (lowered.value.kind === 'storage') {
-      return { defaultValue: lowered.value.defaultValue };
-    }
-
-    const generatorDescriptor = input.generatorDescriptorById.get(lowered.value.generated.id);
-    if (!generatorDescriptor) {
-      input.diagnostics.push({
-        code: 'PSL_INVALID_DEFAULT_APPLICABILITY',
-        message: `Default generator "${lowered.value.generated.id}" is not available in the composed mutation default registry.`,
-        sourceId: input.sourceId,
-        span: value.span,
-      });
-      return {};
-    }
-
-    // Preset-only generators (e.g. `timestampNow`) co-register their codec through the preset descriptor, so they don't carry an `applicableCodecIds` list. Such a generator surfacing on the `@default(...)` lowering path is itself the bug — emit a diagnostic pointing the user at the correct authoring surface.
-    if (generatorDescriptor.applicableCodecIds === undefined) {
-      input.diagnostics.push({
-        code: 'PSL_INVALID_DEFAULT_APPLICABILITY',
-        message: `Default generator "${generatorDescriptor.id}" is not applicable to "@default(...)" lowering. Use the corresponding field preset (e.g. \`temporal.${generatorDescriptor.id === 'timestampNow' ? 'updatedAt' : generatorDescriptor.id}()\`) instead.`,
-        sourceId: input.sourceId,
-        span: value.span,
-      });
-      return {};
-    }
-
-    if (!generatorDescriptor.applicableCodecIds.includes(input.columnDescriptor.codecId)) {
-      input.diagnostics.push({
-        code: 'PSL_INVALID_DEFAULT_APPLICABILITY',
-        message: `Default generator "${generatorDescriptor.id}" is not applicable to "${input.modelName}.${input.fieldName}" with codecId "${input.columnDescriptor.codecId}".`,
-        sourceId: input.sourceId,
-        span: value.span,
-      });
-      return {};
-    }
-
-    return { executionDefaults: { onCreate: lowered.value.generated } };
+    return {};
   }
 
-  return { defaultValue: { kind: 'literal', value } };
+  // Preset-only generators (e.g. `timestampNow`) co-register their codec through the preset descriptor, so they don't carry an `applicableCodecIds` list. Such a generator surfacing on the `@default(...)` lowering path is itself the bug — emit a diagnostic pointing the user at the correct authoring surface.
+  if (generatorDescriptor.applicableCodecIds === undefined) {
+    input.diagnostics.push({
+      code: 'PSL_INVALID_DEFAULT_APPLICABILITY',
+      message: `Default generator "${generatorDescriptor.id}" is not applicable to "@default(...)" lowering. Use the corresponding field preset (e.g. \`temporal.${generatorDescriptor.id === 'timestampNow' ? 'updatedAt' : generatorDescriptor.id}()\`) instead.`,
+      sourceId: input.sourceId,
+      span: value.span,
+    });
+    return {};
+  }
+
+  if (!generatorDescriptor.applicableCodecIds.includes(input.columnDescriptor.codecId)) {
+    input.diagnostics.push({
+      code: 'PSL_INVALID_DEFAULT_APPLICABILITY',
+      message: `Default generator "${generatorDescriptor.id}" is not applicable to "${input.modelName}.${input.fieldName}" with codecId "${input.columnDescriptor.codecId}".`,
+      sourceId: input.sourceId,
+      span: value.span,
+    });
+    return {};
+  }
+
+  return { executionDefaults: { onCreate: lowered.value.generated } };
+}
+
+function isPslLiteral(value: object): value is PslLiteral {
+  return 'text' in value;
+}
+
+function defaultArgumentText(node: FieldAttributeAst, sourceFile: SourceFile): string {
+  return [...(node.argList()?.args() ?? [])]
+    .map((arg) => sourceFile.text.slice(arg.syntax.offset, arg.syntax.endOffset))
+    .join(', ');
 }
 
 export function resolveColumnDescriptor(

@@ -240,9 +240,7 @@ describe('sqlAttributeSpecs.field.default', () => {
 
     expect(value.kind).toBe('oneOf');
     expect(value.alternatives.map((alt) => alt.kind)).toEqual([
-      'str',
-      'num',
-      'bool',
+      'literal',
       'funcCall',
       'funcCall',
       'funcCall',
@@ -277,7 +275,7 @@ describe('sqlAttributeSpecs.field.default', () => {
 
     const listDefault = listMetadata<unknown, FieldAttributeCtx>(value.alternatives[0] ?? value);
     expect(listDefault).toMatchObject({ kind: 'list' });
-    expect(listDefault.of).toMatchObject({ kind: 'oneOf' });
+    expect(listDefault.of).toMatchObject({ kind: 'literal' });
     expect(
       value.alternatives.slice(1).map((alt) => (alt as FuncCallMetadata<FieldAttributeCtx>).name),
     ).toEqual(['autoincrement', 'now', 'uuid', 'cuid', 'ulid', 'nanoid', 'dbgenerated']);
@@ -385,7 +383,7 @@ model Post {
   it('accepts scalar literals on a scalar field, keeping a number as written', () => {
     const schema = 'model Post {\n  id Int @id\n  price Decimal @default(1.50)\n}\n';
     expect(interpretDefault(schema, 'price')).toEqual({
-      value: { value: { text: '1.50' } },
+      value: { value: { kind: 'number', text: '1.50' } },
       diagnostics: [],
     });
   });
@@ -393,7 +391,7 @@ model Post {
   it('accepts a list literal on a list field and rejects a list on a scalar field', () => {
     expect(
       interpretDefault('model Post {\n  id Int @id\n  tags String[] @default(["a"])\n}\n', 'tags'),
-    ).toEqual({ value: { value: ['a'] }, diagnostics: [] });
+    ).toEqual({ value: { value: [{ kind: 'string', text: 'a' }] }, diagnostics: [] });
     const rejected = interpretDefault(
       'model Post {\n  id Int @id\n  tag String @default(["a"])\n}\n',
       'tag',

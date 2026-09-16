@@ -18,7 +18,21 @@ import {
   type PslExtensionBlock,
   resolveEnumCodecId,
 } from '@internal/framework-components/authoring';
-import type { CodecLookup } from '@internal/framework-components/codec';
+import {
+  type Codec,
+  type CodecLookup,
+  decodeBooleanPsl,
+  decodeFloatPsl,
+  decodeJsonTextPsl,
+  decodeStringPsl,
+  decodeWholeNumberPsl,
+  encodeBooleanPsl,
+  encodeFloatPsl,
+  encodeJsonTextPsl,
+  encodeNumberPsl,
+  encodeStringPsl,
+  pslLiteralKindError,
+} from '@internal/framework-components/codec';
 import type { ExtensionPackRef, TargetPackRef } from '@internal/framework-components/components';
 import type {
   ControlMutationDefaultEntry,
@@ -559,11 +573,115 @@ const targetTypesByCodecId: Record<string, readonly string[]> = {
   'pg/vector@1': ['vector'],
 };
 
+/**
+ * How each fixture codec reads and writes its PSL literal, built from the shared framework helpers so these interpreter tests stay independent of a target pack. Behaviour that only the real codec has (`pg/numeric@1` canonicalisation, exact big integers) is covered in `target-postgres/test/psl-interpreter-literal-defaults.test.ts`.
+ */
+type PslShape = 'string' | 'whole' | 'bigint' | 'float' | 'decimal' | 'boolean' | 'json';
+
+const pslShapeByCodecId: Record<string, PslShape> = {
+  'pg/text@1': 'string',
+  'pg/int@1': 'whole',
+  'pg/bool@1': 'boolean',
+  'pg/int4@1': 'whole',
+  'pg/int8@1': 'bigint',
+  'pg/float8@1': 'float',
+  'pg/numeric@1': 'decimal',
+  'pg/timestamptz-temporal@1': 'string',
+  'pg/jsonb@1': 'json',
+  'pg/bytea@1': 'string',
+  'sql/char@1': 'string',
+  'sql/varchar@1': 'string',
+  'pg/int2@1': 'whole',
+  'pg/float4@1': 'float',
+  'pg/timestamp-temporal@1': 'string',
+  'pg/date-temporal@1': 'string',
+  'pg/time-temporal@1': 'string',
+  'pg/timetz@1': 'string',
+  'pg/json@1': 'json',
+  'pg/vector@1': 'json',
+};
+
+const NON_FINITE_TEXT = /^(?:NaN|-?Infinity)$/;
+
+function pslMembers(
+  id: string,
+  shape: PslShape,
+): Pick<Codec, 'encodeJson' | 'decodeJson' | 'encodePsl' | 'decodePsl'> {
+  const identity = (value: unknown) => value as never;
+  switch (shape) {
+    case 'string':
+      return {
+        encodeJson: identity,
+        decodeJson: identity,
+        encodePsl: (value) => encodeStringPsl(value as string),
+        decodePsl: (literal) => decodeStringPsl(id, literal),
+      };
+    case 'whole':
+      return {
+        encodeJson: identity,
+        decodeJson: identity,
+        encodePsl: (value) => encodeNumberPsl(value as number),
+        decodePsl: (literal) => Number(decodeWholeNumberPsl(id, literal)),
+      };
+    case 'bigint':
+      return {
+        encodeJson: (value) => String(value),
+        decodeJson: (json) => BigInt(json as string),
+        encodePsl: (value) => ({ kind: 'number', text: String(value) }),
+        decodePsl: (literal) => BigInt(decodeWholeNumberPsl(id, literal)),
+      };
+    case 'float':
+      return {
+        encodeJson: (value) => (Number.isFinite(value) ? (value as number) : String(value)),
+        decodeJson: (json) => Number(json),
+        encodePsl: (value) => encodeFloatPsl(value as number),
+        decodePsl: (literal) => decodeFloatPsl(id, literal),
+      };
+    case 'decimal':
+      return {
+        encodeJson: identity,
+        decodeJson: identity,
+        encodePsl: (value) =>
+          NON_FINITE_TEXT.test(value as string)
+            ? { kind: 'string', text: value as string }
+            : { kind: 'number', text: value as string },
+        decodePsl: (literal) => {
+          if (literal.kind === 'number') return literal.text;
+          if (literal.kind === 'string' && NON_FINITE_TEXT.test(literal.text)) return literal.text;
+          throw pslLiteralKindError(id, 'number', literal);
+        },
+      };
+    case 'boolean':
+      return {
+        encodeJson: identity,
+        decodeJson: identity,
+        encodePsl: (value) => encodeBooleanPsl(value as boolean),
+        decodePsl: (literal) => decodeBooleanPsl(id, literal),
+      };
+    case 'json':
+      return {
+        encodeJson: identity,
+        decodeJson: identity,
+        encodePsl: (value) => encodeJsonTextPsl(value as JsonValue),
+        decodePsl: (literal) => decodeJsonTextPsl(id, literal),
+      };
+  }
+}
+
+const fixtureCodecs = new Map<string, Codec>(
+  Object.entries(pslShapeByCodecId).map(([id, shape]) => [
+    id,
+    {
+      id,
+      encode: async (value: unknown) => value,
+      decode: async (wire: unknown) => wire,
+      ...pslMembers(id, shape),
+    },
+  ]),
+);
+
 export const postgresCodecLookup: CodecLookup = {
-  get: (id: string) => {
-    if (!targetTypesByCodecId[id]) return undefined;
-    return { id } as ReturnType<CodecLookup['get']>;
-  },
+  get: (id: string) => fixtureCodecs.get(id),
   targetTypesFor: (id: string) => targetTypesByCodecId[id],
   renderOutputTypeFor: () => undefined,
 };

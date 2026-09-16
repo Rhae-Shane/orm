@@ -11,6 +11,7 @@ import {
 } from '../src/interpreter';
 import {
   createBuiltinLikeControlMutationDefaults,
+  postgresCodecLookup,
   postgresNativeScalarTypeDescriptors,
   postgresScalarAuthoringTypes,
   postgresScalarTypeDescriptors,
@@ -50,9 +51,129 @@ describe('interpretPslDocumentToSqlContract default lowering', () => {
       composedExtensionContracts: new Map(),
       createNamespace: createTestSqlNamespace,
       capabilities: { sql: { scalarList: true } },
+      codecLookup: postgresCodecLookup,
       ...interpreterInput,
     });
   };
+
+  function literalDefaults(schema: string) {
+    const document = symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' });
+    const result = interpretPslDocumentToSqlContract({
+      ...document,
+      controlMutationDefaults: builtinControlMutationDefaults,
+    });
+    if (!result.ok) return { columns: {}, diagnostics: result.failure.diagnostics };
+    const table = unboundTables(sqlStorageFromSuccessfulSqlInterpretation(result.value))['n'];
+    const columns = Object.fromEntries(
+      Object.entries(table?.columns ?? {}).flatMap(([name, column]) =>
+        column.default === undefined ? [] : [[name, column.default]],
+      ),
+    );
+    return { columns, diagnostics: [] };
+  }
+
+  const invalidLiteral = (field: string, source: string, codecId: string, reason: string) => ({
+    code: 'PSL_INVALID_DEFAULT_LITERAL',
+    message: `Field "N.${field}": @default(${source}) is not a value of ${codecId}: ${reason}`,
+    sourceId: 'schema.prisma',
+    span: { start: expect.any(Object), end: expect.any(Object) },
+  });
+
+  describe('literal defaults read through the column codec', () => {
+    it('reads a JSON document from a string literal', () => {
+      expect(
+        literalDefaults(`model N {
+  id      Int   @id
+  object  Jsonb @default("{}")
+  array   Json  @default("[1, 2]")
+  nothing Json  @default("null")
+}`),
+      ).toEqual({
+        columns: {
+          object: { kind: 'literal', value: {} },
+          array: { kind: 'literal', value: [1, 2] },
+          nothing: { kind: 'literal', value: null },
+        },
+        diagnostics: [],
+      });
+    });
+
+    it('stores a number in the JSON form the codec writes', () => {
+      expect(
+        literalDefaults(`model N {
+  id      Int     @id
+  big     BigInt  @default(9007199254740993)
+  price   Decimal @default(1.50)
+  nan     Float   @default("NaN")
+  ratio   Float   @default(1.5)
+  count   Int     @default(-5)
+}`),
+      ).toEqual({
+        columns: {
+          big: { kind: 'literal', value: '9007199254740993' },
+          price: { kind: 'literal', value: '1.50' },
+          nan: { kind: 'literal', value: 'NaN' },
+          ratio: { kind: 'literal', value: 1.5 },
+          count: { kind: 'literal', value: -5 },
+        },
+        diagnostics: [],
+      });
+    });
+
+    it('reads strings, booleans, and lists', () => {
+      expect(
+        literalDefaults(`model N {
+  id      Int     @id
+  quoted  String  @default("a\\"b")
+  flag    Boolean @default(true)
+  numbers Int[]   @default([1, 2])
+}`),
+      ).toEqual({
+        columns: {
+          quoted: { kind: 'literal', value: 'a"b' },
+          flag: { kind: 'literal', value: true },
+          numbers: { kind: 'literal', value: [1, 2] },
+        },
+        diagnostics: [],
+      });
+    });
+
+    it.each([
+      [
+        'ratio Int @default(1.5)',
+        'ratio',
+        '1.5',
+        'pg/int4@1',
+        'pg/int4@1 reads a whole number literal; got a number 1.5',
+      ],
+      [
+        'count Int @default("1")',
+        'count',
+        '"1"',
+        'pg/int4@1',
+        'pg/int4@1 reads a whole number literal; got a string "1"',
+      ],
+      [
+        'payload Bytes @default(1234)',
+        'payload',
+        '1234',
+        'pg/bytea@1',
+        'pg/bytea@1 reads a string literal; got a number 1234',
+      ],
+      [
+        'xs Int[] @default([1, "x"])',
+        'xs',
+        '[1, "x"]',
+        'pg/int4@1',
+        'pg/int4@1 reads a whole number literal; got a string "x"',
+      ],
+    ])('reports %s as PSL_INVALID_DEFAULT_LITERAL', (field, name, source, codecId, reason) => {
+      expect(literalDefaults(`model N {\n  id Int @id\n  ${field}\n}`)).toEqual({
+        columns: {},
+        diagnostics: [invalidLiteral(name, source, codecId, reason)],
+      });
+    });
+  });
   it('lowers supported default functions into execution and storage contract shapes', () => {
     const document = symbolTableInputFromParseArgs({
       schema: `model Defaults {

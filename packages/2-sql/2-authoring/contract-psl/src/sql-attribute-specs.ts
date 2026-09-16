@@ -1,4 +1,5 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
+import type { PslLiteral } from '@internal/framework-components/codec';
 import type { ControlMutationDefaultRegistry } from '@internal/framework-components/control';
 import type {
   ContributedPslDiagnosticCode,
@@ -17,7 +18,6 @@ import type {
   InferAttr,
   ModelAttributeCtx,
   ModelSymbol,
-  NumLiteral,
   PslSpan,
   RejectingArgType,
   SymbolTable,
@@ -33,9 +33,9 @@ import {
   interpretAttribute,
   leafDiagnostic,
   list,
+  literal,
   modelAttribute,
   nodePslSpan,
-  numLiteral,
   oneOf,
   optional,
   record,
@@ -178,18 +178,15 @@ const mapFieldSpec = fieldAttribute('map', {
   refine: validateMappedName,
 });
 
-type DefaultArgValue =
-  | string
-  | NumLiteral
-  | boolean
-  | (string | NumLiteral | boolean)[]
-  | TypedFuncCall;
+/** An enum member lowers to its name; every other literal reaches the column codec as a {@link PslLiteral}. */
+type EnumMemberName = string;
+
+type DefaultArgValue = PslLiteral | PslLiteral[] | TypedFuncCall | EnumMemberName;
 
 function scalarDefaultArms(
   isList: boolean,
   registry: ControlMutationDefaultRegistry,
 ): readonly [ArgType<DefaultArgValue, AttributeCtx>, ...ArgType<DefaultArgValue, AttributeCtx>[]] {
-  const literal = () => oneOf(str(), numLiteral(), bool());
   const funcArms = [...registry.entries()].map(([name, entry]) =>
     funcCall(
       name,
@@ -199,7 +196,7 @@ function scalarDefaultArms(
       >(entry.signature),
     ),
   );
-  return isList ? [list(literal()), ...funcArms] : [str(), numLiteral(), bool(), ...funcArms];
+  return isList ? [list(literal()), ...funcArms] : [literal(), ...funcArms];
 }
 
 function noEnumMember(): RejectingArgType<never, AttributeCtx> {
@@ -428,6 +425,10 @@ export const PSL_CHECK_EXPRESSION_EMPTY: ContributedPslDiagnosticCode =
  * declaration, which a single attribute's `refine` cannot see.
  */
 export const PSL_CHECK_ON_STI_VARIANT: ContributedPslDiagnosticCode = 'PSL_CHECK_ON_STI_VARIANT';
+
+/** A `@default(...)` literal the column codec's `decodePsl` does not read. */
+export const PSL_INVALID_DEFAULT_LITERAL: ContributedPslDiagnosticCode =
+  'PSL_INVALID_DEFAULT_LITERAL';
 
 const checkModelSpec = modelAttribute('check', {
   documentation: 'Declares a named database CHECK constraint on this table.',

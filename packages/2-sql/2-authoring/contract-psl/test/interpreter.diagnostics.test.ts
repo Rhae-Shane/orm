@@ -7,6 +7,7 @@ import {
 import {
   createBuiltinLikeControlMutationDefaults,
   modelsOf,
+  postgresCodecLookup,
   postgresNativeScalarTypeDescriptors,
   postgresScalarAuthoringTypes,
   postgresScalarTypeDescriptors,
@@ -24,6 +25,7 @@ const baseInput = {
   composedExtensionContracts: new Map(),
   createNamespace: createTestSqlNamespace,
   capabilities: { sql: { scalarList: true } },
+  codecLookup: postgresCodecLookup,
 } as const;
 
 const builtinControlMutationDefaults = createBuiltinLikeControlMutationDefaults();
