@@ -61,13 +61,6 @@ export function modelsByCoordinate(
   return new Map(entries.map((entry) => [modelCoordinate(entry.namespaceId, entry.name), entry]));
 }
 
-/** Models keyed by their `(namespace, table)` coordinate. */
-export function modelsByTable(entries: readonly ModelEntry[]): ReadonlyMap<string, ModelEntry> {
-  return new Map(
-    entries.map((entry) => [modelCoordinate(entry.namespaceId, entry.tableName), entry]),
-  );
-}
-
 export function crossReferenceCoordinate(reference: CrossReference): string {
   return modelCoordinate(reference.namespace, reference.model);
 }

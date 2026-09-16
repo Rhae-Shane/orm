@@ -3,7 +3,6 @@ import type {
   PslModelAttribute,
 } from '@internal/framework-components/psl-ast';
 import { computeIndexContentHash, parseWireName } from '@internal/sql-schema-ir/naming';
-import type { SqlCheckConstraintIR } from '@internal/sql-schema-ir/types';
 import { assertDefined } from '@internal/utils/assertions';
 import { buildAttribute, escapePslString, namedArg, positionalArg } from './psl-literals';
 
@@ -88,6 +87,15 @@ export function buildIndexAttribute(
 }
 
 /**
+ * The parts of a check constraint `@@check` reads. Both the schema IR node and
+ * the contract's storage node carry them, and both sides print checks.
+ */
+export interface CheckAttributeSource {
+  readonly name: string;
+  readonly expression: string;
+}
+
+/**
  * Emits one `@@check` attribute for a live, non-derived check, always in the
  * `map:` form. Re-detecting `name:` is not attempted: the live expression is
  * Postgres's own reprint, but a wire-named check's hash was taken over the
@@ -98,7 +106,7 @@ export function buildIndexAttribute(
  * zero pending operations. `buildPolicyBlocks` makes the same call for
  * `@@map` on adopted RLS policies, for the same reason.
  */
-export function buildCheckAttribute(check: SqlCheckConstraintIR): PslModelAttribute {
+export function buildCheckAttribute(check: CheckAttributeSource): PslModelAttribute {
   return buildAttribute('model', 'check', [
     namedArg('expression', `"${escapePslString(check.expression)}"`),
     namedArg('map', `"${escapePslString(check.name)}"`),

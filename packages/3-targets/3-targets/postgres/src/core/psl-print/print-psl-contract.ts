@@ -15,6 +15,7 @@ import { ifDefined } from '@internal/utils/defined';
 import { postgresError } from '../errors';
 import { PostgresNativeEnum } from '../postgres-native-enum';
 import {
+  buildCheckAttribute,
   buildIndexAttribute,
   buildModelConstraintAttribute,
 } from '../psl-infer/infer-index-attributes';
@@ -59,6 +60,8 @@ function executionDefaultsByColumn(
 function scalarFieldAttributes(input: {
   readonly column: StorageColumn;
   readonly fieldName: string;
+  readonly namespaceId: string;
+  readonly tableName: string;
   readonly columnName: string;
   readonly isSingleColumnId: boolean;
   readonly pslTypeName: string;
@@ -75,6 +78,9 @@ function scalarFieldAttributes(input: {
       column: input.column,
       pslTypeName: input.pslTypeName,
       isEnum: input.isEnum,
+      namespaceId: input.namespaceId,
+      tableName: input.tableName,
+      columnName: input.columnName,
     });
   if (columnDefault !== undefined) {
     attributes.push(columnDefault);
@@ -149,6 +155,8 @@ function buildScalarFields(input: {
       attributes: scalarFieldAttributes({
         column,
         fieldName,
+        namespaceId: entry.namespaceId,
+        tableName: entry.tableName,
         columnName,
         isSingleColumnId: primaryKeyColumns.length === 1 && primaryKeyColumns[0] === columnName,
         pslTypeName: columnType.typeName,
@@ -164,14 +172,18 @@ function buildScalarFields(input: {
 
 function buildModelAttributes(entry: ModelEntry): readonly PslModelAttribute[] {
   const attributes: PslModelAttribute[] = [];
+  const fieldNameOf = (column: string): string => entry.fieldNamesByColumn.get(column) ?? column;
   const primaryKeyColumns = entry.table.primaryKey?.columns ?? [];
   if (primaryKeyColumns.length > 1) {
+    attributes.push(buildModelConstraintAttribute('id', primaryKeyColumns.map(fieldNameOf)));
+  }
+  for (const unique of entry.table.uniques) {
     attributes.push(
-      buildModelConstraintAttribute(
-        'id',
-        primaryKeyColumns.map((column) => entry.fieldNamesByColumn.get(column) ?? column),
-      ),
+      buildModelConstraintAttribute('unique', unique.columns.map(fieldNameOf), unique.name),
     );
+  }
+  for (const check of entry.table.checks ?? []) {
+    attributes.push(buildCheckAttribute(check));
   }
   for (const index of entry.table.indexes) {
     attributes.push(

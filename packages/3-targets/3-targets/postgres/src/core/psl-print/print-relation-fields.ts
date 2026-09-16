@@ -61,8 +61,12 @@ export function relationName(entry: RelationEntry): string {
   return `${entry.owner.name}_${entry.fieldName}`;
 }
 
+function columnsIn(model: ModelEntry, fieldNames: readonly string[]): readonly string[] {
+  return fieldNames.map((fieldName) => model.storage.fields[fieldName]?.column ?? fieldName);
+}
+
 function columnsOf(entry: RelationEntry, fieldNames: readonly string[]): readonly string[] {
-  return fieldNames.map((fieldName) => entry.owner.storage.fields[fieldName]?.column ?? fieldName);
+  return columnsIn(entry.owner, fieldNames);
 }
 
 function sameColumns(a: readonly string[], b: readonly string[]): boolean {
@@ -82,7 +86,10 @@ export function foreignKeyFor(entry: RelationEntry, target: ModelEntry): Foreign
 
 /**
  * The owning relation on `target` that pairs with a back-relation `entry`: the
- * one pointing back at `entry`'s model over the same columns.
+ * one pointing back at `entry`'s model over the same columns. The
+ * back-relation's target fields name fields of the target model, so they are
+ * resolved to columns through the candidate's own model, not through the
+ * back-relation's.
  */
 export function owningPartner(
   entry: RelationEntry,
@@ -97,7 +104,7 @@ export function owningPartner(
         candidate.targetCoordinate === ownerCoordinate &&
         sameColumns(
           columnsOf(candidate, candidate.relation.on.localFields),
-          columnsOf(entry, entry.relation.on.targetFields),
+          columnsIn(candidate.owner, entry.relation.on.targetFields),
         ),
     );
 }

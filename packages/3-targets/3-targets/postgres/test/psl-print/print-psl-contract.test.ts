@@ -8,6 +8,7 @@ import type {
 import { asNamespaceId } from '@internal/contract/types';
 import type { PslAttribute, PslField, PslModel } from '@internal/framework-components/psl-ast';
 import type { SqlStorage } from '@internal/sql-contract/types';
+import { blindCast } from '@internal/utils/casts';
 import { createSqlContract } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { PostgresContractSerializer } from '../../src/core/postgres-contract-serializer';
@@ -77,21 +78,26 @@ function print(input: {
       ? createSqlContract(overrides)
       : createSqlContract({ ...overrides, execution: input.execution });
   const contract = new PostgresContractSerializer().deserializeContract(json);
-  const ast = printPostgresPslContract(contract as Contract<SqlStorage>);
+  const ast = printPostgresPslContract(
+    blindCast<Contract<SqlStorage>, 'the Postgres serializer yields a SQL contract'>(contract),
+  );
   return ast.namespaces.flatMap((namespace) => namespace.models);
 }
 
 function table(input: {
   readonly columns: Record<string, unknown>;
   readonly primaryKey?: { readonly columns: readonly string[] };
+  readonly uniques?: readonly unknown[];
   readonly indexes?: readonly unknown[];
   readonly foreignKeys?: readonly unknown[];
+  readonly checks?: readonly unknown[];
 }): unknown {
   return {
     columns: input.columns,
-    uniques: [],
+    uniques: input.uniques ?? [],
     indexes: input.indexes ?? [],
     foreignKeys: input.foreignKeys ?? [],
+    ...(input.checks === undefined ? {} : { checks: input.checks }),
     ...(input.primaryKey === undefined ? {} : { primaryKey: input.primaryKey }),
   };
 }
@@ -156,6 +162,44 @@ describe('keys and indexes', () => {
       '@@index([email], map: "Widget_email_key", unique: true)',
     ]);
     expect(withIndex?.fields.map(fieldText)).toEqual(['id Int @id', 'email String']);
+  });
+
+  it('prints a unique constraint as @@unique, under the field names its columns carry', () => {
+    const [model] = print({
+      models: {
+        Widget: { table: 'widget', fields: { id: { column: 'id' }, email: { column: 'e_mail' } } },
+      },
+      tables: {
+        widget: table({
+          columns: { id: INT_COLUMN, e_mail: TEXT_COLUMN },
+          primaryKey: { columns: ['id'] },
+          uniques: [{ columns: ['e_mail'], name: 'widget_email_key' }],
+        }),
+      },
+    });
+    expect(model?.attributes.map(attributeText)).toEqual([
+      '@@unique([email], map: "widget_email_key")',
+    ]);
+  });
+
+  it('prints every check constraint the table carries', () => {
+    const [model] = print({
+      models: { Widget: { table: 'widget', fields: { id: { column: 'id' } } } },
+      tables: {
+        widget: table({
+          columns: { id: INT_COLUMN },
+          primaryKey: { columns: ['id'] },
+          checks: [
+            { name: 'widget_id_positive', expression: 'id > 0' },
+            { name: 'widget_id_small', expression: 'id < 100' },
+          ],
+        }),
+      },
+    });
+    expect(model?.attributes.map(attributeText)).toEqual([
+      '@@check(expression: "id > 0", map: "widget_id_positive")',
+      '@@check(expression: "id < 100", map: "widget_id_small")',
+    ]);
   });
 
   it('prints a multi-column primary key as a model attribute', () => {
@@ -230,6 +274,37 @@ describe('column defaults', () => {
       }),
     ).toBe('@default(dbgenerated("gen_random_uuid()"))');
   });
+
+  it('refuses a literal default the column type has no PSL spelling for', () => {
+    let thrown: unknown;
+    try {
+      defaultOf({
+        nativeType: 'jsonb',
+        codecId: 'pg/jsonb@1',
+        nullable: false,
+        default: { kind: 'literal', value: { a: 1 } },
+      });
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toMatchObject({
+      code: 'CONTRACT.CONVERT_UNSUPPORTED',
+      message: expect.stringContaining('"public"."widget"."value"'),
+    });
+  });
+});
+
+describe('list columns', () => {
+  it('prints the element-not-null check a list column carries', () => {
+    const model = oneModel(
+      { id: INT_COLUMN, tags: { ...TEXT_COLUMN, many: true, noCheck: ['elementNotNull'] } },
+      { id: { column: 'id' }, tags: { column: 'tags' } },
+    );
+    expect(model?.fields.map(fieldText)).toEqual([
+      'id Int @id',
+      'tags String[] @noCheck(elementNotNull)',
+    ]);
+  });
 });
 
 describe('generated values', () => {
@@ -296,7 +371,7 @@ describe('generated values', () => {
 });
 
 describe('relations', () => {
-  function postAndUser(foreignKey: Record<string, unknown>, indexes: readonly unknown[] = []) {
+  function postAndUser(foreignKey: Record<string, unknown>) {
     return print({
       models: {
         User: {
@@ -328,7 +403,6 @@ describe('relations', () => {
         post: table({
           columns: { id: INT_COLUMN, authorId: INT_COLUMN },
           primaryKey: { columns: ['id'] },
-          indexes,
           foreignKeys: [
             {
               source: { namespaceId: 'public', tableName: 'post', columns: ['authorId'] },
