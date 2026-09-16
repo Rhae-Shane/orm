@@ -150,9 +150,11 @@ export const pgUnboundedIntDecode = (wire: string | number | bigint): bigint =>
 
 const NON_FINITE_TEXT = /^(?:NaN|-?Infinity)$/;
 
-/** JSON has no number for `NaN` or the infinities; PostgreSQL emits them as strings and the float codecs store them that way. */
-export const pgFloatEncodeJson = (value: number): JsonValue =>
+/** Neither JSON nor a SQL number literal has a form for `NaN` or the infinities; PostgreSQL reads and writes them as the text `NaN`, `Infinity`, `-Infinity`, so the float codecs carry them as that text on the wire and in JSON. */
+export const pgFloatEncode = (value: number): string | number =>
   Number.isFinite(value) ? value : String(value);
+
+export const pgFloatEncodeJson = (value: number): JsonValue => pgFloatEncode(value);
 
 export const pgFloatDecodeJson = (codecId: string, json: JsonValue): number => {
   if (typeof json === 'number') return json;

@@ -115,6 +115,21 @@ describe('codecs-class', () => {
       expect(await codec.encode(Math.E, callCtx)).toBe(Math.E);
       expect(await codec.decode(Math.E, callCtx)).toBe(Math.E);
     });
+    it.each([
+      [Number.NaN, 'NaN'],
+      [Number.POSITIVE_INFINITY, 'Infinity'],
+      [Number.NEGATIVE_INFINITY, '-Infinity'],
+    ])('writes %s as the text %s that Postgres reads back', async (value, text) => {
+      expect(await codec.encode(value, callCtx)).toBe(text);
+      expect(await codec.decode(text, callCtx)).toBe(value);
+    });
+  });
+
+  describe('pg/float4@1 non-finite values', () => {
+    const codec = pgFloat4Descriptor.factory()(instanceCtx);
+    it('writes NaN as the text NaN', async () => {
+      expect(await codec.encode(Number.NaN, callCtx)).toBe('NaN');
+    });
   });
 
   describe('pg/bool@1', () => {

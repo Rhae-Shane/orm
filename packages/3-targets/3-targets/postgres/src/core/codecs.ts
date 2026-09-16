@@ -68,6 +68,7 @@ import {
   pgByteaDecodeWire,
   pgByteaEncodeJson,
   pgFloatDecodeJson,
+  pgFloatEncode,
   pgFloatEncodeJson,
   pgInt8Decode,
   pgInt8NumberDecode,
@@ -864,8 +865,8 @@ export class PgFloat4Codec extends CodecImpl<
   string | number,
   number
 > {
-  async encode(value: number, _ctx: CodecCallContext): Promise<number> {
-    return value;
+  async encode(value: number, _ctx: CodecCallContext): Promise<string | number> {
+    return pgFloatEncode(value);
   }
   async decode(wire: string | number, _ctx: CodecCallContext): Promise<number> {
     return decodePostgresNumberWire(wire);
@@ -917,8 +918,8 @@ export class PgFloat8Codec extends CodecImpl<
   string | number,
   number
 > {
-  async encode(value: number, _ctx: CodecCallContext): Promise<number> {
-    return value;
+  async encode(value: number, _ctx: CodecCallContext): Promise<string | number> {
+    return pgFloatEncode(value);
   }
   async decode(wire: string | number, _ctx: CodecCallContext): Promise<number> {
     return decodePostgresNumberWire(wire);
