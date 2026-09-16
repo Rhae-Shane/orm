@@ -136,7 +136,8 @@ function validateProviderResult(providerResult: unknown): ValidatedProviderResul
   }
 
   if (providerResult['ok']) {
-    if (!('value' in providerResult)) {
+    const value = providerResult['value'];
+    if (value === undefined || value === null) {
       return {
         ok: false,
         error: failedToResolveContractSource(
@@ -145,7 +146,7 @@ function validateProviderResult(providerResult: unknown): ValidatedProviderResul
         ),
       };
     }
-    return { ok: true, value: providerResult['value'] };
+    return { ok: true, value };
   }
 
   const failure = providerResult['failure'];
