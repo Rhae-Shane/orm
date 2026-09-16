@@ -40,6 +40,15 @@ const listColumnCases = new Set([
   'scalars',
 ]);
 
+/**
+ * The Prisma 8 PSL source resolves a relation's target by model name alone, so
+ * two models sharing a name in different namespaces cannot be printed.
+ */
+const duplicateModelNameCases = new Set([
+  'junction-name-in-other-schema',
+  'relation-name-in-two-schemas',
+]);
+
 function prisma7SchemaPath(caseName: string): string {
   const directory = join(fixturesDir, caseName, 'schema');
   return existsSync(directory) ? directory : join(fixturesDir, caseName, 'schema.prisma');
@@ -106,6 +115,12 @@ describe('a printed Prisma 7 contract reads back as the same contract', () => {
   for (const caseName of cases) {
     if (listColumnCases.has(caseName)) {
       it.fails(`${caseName} (a nullable list has no PSL spelling yet)`, async () => {
+        await roundTrip(caseName);
+      });
+      continue;
+    }
+    if (duplicateModelNameCases.has(caseName)) {
+      it.fails(`${caseName} (one model name in two namespaces has no PSL spelling)`, async () => {
         await roundTrip(caseName);
       });
       continue;
