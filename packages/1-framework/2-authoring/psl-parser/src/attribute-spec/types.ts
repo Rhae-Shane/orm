@@ -192,6 +192,7 @@ export interface TaggedLiteralArgType<Ctx extends AttributeCtx = AttributeCtx>
   extends ArgTypeOutput<TaggedLiteralValue, Ctx> {
   readonly kind: 'taggedLiteral';
   readonly tags: readonly string[];
+  readonly documentation: string;
 }
 
 export interface ArgType<T, Ctx extends AttributeCtx> extends ArgTypeOutput<T, Ctx> {

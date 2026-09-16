@@ -91,6 +91,8 @@ export interface TypedDefaultLiteral {
 export interface ControlDefaultLiteralTagEntry {
   /** How the tag is written, for messages: `sql`...``. */
   readonly usage: string;
+  /** What the literal does, shown as signature help. */
+  readonly documentation: string;
   readonly lower: (input: {
     readonly literal: TypedDefaultLiteral;
     readonly context: DefaultFunctionLoweringContext;

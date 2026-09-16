@@ -26,11 +26,15 @@ const CANONICALIZATION_FAILURES: Record<
 };
 
 /** A `tag`...`` or `tag"..."` argument whose tag is one of `tags`, in registration order. */
-export function taggedLiteral(tags: readonly string[]): TaggedLiteralArgType<AttributeCtx> {
+export function taggedLiteral(
+  tags: readonly string[],
+  options: { readonly documentation: string },
+): TaggedLiteralArgType<AttributeCtx> {
   return {
     kind: 'taggedLiteral',
     label: `${tags[0] ?? 'tag'}\`...\``,
     tags,
+    documentation: options.documentation,
     parse: (arg, ctx): Result<TaggedLiteralValue, readonly PslDiagnostic[]> => {
       const literal = TaggedLiteralExprAst.cast(arg.syntax);
       if (literal === undefined) {

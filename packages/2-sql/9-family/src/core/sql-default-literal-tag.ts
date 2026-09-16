@@ -8,6 +8,7 @@ import { checkSqlDefaultBody } from '@internal/sql-contract/validators';
 export function sqlDefaultLiteralTagEntry(usage: string): ControlDefaultLiteralTagEntry {
   return {
     usage,
+    documentation: "Uses the SQL between the fences, verbatim, as the column's default expression.",
     lower: ({ literal, context }): LoweredDefaultResult => {
       const reason = checkSqlDefaultBody(literal.body);
       if (reason !== undefined) {

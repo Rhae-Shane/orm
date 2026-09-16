@@ -193,8 +193,20 @@ function scalarDefaultArms(
   registries: ControlDefaultRegistries,
 ): readonly [ArgType<DefaultArgValue, AttributeCtx>, ...ArgType<DefaultArgValue, AttributeCtx>[]] {
   const literal = () => oneOf(str(), numLiteral(), bool());
-  const tags = [...registries.defaultLiteralTagRegistry.keys()];
-  const tagArms = tags.length > 0 ? [taggedLiteral(tags)] : [];
+  const tagEntries = [...registries.defaultLiteralTagRegistry];
+  const tagArms =
+    tagEntries.length > 0
+      ? [
+          taggedLiteral(
+            tagEntries.map(([tag]) => tag),
+            {
+              documentation: [...new Set(tagEntries.map(([, entry]) => entry.documentation))].join(
+                ' ',
+              ),
+            },
+          ),
+        ]
+      : [];
   const funcArms = [...registries.defaultFunctionRegistry.entries()].map(([name, entry]) =>
     funcCall(
       name,

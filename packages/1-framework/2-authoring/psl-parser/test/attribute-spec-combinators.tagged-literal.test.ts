@@ -39,7 +39,7 @@ function argOf(exprSource: string): { expr: ExpressionAst; ctx: FieldAttributeCt
 }
 
 describe('oneOf with a tagged literal alternative', () => {
-  const type = oneOf(str(), taggedLiteral(['sql']));
+  const type = oneOf(str(), taggedLiteral(['sql'], { documentation: 'Raw SQL.' }));
 
   it('surfaces the one alternative-specific failure instead of the generic list', () => {
     const { expr, ctx } = argOf('pg.sql`x`');
@@ -56,7 +56,10 @@ describe('oneOf with a tagged literal alternative', () => {
   });
 
   it('returns the first specific failure when several alternatives produce one', () => {
-    const twoTagArms = oneOf(taggedLiteral(['sql']), taggedLiteral(['pg.sql']));
+    const twoTagArms = oneOf(
+      taggedLiteral(['sql'], { documentation: 'Raw SQL.' }),
+      taggedLiteral(['pg.sql'], { documentation: 'Raw SQL.' }),
+    );
     const { expr, ctx } = argOf('other`x`');
     const result = twoTagArms.parse(expr, ctx);
     expect(result.ok).toBe(false);
@@ -81,12 +84,13 @@ describe('oneOf with a tagged literal alternative', () => {
 });
 
 describe('taggedLiteral', () => {
-  const type = taggedLiteral(['sql', 'pg.sql']);
+  const type = taggedLiteral(['sql', 'pg.sql'], { documentation: 'Raw SQL, used verbatim.' });
 
   it('labels itself with the first tag', () => {
     expect(type.kind).toBe('taggedLiteral');
     expect(type.label).toBe('sql`...`');
     expect(type.tags).toEqual(['sql', 'pg.sql']);
+    expect(type.documentation).toBe('Raw SQL, used verbatim.');
   });
 
   it('accepts a known tag and returns the canonical body with its span', () => {

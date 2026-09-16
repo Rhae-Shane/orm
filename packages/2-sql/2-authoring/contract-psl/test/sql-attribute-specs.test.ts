@@ -313,6 +313,8 @@ describe('sqlAttributeSpecs.field.default', () => {
       kind: 'taggedLiteral',
       label: 'sql`...`',
       tags: ['sql', 'pg.sql'],
+      documentation:
+        "Uses the SQL between the fences, verbatim, as the column's default expression.",
     });
   });
 

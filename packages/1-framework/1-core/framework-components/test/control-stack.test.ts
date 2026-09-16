@@ -1292,7 +1292,7 @@ describe('assembleControlMutationDefaults', () => {
   });
 
   it('merges literal tag registries from multiple descriptors', () => {
-    const entry = { usage: 'sql`...`', lower: stubLower };
+    const entry = { usage: 'sql`...`', documentation: 'Raw SQL.', lower: stubLower };
     const result = assembleControlMutationDefaults([
       createDescriptor({
         id: 'desc-a',
@@ -1316,7 +1316,7 @@ describe('assembleControlMutationDefaults', () => {
   });
 
   it('throws on a duplicate literal tag, naming both descriptors', () => {
-    const entry = { usage: 'sql`...`', lower: stubLower };
+    const entry = { usage: 'sql`...`', documentation: 'Raw SQL.', lower: stubLower };
     expect(() =>
       assembleControlMutationDefaults([
         createDescriptor({
