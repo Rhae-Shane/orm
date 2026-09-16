@@ -120,6 +120,10 @@ export type AggregateTypes = {
         readonly output: 'pg/timestamp-temporal@1';
         readonly nullable: true;
       };
+      readonly 'pg/timestamptz-date@1': {
+        readonly output: 'pg/timestamptz-date@1';
+        readonly nullable: true;
+      };
       readonly 'pg/timestamptz-string@1': {
         readonly output: 'pg/timestamptz-string@1';
         readonly nullable: true;
@@ -174,6 +178,10 @@ export type AggregateTypes = {
       };
       readonly 'pg/timestamp-temporal@1': {
         readonly output: 'pg/timestamp-temporal@1';
+        readonly nullable: true;
+      };
+      readonly 'pg/timestamptz-date@1': {
+        readonly output: 'pg/timestamptz-date@1';
         readonly nullable: true;
       };
       readonly 'pg/timestamptz-string@1': {
@@ -244,8 +252,8 @@ export type FieldOutputTypes = {
   readonly public: {
     readonly Round: {
       readonly id: CodecTypes['pg/text@1']['output'];
-      readonly teamName: CodecTypes['pg/text@1']['output'];
       readonly points: CodecTypes['pg/int4@1']['output'];
+      readonly teamName: CodecTypes['pg/text@1']['output'];
     };
   };
 };
@@ -253,8 +261,8 @@ export type FieldInputTypes = {
   readonly public: {
     readonly Round: {
       readonly id: CodecTypes['pg/text@1']['input'];
-      readonly teamName: CodecTypes['pg/text@1']['input'];
       readonly points: CodecTypes['pg/int4@1']['input'];
+      readonly teamName: CodecTypes['pg/text@1']['input'];
     };
   };
 };
@@ -280,8 +288,8 @@ export type StorageColumnInputTypes = {
 export namespace Models {
   export type public_Round = {
     id: CodecTypes['pg/text@1']['output'];
-    teamName: CodecTypes['pg/text@1']['output'];
     points: CodecTypes['pg/int4@1']['output'];
+    teamName: CodecTypes['pg/text@1']['output'];
     readonly [RelationKeys]?: never;
   };
 }
@@ -317,14 +325,14 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
-                readonly teamName: {
-                  readonly nativeType: 'text';
-                  readonly codecId: 'pg/text@1';
-                  readonly nullable: false;
-                };
                 readonly points: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                };
+                readonly teamName: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
               };
@@ -356,13 +364,13 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
-              readonly teamName: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-              };
               readonly points: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly teamName: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
             };
             readonly relations: Record<string, never>;
@@ -371,8 +379,8 @@ type ContractBase = Omit<
               readonly namespaceId: 'public';
               readonly fields: {
                 readonly id: { readonly column: 'id' };
-                readonly teamName: { readonly column: 'teamName' };
                 readonly points: { readonly column: 'points' };
+                readonly teamName: { readonly column: 'teamName' };
               };
             };
           };
@@ -404,12 +412,12 @@ type ContractBase = Omit<
     readonly mutations: {
       readonly defaults: readonly [
         {
+          readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
           readonly ref: {
+            readonly column: 'id';
             readonly namespace: 'public';
             readonly table: 'round';
-            readonly column: 'id';
           };
-          readonly onCreate: { readonly kind: 'generator'; readonly id: 'cuid2' };
         },
       ];
     };

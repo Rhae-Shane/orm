@@ -32,7 +32,8 @@
     "@internal/utils": "workspace:8.0.0-rc.11",
     "@standard-schema/spec": "^1.1.0",
     "arktype": "^2.2.2",
-    "pathe": "^2.0.3"
+    "pathe": "^2.0.3",
+    "postgres-array": "2.0.0"
   },
   "devDependencies": {
     "@internal/psl-printer": "workspace:8.0.0-rc.11",
@@ -84,6 +85,7 @@
     "./planner-schema-lookup": "./dist/planner-schema-lookup.mjs",
     "./planner-sql-checks": "./dist/planner-sql-checks.mjs",
     "./planner-target-details": "./dist/planner-target-details.mjs",
+    "./prisma7-binding": "./dist/prisma7-binding.mjs",
     "./render-ops": "./dist/render-ops.mjs",
     "./render-typescript": "./dist/render-typescript.mjs",
     "./rls-canonicalize": "./dist/rls-canonicalize.mjs",

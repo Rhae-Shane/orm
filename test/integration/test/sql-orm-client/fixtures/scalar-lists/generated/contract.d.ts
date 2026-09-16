@@ -119,6 +119,10 @@ export type AggregateTypes = {
         readonly output: 'pg/timestamp-temporal@1';
         readonly nullable: true;
       };
+      readonly 'pg/timestamptz-date@1': {
+        readonly output: 'pg/timestamptz-date@1';
+        readonly nullable: true;
+      };
       readonly 'pg/timestamptz-string@1': {
         readonly output: 'pg/timestamptz-string@1';
         readonly nullable: true;
@@ -173,6 +177,10 @@ export type AggregateTypes = {
       };
       readonly 'pg/timestamp-temporal@1': {
         readonly output: 'pg/timestamp-temporal@1';
+        readonly nullable: true;
+      };
+      readonly 'pg/timestamptz-date@1': {
+        readonly output: 'pg/timestamptz-date@1';
         readonly nullable: true;
       };
       readonly 'pg/timestamptz-string@1': {
@@ -243,8 +251,8 @@ export type FieldOutputTypes = {
   readonly public: {
     readonly Item: {
       readonly id: CodecTypes['pg/int4@1']['output'];
-      readonly tags: ReadonlyArray<CodecTypes['pg/text@1']['output']>;
       readonly scores: ReadonlyArray<CodecTypes['pg/int4@1']['output']>;
+      readonly tags: ReadonlyArray<CodecTypes['pg/text@1']['output']>;
     };
   };
 };
@@ -252,8 +260,8 @@ export type FieldInputTypes = {
   readonly public: {
     readonly Item: {
       readonly id: CodecTypes['pg/int4@1']['input'];
-      readonly tags: ReadonlyArray<CodecTypes['pg/text@1']['input']>;
       readonly scores: ReadonlyArray<CodecTypes['pg/int4@1']['input']>;
+      readonly tags: ReadonlyArray<CodecTypes['pg/text@1']['input']>;
     };
   };
 };
@@ -279,8 +287,8 @@ export type StorageColumnInputTypes = {
 export namespace Models {
   export type public_Item = {
     id: CodecTypes['pg/int4@1']['output'];
-    tags: ReadonlyArray<CodecTypes['pg/text@1']['output']>;
     scores: ReadonlyArray<CodecTypes['pg/int4@1']['output']>;
+    tags: ReadonlyArray<CodecTypes['pg/text@1']['output']>;
     readonly [RelationKeys]?: never;
   };
 }
@@ -316,14 +324,14 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                 };
-                readonly tags: {
-                  readonly nativeType: 'text';
-                  readonly codecId: 'pg/text@1';
-                  readonly nullable: false;
-                };
                 readonly scores: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                };
+                readonly tags: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
               };
@@ -355,14 +363,14 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
-              readonly tags: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-                readonly many: true;
-              };
               readonly scores: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+                readonly many: true;
+              };
+              readonly tags: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
                 readonly many: true;
               };
             };
@@ -372,8 +380,8 @@ type ContractBase = Omit<
               readonly namespaceId: 'public';
               readonly fields: {
                 readonly id: { readonly column: 'id' };
-                readonly tags: { readonly column: 'tags' };
                 readonly scores: { readonly column: 'scores' };
+                readonly tags: { readonly column: 'tags' };
               };
             };
           };

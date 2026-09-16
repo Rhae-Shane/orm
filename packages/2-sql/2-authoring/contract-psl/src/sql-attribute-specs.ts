@@ -17,6 +17,7 @@ import type {
   InferAttr,
   ModelAttributeCtx,
   ModelSymbol,
+  NumLiteral,
   PslSpan,
   RejectingArgType,
   SymbolTable,
@@ -34,14 +35,19 @@ import {
   list,
   modelAttribute,
   nodePslSpan,
-  num,
+  numLiteral,
   oneOf,
   optional,
   record,
   referencedFieldRef,
   str,
 } from '@internal/psl-parser';
-import type { FieldAttributeAst, ModelAttributeAst, SourceFile } from '@internal/psl-parser/syntax';
+import type {
+  AstNode,
+  FieldAttributeAst,
+  ModelAttributeAst,
+  SourceFile,
+} from '@internal/psl-parser/syntax';
 import { blindCast } from '@internal/utils/casts';
 import { notOk } from '@internal/utils/result';
 
@@ -151,16 +157,37 @@ export function interpretFieldAttribute<Out>(input: {
   return result.value;
 }
 
-const mapModelSpec = modelAttribute('map', { positional: [{ key: 'name', type: str() }] });
-const mapFieldSpec = fieldAttribute('map', { positional: [{ key: 'name', type: str() }] });
+function validateMappedName(
+  value: { readonly name: string },
+  ctx: AttributeCtx,
+  attributeNode: AstNode,
+): readonly PslDiagnostic[] {
+  return value.name === ''
+    ? [leafDiagnostic(ctx, attributeNode, 'Mapped name must not be empty')]
+    : [];
+}
 
-type DefaultArgValue = string | number | boolean | (string | number | boolean)[] | TypedFuncCall;
+const mapModelSpec = modelAttribute('map', {
+  positional: [{ key: 'name', type: str() }],
+  refine: validateMappedName,
+});
+const mapFieldSpec = fieldAttribute('map', {
+  positional: [{ key: 'name', type: str() }],
+  refine: validateMappedName,
+});
+
+type DefaultArgValue =
+  | string
+  | NumLiteral
+  | boolean
+  | (string | NumLiteral | boolean)[]
+  | TypedFuncCall;
 
 function scalarDefaultArms(
   isList: boolean,
   registry: ControlMutationDefaultRegistry,
 ): readonly [ArgType<DefaultArgValue, AttributeCtx>, ...ArgType<DefaultArgValue, AttributeCtx>[]] {
-  const literal = () => oneOf(str(), num(), bool());
+  const literal = () => oneOf(str(), numLiteral(), bool());
   const funcArms = [...registry.entries()].map(([name, entry]) =>
     funcCall(
       name,
@@ -170,7 +197,7 @@ function scalarDefaultArms(
       >(entry.signature),
     ),
   );
-  return isList ? [list(literal()), ...funcArms] : [str(), num(), bool(), ...funcArms];
+  return isList ? [list(literal()), ...funcArms] : [str(), numLiteral(), bool(), ...funcArms];
 }
 
 function noEnumMember(): RejectingArgType<never, AttributeCtx> {

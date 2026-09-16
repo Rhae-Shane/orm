@@ -119,6 +119,10 @@ export type AggregateTypes = {
         readonly output: 'pg/timestamp-temporal@1';
         readonly nullable: true;
       };
+      readonly 'pg/timestamptz-date@1': {
+        readonly output: 'pg/timestamptz-date@1';
+        readonly nullable: true;
+      };
       readonly 'pg/timestamptz-string@1': {
         readonly output: 'pg/timestamptz-string@1';
         readonly nullable: true;
@@ -173,6 +177,10 @@ export type AggregateTypes = {
       };
       readonly 'pg/timestamp-temporal@1': {
         readonly output: 'pg/timestamp-temporal@1';
+        readonly nullable: true;
+      };
+      readonly 'pg/timestamptz-date@1': {
+        readonly output: 'pg/timestamptz-date@1';
         readonly nullable: true;
       };
       readonly 'pg/timestamptz-string@1': {
@@ -297,10 +305,11 @@ export type StorageColumnInputTypes = {
 };
 
 export namespace Models {
-  export type public_UserOneToOne = {
+  export type public_PostOneToMany = {
     id: CodecTypes['pg/int4@1']['output'];
-    profile: public_ProfileOneToOne | null;
-    readonly [RelationKeys]?: 'profile';
+    userId: CodecTypes['pg/int4@1']['output'] | null;
+    user: public_UserOneToMany | null;
+    readonly [RelationKeys]?: 'user';
   };
   export type public_ProfileOneToOne = {
     id: CodecTypes['pg/int4@1']['output'];
@@ -313,20 +322,19 @@ export namespace Models {
     posts: public_PostOneToMany[];
     readonly [RelationKeys]?: 'posts';
   };
-  export type public_PostOneToMany = {
+  export type public_UserOneToOne = {
     id: CodecTypes['pg/int4@1']['output'];
-    userId: CodecTypes['pg/int4@1']['output'] | null;
-    user: public_UserOneToMany | null;
-    readonly [RelationKeys]?: 'user';
+    profile: public_ProfileOneToOne | null;
+    readonly [RelationKeys]?: 'profile';
   };
 }
 
 export declare const models: {
   public: {
-    UserOneToOne: Models.public_UserOneToOne;
+    PostOneToMany: Models.public_PostOneToMany;
     ProfileOneToOne: Models.public_ProfileOneToOne;
     UserOneToMany: Models.public_UserOneToMany;
-    PostOneToMany: Models.public_PostOneToMany;
+    UserOneToOne: Models.public_UserOneToOne;
   };
 };
 
@@ -462,9 +470,9 @@ type ContractBase = Omit<
   readonly target: 'postgres';
   readonly targetFamily: 'sql';
   readonly roots: {
-    readonly userOneToOne: {
+    readonly postOneToMany: {
       readonly namespace: 'public' & NamespaceId;
-      readonly model: 'UserOneToOne';
+      readonly model: 'PostOneToMany';
     };
     readonly profileOneToOne: {
       readonly namespace: 'public' & NamespaceId;
@@ -474,9 +482,9 @@ type ContractBase = Omit<
       readonly namespace: 'public' & NamespaceId;
       readonly model: 'UserOneToMany';
     };
-    readonly postOneToMany: {
+    readonly userOneToOne: {
       readonly namespace: 'public' & NamespaceId;
-      readonly model: 'PostOneToMany';
+      readonly model: 'UserOneToOne';
     };
   };
   readonly domain: {

@@ -11,7 +11,11 @@ import type {
 import { builtinGeneratorRegistryMetadata } from '@internal/ids';
 import type { FuncCallSig } from '@internal/psl-parser';
 import { int, num, oneOf, optional, str } from '@internal/psl-parser';
-import { instantNowControlDescriptor } from '@internal/target-postgres/control';
+import { PG_TIMESTAMPTZ_DATE_CODEC_ID } from '@internal/target-postgres/codec-ids';
+import {
+  instantNowControlDescriptor,
+  plainDateTimeNowControlDescriptor,
+} from '@internal/target-postgres/control';
 
 function invalidArgumentDiagnostic(input: {
   readonly context: DefaultFunctionLoweringContext;
@@ -298,6 +302,15 @@ export const postgresNativeAuthoringTypes = {
       typeParams: { precision: { kind: 'arg', index: 0 } },
     },
   },
+  TimestamptzJsDate: {
+    kind: 'typeConstructor',
+    args: [{ kind: 'number', name: 'precision', integer: true, minimum: 0, optional: true }],
+    output: {
+      codecId: PG_TIMESTAMPTZ_DATE_CODEC_ID,
+      nativeType: 'timestamptz',
+      typeParams: { precision: { kind: 'arg', index: 0 } },
+    },
+  },
   TimestamptzString: {
     kind: 'typeConstructor',
     args: [{ kind: 'number', name: 'precision', integer: true, minimum: 0, optional: true }],
@@ -340,5 +353,6 @@ export function createPostgresMutationDefaultGeneratorDescriptors(): readonly Mu
     ),
     timestampNowControlDescriptor(),
     instantNowControlDescriptor(),
+    plainDateTimeNowControlDescriptor(),
   ];
 }

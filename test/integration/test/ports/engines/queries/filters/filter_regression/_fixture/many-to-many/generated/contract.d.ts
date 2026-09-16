@@ -119,6 +119,10 @@ export type AggregateTypes = {
         readonly output: 'pg/timestamp-temporal@1';
         readonly nullable: true;
       };
+      readonly 'pg/timestamptz-date@1': {
+        readonly output: 'pg/timestamptz-date@1';
+        readonly nullable: true;
+      };
       readonly 'pg/timestamptz-string@1': {
         readonly output: 'pg/timestamptz-string@1';
         readonly nullable: true;
@@ -173,6 +177,10 @@ export type AggregateTypes = {
       };
       readonly 'pg/timestamp-temporal@1': {
         readonly output: 'pg/timestamp-temporal@1';
+        readonly nullable: true;
+      };
+      readonly 'pg/timestamptz-date@1': {
+        readonly output: 'pg/timestamptz-date@1';
         readonly nullable: true;
       };
       readonly 'pg/timestamptz-string@1': {
@@ -305,13 +313,6 @@ export type StorageColumnInputTypes = {
 };
 
 export namespace Models {
-  export type public_Location = {
-    id: CodecTypes['pg/int4@1']['output'];
-    name: CodecTypes['pg/text@1']['output'] | null;
-    companies: public_Company[];
-    companyLocations: public_CompanyLocation[];
-    readonly [RelationKeys]?: 'companies' | 'companyLocations';
-  };
   export type public_Company = {
     id: CodecTypes['pg/int4@1']['output'];
     name: CodecTypes['pg/text@1']['output'] | null;
@@ -326,13 +327,20 @@ export namespace Models {
     location: public_Location;
     readonly [RelationKeys]?: 'company' | 'location';
   };
+  export type public_Location = {
+    id: CodecTypes['pg/int4@1']['output'];
+    name: CodecTypes['pg/text@1']['output'] | null;
+    companies: public_Company[];
+    companyLocations: public_CompanyLocation[];
+    readonly [RelationKeys]?: 'companies' | 'companyLocations';
+  };
 }
 
 export declare const models: {
   public: {
-    Location: Models.public_Location;
     Company: Models.public_Company;
     CompanyLocation: Models.public_CompanyLocation;
+    Location: Models.public_Location;
   };
 };
 
@@ -457,12 +465,12 @@ type ContractBase = Omit<
   readonly target: 'postgres';
   readonly targetFamily: 'sql';
   readonly roots: {
-    readonly location: { readonly namespace: 'public' & NamespaceId; readonly model: 'Location' };
     readonly company: { readonly namespace: 'public' & NamespaceId; readonly model: 'Company' };
     readonly companyLocation: {
       readonly namespace: 'public' & NamespaceId;
       readonly model: 'CompanyLocation';
     };
+    readonly location: { readonly namespace: 'public' & NamespaceId; readonly model: 'Location' };
   };
   readonly domain: {
     readonly namespaces: {
