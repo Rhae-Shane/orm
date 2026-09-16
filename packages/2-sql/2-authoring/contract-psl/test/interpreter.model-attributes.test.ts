@@ -102,7 +102,7 @@ describe('contributed model attributes (AuthoringContributions.modelAttributes)'
     expect(capturedEntries).toMatchObject({
       public: {
         stamp: {
-          widget: { kind: 'stamp', tableName: 'widget', modelName: 'Widget', label: 'v1' },
+          Widget: { kind: 'stamp', tableName: 'Widget', modelName: 'Widget', label: 'v1' },
         },
       },
     });
@@ -128,7 +128,7 @@ model Gadget {
       .join('+');
 
     expect(result.ok).toBe(true);
-    expect(capturedEntries['public']?.['stamp']?.['widget']).toMatchObject({
+    expect(capturedEntries['public']?.['stamp']?.['Widget']).toMatchObject({
       scope: `Widget|Gadget+Widget|${expectedDefaultFunctions}`,
     });
   });
@@ -145,7 +145,7 @@ model Gadget {
     );
 
     expect(result.ok).toBe(true);
-    expect(capturedEntries['tenant']?.['stamp']?.['widget']).toMatchObject({
+    expect(capturedEntries['tenant']?.['stamp']?.['Widget']).toMatchObject({
       namespaceId: 'tenant',
       label: 'in-namespace',
     });

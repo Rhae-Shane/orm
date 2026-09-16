@@ -110,7 +110,7 @@ describe('composed mutation default registries', () => {
         mutations: {
           defaults: [
             {
-              ref: { namespace: 'public', table: 'user', column: 'slug' },
+              ref: { namespace: 'public', table: 'User', column: 'slug' },
               onCreate: { kind: 'generator', id: 'slugid' },
             },
           ],
