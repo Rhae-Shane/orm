@@ -259,6 +259,38 @@ describe('addModelMaps', () => {
     strictEqual(addModelMaps(mapped), mapped);
   });
 
+  it('leaves a field named model inside a block it does not descend into alone', () => {
+    const input = ['type Device {', '  model String', '  serial String', '}', ''].join('\n');
+    strictEqual(addModelMaps(input), input);
+  });
+
+  it('handles a header with a blank line before its brace', () => {
+    const input = ['model UserProfile', '', '{', '  id Int @id', '}', ''].join('\n');
+    const expected = [
+      'model UserProfile',
+      '',
+      '{',
+      '  id Int @id',
+      '  @@map("userProfile")',
+      '}',
+      '',
+    ].join('\n');
+    strictEqual(addModelMaps(input), expected);
+  });
+
+  it('keeps working when a model block has a field named model', () => {
+    const input = ['model Device {', '  id    Int    @id', '  model String', '}', ''].join('\n');
+    const expected = [
+      'model Device {',
+      '  id    Int    @id',
+      '  model String',
+      '  @@map("device")',
+      '}',
+      '',
+    ].join('\n');
+    strictEqual(addModelMaps(input), expected);
+  });
+
   it('refuses a model block that never closes', () => {
     throws(() => addModelMaps('model UserProfile {\n  id Int @id\n'), UnhandledModelError);
   });

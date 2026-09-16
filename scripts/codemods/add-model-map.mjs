@@ -50,15 +50,34 @@ function stripCr(line) {
  * name, the index of the first body line, any body text that shares the
  * header line, and whether the whole block sits on this one line.
  */
+function nextNonBlankIndex(lines, index) {
+  let i = index + 1;
+  while (i < lines.length && /^\s*$/.test(lines[i])) i += 1;
+  return i;
+}
+
+/**
+ * A `model` line is a declaration only when a `{` sits on that line or on the
+ * next non-blank line. Any other `model` line is a field named `model` inside
+ * some block and is left alone.
+ */
+function isModelDeclaration(lines, index) {
+  const line = stripCr(lines[index]);
+  if (line.includes('{')) return true;
+  const next = lines[nextNonBlankIndex(lines, index)];
+  return next !== undefined && OPEN_BRACE_LINE.test(stripCr(next));
+}
+
 function readModelStart(lines, index) {
   const match = MODEL_START.exec(stripCr(lines[index]));
   if (!match) return undefined;
   const [, indent, modelName, brace, rest] = match;
   if (brace === undefined) {
     if (!BLANK_OR_COMMENT.test(rest)) return undefined;
-    const next = lines[index + 1];
+    const braceAt = nextNonBlankIndex(lines, index);
+    const next = lines[braceAt];
     if (next === undefined || !OPEN_BRACE_LINE.test(stripCr(next))) return undefined;
-    return { indent, modelName, bodyStart: index + 2, inlineBody: '', singleLine: false };
+    return { indent, modelName, bodyStart: braceAt + 1, inlineBody: '', singleLine: false };
   }
   const closeAt = rest.lastIndexOf('}');
   if (closeAt !== -1 && /^\s*$/.test(rest.slice(closeAt + 1))) {
@@ -81,7 +100,7 @@ function addMapToSingleLineModel(line, modelName) {
   return `${body.trimEnd()} @@map("${lowerFirst(modelName)}") ${line.slice(closeAt)}`;
 }
 
-/** Thrown when a `model` line is written in a shape the codemod does not recognise. */
+/** Thrown when a `model` declaration is written in a shape the codemod does not recognise. */
 export class UnhandledModelError extends Error {
   constructor(lineNumbers) {
     super(`model block(s) not understood at line(s) ${lineNumbers.join(', ')}`);
@@ -96,7 +115,7 @@ export function addModelMaps(source) {
   const unhandled = [];
   let i = 0;
   while (i < lines.length) {
-    if (!MODEL_LINE.test(lines[i])) {
+    if (!MODEL_LINE.test(lines[i]) || !isModelDeclaration(lines, i)) {
       out.push(lines[i]);
       i += 1;
       continue;
