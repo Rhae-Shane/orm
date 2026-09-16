@@ -201,7 +201,7 @@ function buildSyntheticSupabaseOrderItem() {
     undefined,
     undefined,
     'supabase' as const,
-  ).sql(({ cols }) => ({ table: 'order_items', indexes: [{ columns: [cols.sku] }] }));
+  ).sql(() => ({ table: 'order_items' }));
 }
 
 describe('cross-space belongsTo relation with no statically readable target table', () => {

@@ -1345,7 +1345,14 @@ export function buildSqlContractFromDefinition(
         relation.toNamespaceId,
         'Relation',
       );
-      assertTargetTableMatches(semanticModel.modelName, targetModel, relation.toTable, 'Relation');
+      if (relation.toTable !== undefined) {
+        assertTargetTableMatches(
+          semanticModel.modelName,
+          targetModel,
+          relation.toTable,
+          'Relation',
+        );
+      }
 
       const targetColumnToField = new Map(
         targetModel.fields.map((f) => [f.columnName, f.fieldName]),
