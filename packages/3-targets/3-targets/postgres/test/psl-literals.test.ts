@@ -163,8 +163,19 @@ describe('pg/numeric@1', () => {
     expect(numeric.encodePsl('1.50')).toEqual({ kind: 'number', text: '1.50' });
   });
 
-  it('rejects a string that is not a special value', () => {
-    expect(() => numeric.decodePsl({ kind: 'string', text: '1.5' })).toThrow('pg/numeric@1');
+  it.each([
+    ['1.50', '1.50'],
+    ['007', '7'],
+    ['-0.00', '0.00'],
+  ])('reads the string literal "%s" holding a decimal as %s', (text, expected) => {
+    expect(numeric.decodePsl({ kind: 'string', text })).toBe(expected);
+  });
+
+  it('rejects a string that holds neither a decimal nor a special value', () => {
+    expect(() => numeric.decodePsl({ kind: 'string', text: 'abc' })).toThrow(
+      'pg/numeric@1 reads a number literal, or a string holding a decimal, "NaN", "Infinity", "-Infinity"; got a string "abc"',
+    );
+    expect(() => numeric.decodePsl({ kind: 'string', text: '1e5' })).toThrow('pg/numeric@1');
   });
 });
 

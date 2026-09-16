@@ -193,7 +193,8 @@ const isCanonicalNumericText = (value: string): boolean => CANONICAL_NUMERIC_TEX
 
 const NON_FINITE_NUMERIC_TEXT = /^(?:NaN|-?Infinity)$/;
 const DECIMAL_NUMERAL = /^(-?)0*(\d+)(\.\d+)?$/;
-const NUMERIC_READS = 'a number literal or "NaN", "Infinity", "-Infinity"';
+const NUMERIC_READS =
+  'a number literal, or a string holding a decimal, "NaN", "Infinity", "-Infinity"';
 
 /** Leading zeros and the sign of zero never change a decimal. Trailing zeros are kept, because a column without a scale keeps them. */
 const canonicalDecimalText = (text: string): string => {
@@ -208,16 +209,11 @@ const canonicalDecimalText = (text: string): string => {
 const pgNumericEncodePsl = (text: string): PslLiteral =>
   NON_FINITE_NUMERIC_TEXT.test(text) ? { kind: 'string', text } : { kind: 'number', text };
 
+/** A number literal, as written; or a string holding the same text, which is how `contract infer` printed a decimal before the printer moved onto the codec and how schemas written then still read. */
 const pgNumericDecodePsl = (codecId: string, literal: PslLiteral): string => {
-  const text =
-    literal.kind === 'number'
-      ? canonicalDecimalText(literal.text)
-      : literal.kind === 'string' && NON_FINITE_NUMERIC_TEXT.test(literal.text)
-        ? literal.text
-        : undefined;
-  if (text === undefined || !isCanonicalNumericText(text)) {
-    throw pslLiteralReadsError(codecId, NUMERIC_READS, literal);
-  }
+  if (literal.kind === 'boolean') throw pslLiteralReadsError(codecId, NUMERIC_READS, literal);
+  const text = canonicalDecimalText(literal.text);
+  if (!isCanonicalNumericText(text)) throw pslLiteralReadsError(codecId, NUMERIC_READS, literal);
   return text;
 };
 
