@@ -112,3 +112,14 @@ These were raised to the operator before dispatch 1. Each is reversible; none ch
 
 - Slice A adds a tagged-literal arm after the function arms in `scalarDefaultArms` and its own `DefaultArgValue` member. Whichever slice merges second resolves that one function by hand to `[literal(), ...funcArms, taggedLiteral(tags)]` / `[list(literal()), ...funcArms, taggedLiteral(tags)]`.
 - Slice C deletes the `dbgenerated(...)` fallback the printer keeps in dispatch 6 and the `// Raw default:` comment result.
+
+## Retro (2026-09-16, slice B delivered as PR #30324)
+
+Trigger: spec gaps recorded in the PR body. No halt condition fired; the shared-file edit stayed inside `scalarDefaultArms`.
+
+- **The spec's per-codec inventory was written from class names, not from how codecs are built.** Mongo codecs come from a factory, and about forty test doubles implement `Codec` as object literals. Lesson: when a spec makes an interface member required, grep for every implementer (`decodeJson` across `src` and `test`), not only for `extends CodecImpl`, before sizing the slice.
+- **A codec's JSON form and its PSL form can disagree with the spec's grouping.** Three codecs moved rule: postgis (hex string, not a JSON document), interval (ISO duration string), and numeric (also reads a quoted decimal because older schemas and the old printer used it). Lesson: derive the rule table from `encodeJson` return types in code, and let the implementer report each reassignment rather than pre-listing groups in the spec.
+- **Changing what a value decodes to reaches the wire.** Making `"NaN"` decode to a real NaN broke the DDL renderer until the float codecs' `encode` learned to write the text. Lesson: a spec that changes `decodeJson` behaviour must name every consumer of the decoded value (DDL rendering, runtime encode), not only the PSL path.
+- **Printer codec resolution keys on the printed PSL type name.** Several codecs share one native type, so the plan's "resolve by native type" could not pick the codec emit binds. Lesson: when a printer must pick a codec, key on whatever the reader will resolve from.
+- **Docs rule versus spec instruction.** The spec asked the ADR to link into `projects/`; the always-apply doc-maintenance rule forbids it. Lesson: a slice spec's docs section should be checked against `.agents/rules/doc-maintenance.mdc` at planning time.
+- **Process.** Reviewer and implementer ran in parallel on different dispatches, which cut wall time without a conflict; the slip of spawning a second implementer for dispatch 2 cost one re-read of the codebase and nothing else.
