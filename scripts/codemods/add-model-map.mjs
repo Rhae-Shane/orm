@@ -24,7 +24,7 @@ const MODEL_LINE = /^\s*model\s/;
 const MODEL_START = /^(\s*)model\s+([A-Za-z_][A-Za-z0-9_]*)\s*(\{)?(.*)$/;
 const OPEN_BRACE_LINE = /^\s*\{\s*(\/\/.*)?$/;
 const BLANK_OR_COMMENT = /^\s*(\/\/.*)?$/;
-const BLOCK_CLOSE = /^\s*\}\s*$/;
+const BLOCK_CLOSE = /^\s*\}\s*(\/\/.*)?$/;
 const MAP_ATTRIBUTE = /^\s*@@map\s*\(/;
 const BASE_ATTRIBUTE = /^\s*@@base\s*\(/;
 const OWN_STORAGE_ATTRIBUTE = /@@(map|base)\s*\(/;
@@ -81,8 +81,8 @@ function readModelStart(lines, index) {
     if (next === undefined || !OPEN_BRACE_LINE.test(stripCr(next))) return undefined;
     return { indent, modelName, bodyStart: braceAt + 1, inlineBody: '', singleLine: false };
   }
-  const closeAt = rest.lastIndexOf('}');
-  if (closeAt !== -1 && /^\s*$/.test(rest.slice(closeAt + 1))) {
+  const closeAt = closingBraceIndex(rest);
+  if (closeAt !== -1) {
     return { indent, modelName, bodyStart: index + 1, inlineBody: rest, singleLine: true };
   }
   return {
@@ -94,9 +94,16 @@ function readModelStart(lines, index) {
   };
 }
 
+/** Index of a `}` that ends the block on this line (only whitespace or a `//` comment may follow), else -1. */
+function closingBraceIndex(text) {
+  const code = text.replace(/\s*\/\/.*$/, '');
+  const closeAt = code.lastIndexOf('}');
+  return closeAt !== -1 && /^\s*$/.test(code.slice(closeAt + 1)) ? closeAt : -1;
+}
+
 function addMapToSingleLineModel(line, modelName) {
   const raw = stripCr(line);
-  const closeAt = raw.lastIndexOf('}');
+  const closeAt = closingBraceIndex(raw);
   const body = raw.slice(0, closeAt);
   if (OWN_STORAGE_ATTRIBUTE.test(body)) return line;
   return `${body.trimEnd()} @@map("${lowerFirst(modelName)}") ${line.slice(closeAt)}`;

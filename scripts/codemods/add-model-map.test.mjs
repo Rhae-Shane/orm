@@ -318,6 +318,36 @@ describe('addModelMaps', () => {
     strictEqual(addModelMaps(input), expected);
   });
 
+  it('ends a block at a closing brace that carries a comment', () => {
+    const input = [
+      'model UserProfile {',
+      '  id Int @id',
+      '} // keep',
+      '',
+      'model TeamMember {',
+      '  id Int @id',
+      '}',
+      '',
+      'model OrderItem { id Int @id } // one line',
+      '',
+    ].join('\n');
+    const expected = [
+      'model UserProfile {',
+      '  id Int @id',
+      '  @@map("userProfile")',
+      '} // keep',
+      '',
+      'model TeamMember {',
+      '  id Int @id',
+      '  @@map("teamMember")',
+      '}',
+      '',
+      'model OrderItem { id Int @id @@map("orderItem") } // one line',
+      '',
+    ].join('\n');
+    strictEqual(addModelMaps(input), expected);
+  });
+
   it('refuses a model block that never closes', () => {
     throws(() => addModelMaps('model UserProfile {\n  id Int @id\n'), UnhandledModelError);
   });
