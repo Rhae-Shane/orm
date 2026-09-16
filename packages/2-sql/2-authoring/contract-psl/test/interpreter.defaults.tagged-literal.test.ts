@@ -31,7 +31,7 @@ describe('interpretPslDocumentToSqlContract tagged literal defaults', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error(JSON.stringify(result.failure.diagnostics));
     return sqlStorageFromSuccessfulSqlInterpretation(result.value).namespaces['public']?.entries
-      .table?.['lit']?.columns[column]?.default;
+      .table?.['Lit']?.columns[column]?.default;
   };
   const diagnostics = (fieldLine: string) => {
     const result = interpret(fieldLine);
