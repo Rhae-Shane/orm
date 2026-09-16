@@ -84,6 +84,43 @@ describe('addModelMaps', () => {
     strictEqual(addModelMaps(input), input);
   });
 
+  it('leaves a variant with @@base and no @@map alone because it shares the base storage', () => {
+    const input = [
+      'model Task {',
+      '  id   Int    @id',
+      '  kind String',
+      '',
+      '  @@discriminator(kind)',
+      '}',
+      '',
+      'model BugReport {',
+      '  id       Int    @id',
+      '  severity String',
+      '',
+      '  @@base(Task, "bug")',
+      '}',
+      '',
+    ].join('\n');
+    const expected = [
+      'model Task {',
+      '  id   Int    @id',
+      '  kind String',
+      '',
+      '  @@discriminator(kind)',
+      '  @@map("task")',
+      '}',
+      '',
+      'model BugReport {',
+      '  id       Int    @id',
+      '  severity String',
+      '',
+      '  @@base(Task, "bug")',
+      '}',
+      '',
+    ].join('\n');
+    strictEqual(addModelMaps(input), expected);
+  });
+
   it('handles a Mongo-style model', () => {
     const input = [
       'model UserProfile {',
@@ -139,6 +176,14 @@ describe('addModelMaps', () => {
       '',
     ].join('\n');
     strictEqual(addModelMaps(input), expected);
+  });
+
+  it('handles a model written on a single line', () => {
+    const input = 'model UserProfile { id Int @id email String? @unique }\n';
+    const expected =
+      'model UserProfile { id Int @id email String? @unique @@map("userProfile") }\n';
+    strictEqual(addModelMaps(input), expected);
+    strictEqual(addModelMaps(expected), expected);
   });
 
   it('is idempotent', () => {
