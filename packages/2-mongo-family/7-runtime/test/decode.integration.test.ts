@@ -62,6 +62,8 @@ describe('Mongo runtime decode integration', () => {
         decode: () => {
           throw new Error('decode explosion');
         },
+        encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+        decodePsl: (literal) => literal.text as never,
       });
       ctx.codecs.register(failing);
 

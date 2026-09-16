@@ -18,6 +18,15 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
+  decodeJsonTextPsl,
+  decodeNumberPsl,
+  decodeStringPsl,
+  decodeWholeNumberPsl,
+  encodeJsonTextPsl,
+  encodeNumberPsl,
+  encodeStringPsl,
+  type PslLiteral,
+  pslLiteralReadsError,
   renderTsLiteral,
   voidParamsSchema,
 } from '@internal/framework-components/codec';
@@ -273,6 +282,12 @@ export class SqliteTextCodec extends CodecImpl<
   decodeJson(json: JsonValue): string {
     return json as string;
   }
+  encodePsl(value: string): PslLiteral {
+    return encodeStringPsl(value);
+  }
+  decodePsl(literal: PslLiteral): string {
+    return decodeStringPsl(this.id, literal);
+  }
 }
 
 export class SqliteTextDescriptor extends SqliteCodecDescriptor<void> {
@@ -313,6 +328,12 @@ export class SqliteIntegerCodec extends CodecImpl<
   }
   decodeJson(json: JsonValue): number {
     return json as number;
+  }
+  encodePsl(value: number): PslLiteral {
+    return encodeNumberPsl(value);
+  }
+  decodePsl(literal: PslLiteral): number {
+    return Number(decodeWholeNumberPsl(this.id, literal));
   }
 }
 
@@ -364,6 +385,14 @@ export class SqliteRealCodec extends CodecImpl<
     }
     return finiteReal(json, 'RUNTIME.DECODE_FAILED');
   }
+  encodePsl(value: number): PslLiteral {
+    return encodeNumberPsl(finiteReal(value, 'RUNTIME.ENCODE_FAILED'));
+  }
+  decodePsl(literal: PslLiteral): number {
+    const value = decodeNumberPsl(this.id, literal);
+    if (!Number.isFinite(value)) throw pslLiteralReadsError(this.id, 'a finite number', literal);
+    return value;
+  }
 }
 
 export class SqliteRealDescriptor extends SqliteCodecDescriptor<void> {
@@ -399,7 +428,7 @@ export class SqliteBlobCodec extends CodecImpl<
   async decode(wire: Uint8Array, _ctx: CodecCallContext): Promise<Uint8Array> {
     return wire;
   }
-  encodeJson(value: Uint8Array): JsonValue {
+  encodeJson(value: Uint8Array): string {
     return Buffer.from(value).toString('hex').toUpperCase();
   }
   decodeJson(json: JsonValue): Uint8Array {
@@ -411,6 +440,12 @@ export class SqliteBlobCodec extends CodecImpl<
       );
     }
     return new Uint8Array(Buffer.from(json, 'hex'));
+  }
+  encodePsl(value: Uint8Array): PslLiteral {
+    return encodeStringPsl(this.encodeJson(value));
+  }
+  decodePsl(literal: PslLiteral): Uint8Array {
+    return this.decodeJson(decodeStringPsl(this.id, literal));
   }
 }
 
@@ -459,7 +494,7 @@ export class SqliteDatetimeCodec extends CodecImpl<
   async decode(wire: string, _ctx: CodecCallContext): Promise<Date> {
     return this.parseDate(wire);
   }
-  encodeJson(value: Date): JsonValue {
+  encodeJson(value: Date): string {
     return value.toISOString();
   }
   decodeJson(json: JsonValue): Date {
@@ -471,6 +506,12 @@ export class SqliteDatetimeCodec extends CodecImpl<
       );
     }
     return this.parseDate(json);
+  }
+  encodePsl(value: Date): PslLiteral {
+    return encodeStringPsl(this.encodeJson(value));
+  }
+  decodePsl(literal: PslLiteral): Date {
+    return this.decodeJson(decodeStringPsl(this.id, literal));
   }
 }
 
@@ -512,6 +553,12 @@ export class SqliteJsonCodec extends CodecImpl<
   }
   decodeJson(json: JsonValue): JsonValue {
     return json;
+  }
+  encodePsl(value: JsonValue): PslLiteral {
+    return encodeJsonTextPsl(value);
+  }
+  decodePsl(literal: PslLiteral): JsonValue {
+    return decodeJsonTextPsl(this.id, literal);
   }
 }
 
@@ -571,7 +618,7 @@ export class SqliteBigintCodec extends CodecImpl<
     }
     return BigInt(wire);
   }
-  encodeJson(value: bigint): JsonValue {
+  encodeJson(value: bigint): string {
     return bigintEncodeJson(SQLITE_BIGINT_CODEC_ID, value);
   }
   decodeJson(json: JsonValue): bigint {
@@ -583,6 +630,12 @@ export class SqliteBigintCodec extends CodecImpl<
       );
     }
     return BigInt(json);
+  }
+  encodePsl(value: bigint): PslLiteral {
+    return { kind: 'number', text: this.encodeJson(value) };
+  }
+  decodePsl(literal: PslLiteral): bigint {
+    return BigInt(decodeWholeNumberPsl(this.id, literal));
   }
 }
 
@@ -641,7 +694,7 @@ export class SqliteBigintNumberCodec extends CodecImpl<
     }
     return safeIntegerFromBigint(BigInt(wire));
   }
-  encodeJson(value: number): JsonValue {
+  encodeJson(value: number): number {
     return encodableSafeInteger(value);
   }
   decodeJson(json: JsonValue): number {
@@ -653,6 +706,12 @@ export class SqliteBigintNumberCodec extends CodecImpl<
       );
     }
     return safeIntegerNumber(json, 'RUNTIME.DECODE_FAILED');
+  }
+  encodePsl(value: number): PslLiteral {
+    return encodeNumberPsl(this.encodeJson(value));
+  }
+  decodePsl(literal: PslLiteral): number {
+    return safeIntegerFromBigint(BigInt(decodeWholeNumberPsl(this.id, literal)));
   }
 }
 

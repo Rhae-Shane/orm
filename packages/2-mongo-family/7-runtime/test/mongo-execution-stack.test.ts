@@ -68,6 +68,8 @@ describe('createMongoExecutionContext', () => {
       typeId: 'test/custom@1',
       decode: (wire: string) => `decoded:${wire}`,
       encode: (value: string) => value,
+      encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+      decodePsl: (literal) => literal.text as never,
     });
     const pack: MongoRuntimeExtensionDescriptor<'mongo'> = {
       kind: 'extension',
@@ -97,6 +99,8 @@ describe('createMongoExecutionContext', () => {
       typeId: 'mongo/string@1',
       decode: (wire: string) => wire,
       encode: (value: string) => value,
+      encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+      decodePsl: (literal) => literal.text as never,
     });
     const conflictingPack: MongoRuntimeExtensionDescriptor<'mongo'> = {
       kind: 'extension',

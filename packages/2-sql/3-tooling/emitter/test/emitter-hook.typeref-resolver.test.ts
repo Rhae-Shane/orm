@@ -15,6 +15,8 @@ function vectorCodecLookup(): CodecLookup {
     decode: async (w: unknown) => w,
     encodeJson: (v: unknown) => v as never,
     decodeJson: (j: unknown) => j as never,
+    encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+    decodePsl: (literal) => literal.text as never,
   } as ReturnType<CodecLookup['get']>;
   return {
     get: (id) => (id === 'pg/vector@1' ? vectorCodec : undefined),

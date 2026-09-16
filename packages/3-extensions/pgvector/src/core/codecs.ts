@@ -19,6 +19,9 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
+  decodeJsonTextPsl,
+  encodeJsonTextPsl,
+  type PslLiteral,
 } from '@internal/framework-components/codec';
 import type { ExtractCodecTypes, ProjectionExpr } from '@internal/sql-relational-core/ast';
 import { CastExpr, FunctionCallExpr } from '@internal/sql-relational-core/ast';
@@ -148,6 +151,14 @@ export class PgVectorCodec extends CodecImpl<
     const value = [...json];
     this.assertVector(value, 'RUNTIME.DECODE_FAILED');
     return value;
+  }
+
+  encodePsl(value: number[]): PslLiteral {
+    return encodeJsonTextPsl(this.encodeJson(value));
+  }
+
+  decodePsl(literal: PslLiteral): number[] {
+    return this.decodeJson(decodeJsonTextPsl(this.id, literal));
   }
 }
 

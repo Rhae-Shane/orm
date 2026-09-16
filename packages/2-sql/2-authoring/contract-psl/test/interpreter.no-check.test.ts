@@ -30,6 +30,8 @@ const textCodec: Codec = {
     if (typeof json !== 'string') throw new Error(`expected string, got ${typeof json}`);
     return json;
   },
+  encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+  decodePsl: (literal) => literal.text as never,
 };
 
 const int4Codec: Codec = { ...textCodec, id: 'pg/int4@1' };

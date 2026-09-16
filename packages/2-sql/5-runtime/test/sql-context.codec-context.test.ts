@@ -35,6 +35,8 @@ describe('buildContractCodecRegistry — per-column codec instance context', () 
           decode: (w: unknown) => Promise.resolve(w),
           encodeJson: (v) => v as never,
           decodeJson: (j) => j as never,
+          encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+          decodePsl: (literal) => literal.text as never,
         };
         instances.push({ ctx, codec });
         return codec;
@@ -146,6 +148,8 @@ describe('buildContractCodecRegistry — forCodecRef content-keyed cache', () =>
           decode: (w: unknown) => Promise.resolve(w),
           encodeJson: (v) => v as never,
           decodeJson: (j) => j as never,
+          encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+          decodePsl: (literal) => literal.text as never,
         };
         return Object.assign({}, codec, {
           meta: { length: params.length, ctxName: ctx.name },
@@ -394,6 +398,8 @@ describe('buildContractCodecRegistry — forColumn delegates to forCodecRef', ()
           decode: (w: unknown) => Promise.resolve(w),
           encodeJson: (v) => v as never,
           decodeJson: (j) => j as never,
+          encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+          decodePsl: (literal) => literal.text as never,
         };
         instances.push({ ctx, codec });
         return codec;

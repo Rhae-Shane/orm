@@ -154,6 +154,8 @@ describe('lowerFilter', () => {
         typeId: 'test/uppercase@1',
         decode: (wire: string) => wire,
         encode: (value: string) => value.toUpperCase(),
+        encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+        decodePsl: (literal) => literal.text as never,
       }),
     );
 
@@ -170,6 +172,8 @@ describe('lowerFilter', () => {
         typeId: 'test/uppercase@1',
         decode: (wire: string) => wire,
         encode: (value: string) => value.toUpperCase(),
+        encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+        decodePsl: (literal) => literal.text as never,
       }),
     );
 
@@ -195,6 +199,8 @@ describe('lowerFilter', () => {
         typeId: 'test/uppercase@1',
         decode: (wire: string) => wire,
         encode: (value: string) => value.toUpperCase(),
+        encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+        decodePsl: (literal) => literal.text as never,
       }),
     );
 

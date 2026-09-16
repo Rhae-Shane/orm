@@ -8,6 +8,8 @@ describe('mongoCodec() factory — CodecCallContext arity', () => {
       typeId: 'demo/single-arg-encode@1',
       encode: (value: string) => value.toUpperCase(),
       decode: (wire: string) => wire,
+      encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+      decodePsl: (literal) => literal.text as never,
     });
     expect(await c.encode('hi', {})).toBe('HI');
   });
@@ -21,6 +23,8 @@ describe('mongoCodec() factory — CodecCallContext arity', () => {
         return value;
       },
       decode: (wire: string) => wire,
+      encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+      decodePsl: (literal) => literal.text as never,
     });
     const controller = new AbortController();
     const ctx: CodecCallContext = { signal: controller.signal };
@@ -38,6 +42,8 @@ describe('mongoCodec() factory — CodecCallContext arity', () => {
         observed = ctx;
         return wire;
       },
+      encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+      decodePsl: (literal) => literal.text as never,
     });
     const controller = new AbortController();
     const ctx: CodecCallContext = { signal: controller.signal };
@@ -55,6 +61,8 @@ describe('mongoCodec() factory — CodecCallContext arity', () => {
         return value;
       },
       decode: (wire: string) => wire,
+      encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+      decodePsl: (literal) => literal.text as never,
     });
     const controller = new AbortController();
     await c.encode('x', { signal: controller.signal });
@@ -70,6 +78,8 @@ describe('mongoCodec() factory — CodecCallContext arity', () => {
         return value;
       },
       decode: (wire: string) => wire,
+      encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+      decodePsl: (literal) => literal.text as never,
     });
     const ctx: CodecCallContext = {};
     await c.encode('x', ctx);
@@ -81,6 +91,8 @@ describe('mongoCodec() factory — CodecCallContext arity', () => {
       typeId: 'demo/async-ctx@1',
       encode: async (value: string, _ctx?: CodecCallContext) => `enc:${value}`,
       decode: (wire: string) => wire,
+      encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+      decodePsl: (literal) => literal.text as never,
     });
     expect(await c.encode('x', { signal: new AbortController().signal })).toBe('enc:x');
   });

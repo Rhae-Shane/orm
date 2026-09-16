@@ -42,6 +42,8 @@ const textCodec: Codec = {
     if (typeof json !== 'string') throw new Error(`expected string, got ${typeof json}`);
     return json;
   },
+  encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+  decodePsl: (literal) => literal.text as never,
 };
 
 const int4Codec: Codec = {
@@ -53,6 +55,8 @@ const int4Codec: Codec = {
     if (typeof json !== 'number') throw new Error(`expected number, got ${typeof json}`);
     return json;
   },
+  encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+  decodePsl: (literal) => literal.text as never,
 };
 
 const pgIntCodec: Codec = { ...int4Codec, id: 'pg/int@1' };

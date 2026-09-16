@@ -3,6 +3,7 @@ import type {
   Codec as BaseCodec,
   CodecCallContext,
   CodecTrait,
+  PslLiteral,
 } from '@internal/framework-components/codec';
 
 export type MongoCodecTrait = CodecTrait;
@@ -37,7 +38,7 @@ type JsonRoundTripConfig<TInput> = [TInput] extends [JsonValue]
  *
  * Author `encode` and `decode` as sync or async functions; the factory produces a {@link MongoCodec} whose query-time methods follow the boundary contract documented on the framework {@link BaseCodec}. Authors receive a second `ctx` options argument carrying the per-call context; ignore it if you don't need it.
  *
- * Both `encode` and `decode` are required so `TInput` and `TWire` are always covered by an explicit author function — the factory installs no identity fallback. `encodeJson` and `decodeJson` default to identity **only when `TInput` is assignable to `JsonValue`**; otherwise both are required so the contract artifact stays JSON-safe.
+ * Both `encode` and `decode` are required so `TInput` and `TWire` are always covered by an explicit author function — the factory installs no identity fallback. `encodeJson` and `decodeJson` default to identity **only when `TInput` is assignable to `JsonValue`**; otherwise both are required so the contract artifact stays JSON-safe. `encodePsl` and `decodePsl` are always required: every codec states the PSL literal that denotes its values, and the shared pairs in `@internal/framework-components/codec` (`encodeStringPsl`/`decodeStringPsl`, `encodeNumberPsl`/`decodeNumberPsl`, ...) cover the common shapes.
  *
  * Codec-id-keyed static metadata (`traits`, `targetTypes`, `renderOutputType`) lives on the unified `CodecDescriptor` rather than on the codec instance itself (TML-2357).
  */
@@ -51,6 +52,8 @@ export function mongoCodec<
     typeId: Id;
     encode: (value: TInput, ctx: CodecCallContext) => TWire | Promise<TWire>;
     decode: (wire: TWire, ctx: CodecCallContext) => TInput | Promise<TInput>;
+    encodePsl: (value: TInput) => PslLiteral;
+    decodePsl: (literal: PslLiteral) => TInput;
   } & JsonRoundTripConfig<TInput>,
 ): MongoCodec<Id, TTraits, TWire, TInput> {
   const identity = (v: unknown) => v;
@@ -79,6 +82,8 @@ export function mongoCodec<
     },
     encodeJson: (widenedConfig.encodeJson ?? identity) as (value: TInput) => JsonValue,
     decodeJson: (widenedConfig.decodeJson ?? identity) as (json: JsonValue) => TInput,
+    encodePsl: config.encodePsl,
+    decodePsl: config.decodePsl,
   };
 }
 

@@ -381,6 +381,8 @@ describe('MongoAdapter with codec registry', () => {
     typeId: 'test/uppercase@1',
     decode: (wire: string) => wire.toLowerCase(),
     encode: (value: string) => value.toUpperCase(),
+    encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+    decodePsl: (literal) => literal.text as never,
   });
 
   function registryWithUppercase() {

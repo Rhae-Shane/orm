@@ -76,6 +76,8 @@ const mongoCodecLookup: CodecLookup = {
       decode: async (w: unknown) => w,
       encodeJson: (v: unknown) => v,
       decodeJson: (j: unknown) => j,
+      encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+      decodePsl: (literal) => literal.text as never,
     } as ReturnType<CodecLookup['get']>;
   },
   targetTypesFor: (id: string) => mongoTargetTypes[id],

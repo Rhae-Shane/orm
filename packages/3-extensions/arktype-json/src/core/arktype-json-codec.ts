@@ -19,6 +19,9 @@ import {
   type ColumnHelperFor,
   type ColumnSpec,
   column,
+  decodeJsonTextPsl,
+  encodeJsonTextPsl,
+  type PslLiteral,
 } from '@internal/framework-components/codec';
 import { isRuntimeError, runtimeError } from '@internal/framework-components/runtime';
 import type { ProjectionExpr } from '@internal/sql-relational-core/ast';
@@ -201,6 +204,14 @@ export class ArktypeJsonCodecClass<TInferred> extends CodecImpl<
 
   decodeJson(json: JsonValue): TInferred {
     return validateSchema<TInferred>(this.schema, json);
+  }
+
+  encodePsl(value: TInferred): PslLiteral {
+    return encodeJsonTextPsl(this.encodeJson(value));
+  }
+
+  decodePsl(literal: PslLiteral): TInferred {
+    return this.decodeJson(decodeJsonTextPsl(this.id, literal));
   }
 }
 

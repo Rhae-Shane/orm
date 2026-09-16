@@ -22,6 +22,9 @@ import {
   CodecDescriptorImpl,
   CodecImpl,
   type CodecInstanceContext,
+  decodeStringPsl,
+  encodeStringPsl,
+  type PslLiteral,
   voidParamsSchema,
 } from '@internal/framework-components/codec';
 import {
@@ -79,6 +82,12 @@ class FixturePolicyTextCodec extends CodecImpl<
   }
   decodeJson(json: JsonValue): string {
     return json as string;
+  }
+  encodePsl(value: string): PslLiteral {
+    return encodeStringPsl(value);
+  }
+  decodePsl(literal: PslLiteral): string {
+    return decodeStringPsl(this.id, literal);
   }
 }
 

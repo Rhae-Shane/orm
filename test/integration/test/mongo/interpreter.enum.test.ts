@@ -47,6 +47,8 @@ const mongoCodecLookup: CodecLookup = {
           throw new Error(`expected string, got ${typeof j}`);
         return j;
       },
+      encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+      decodePsl: (literal) => literal.text as never,
     } as ReturnType<CodecLookup['get']>;
   },
   targetTypesFor: (id: string) => mongoTargetTypes[id],

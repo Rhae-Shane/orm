@@ -10,6 +10,8 @@ describe('mongoCodec()', () => {
       typeId: 'test/string@1',
       decode: (wire: string) => wire,
       encode: (value: string) => value,
+      encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+      decodePsl: (literal) => literal.text as never,
     });
 
     expect(codec.id).toBe('test/string@1');
@@ -22,6 +24,8 @@ describe('mongoCodec()', () => {
       typeId: 'test/upper@1',
       decode: (wire: string) => wire.toUpperCase(),
       encode: (value: string) => value.toLowerCase(),
+      encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+      decodePsl: (literal) => literal.text as never,
     });
 
     expect(await codec.decode('hello', {})).toBe('HELLO');
@@ -33,6 +37,8 @@ describe('mongoCodec()', () => {
       typeId: 'test/sync@1',
       decode: (wire: string) => wire,
       encode: (value: string) => value,
+      encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+      decodePsl: (literal) => literal.text as never,
     });
 
     const decoded = codec.decode('x', {});
@@ -46,6 +52,8 @@ describe('mongoCodec()', () => {
       typeId: 'test/async@1',
       decode: async (wire: string) => `decoded:${wire}`,
       encode: async (value: string) => `encoded:${value}`,
+      encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+      decodePsl: (literal) => literal.text as never,
     });
 
     expect(await codec.decode('a', {})).toBe('decoded:a');
@@ -59,6 +67,8 @@ describe('MongoCodecRegistry', () => {
       typeId: id,
       decode: (wire: JsonValue) => wire,
       encode: (value: JsonValue) => value,
+      encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+      decodePsl: (literal) => literal.text,
     });
   }
 

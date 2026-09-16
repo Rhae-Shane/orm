@@ -12,6 +12,9 @@ import {
   CodecImpl,
   type CodecInstanceContext,
   type ColumnTypeDescriptor,
+  decodeStringPsl,
+  encodeStringPsl,
+  type PslLiteral,
   voidParamsSchema,
 } from '@internal/framework-components/codec';
 import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
@@ -56,6 +59,14 @@ class IncludedTextCodec extends CodecImpl<
       throw new Error('intentional included text decode failure');
     }
     return `decoded-json:${json}`;
+  }
+
+  encodePsl(value: string): PslLiteral {
+    return encodeStringPsl(value);
+  }
+
+  decodePsl(literal: PslLiteral): string {
+    return decodeStringPsl(this.id, literal);
   }
 }
 

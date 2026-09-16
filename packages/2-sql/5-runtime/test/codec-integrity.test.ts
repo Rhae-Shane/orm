@@ -22,6 +22,8 @@ describe('createExecutionContext — column codec integrity', () => {
       decode: (w: unknown) => Promise.resolve(w),
       encodeJson: (v) => v as never,
       decodeJson: (j) => j as never,
+      encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+      decodePsl: (literal) => literal.text as never,
     };
   }
 

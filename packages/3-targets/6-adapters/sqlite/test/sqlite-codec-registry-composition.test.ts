@@ -6,6 +6,9 @@ import {
   CodecDescriptorImpl,
   CodecImpl,
   type CodecInstanceContext,
+  decodeStringPsl,
+  encodeStringPsl,
+  type PslLiteral,
   voidParamsSchema,
 } from '@internal/framework-components/codec';
 import type { ControlExtensionDescriptor } from '@internal/framework-components/control';
@@ -76,6 +79,14 @@ class TestCodec extends CodecImpl<string, readonly ['equality'], string, string>
       throw new TypeError('Expected string JSON');
     }
     return json;
+  }
+
+  encodePsl(value: string): PslLiteral {
+    return encodeStringPsl(value);
+  }
+
+  decodePsl(literal: PslLiteral): string {
+    return decodeStringPsl(this.id, literal);
   }
 }
 

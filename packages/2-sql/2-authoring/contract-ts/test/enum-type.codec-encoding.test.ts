@@ -29,6 +29,8 @@ function stubCodec(id: string, encodeJson: (value: unknown) => JsonValue): Codec
     id,
     encodeJson: encodeJson as Codec['encodeJson'],
     decodeJson: ((json: JsonValue) => json) as Codec['decodeJson'],
+    encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+    decodePsl: (literal) => literal.text as never,
     encode: (() => Promise.reject(new Error('unused'))) as Codec['encode'],
     decode: (() => Promise.reject(new Error('unused'))) as Codec['decode'],
   };

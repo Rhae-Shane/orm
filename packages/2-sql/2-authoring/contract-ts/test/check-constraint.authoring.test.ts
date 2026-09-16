@@ -514,6 +514,8 @@ describe('check emission — guards', () => {
         decodeJson: (() => {
           throw new Error('unused');
         }) as Codec['decodeJson'],
+        encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+        decodePsl: (literal) => literal.text as never,
         encode: (() => {
           throw new Error('unused');
         }) as Codec['encode'],

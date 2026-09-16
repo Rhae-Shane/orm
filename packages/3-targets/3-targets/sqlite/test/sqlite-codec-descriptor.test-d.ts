@@ -6,6 +6,9 @@ import {
   CodecImpl,
   type CodecInstanceContext,
   type CodecTrait,
+  decodeJsonTextPsl,
+  encodeJsonTextPsl,
+  type PslLiteral,
 } from '@internal/framework-components/codec';
 import { FunctionCallExpr, type ProjectionExpr } from '@internal/sql-relational-core/ast';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
@@ -55,6 +58,14 @@ class VectorCodec<N extends number> extends CodecImpl<
 
   decodeJson(json: JsonValue): ReadonlyArray<number> {
     return json as unknown as ReadonlyArray<number>;
+  }
+
+  encodePsl(value: ReadonlyArray<number>): PslLiteral {
+    return encodeJsonTextPsl(this.encodeJson(value));
+  }
+
+  decodePsl(literal: PslLiteral): ReadonlyArray<number> {
+    return this.decodeJson(decodeJsonTextPsl(this.id, literal));
   }
 }
 

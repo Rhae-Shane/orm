@@ -40,6 +40,9 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
+  decodeStringPsl,
+  encodeStringPsl,
+  type PslLiteral,
 } from '@internal/framework-components/codec';
 import type { ExtractCodecTypes, ProjectionExpr } from '@internal/sql-relational-core/ast';
 import {
@@ -127,7 +130,7 @@ export class PostgisGeometryCodec extends CodecImpl<
     return decodeEWKBHex(wire);
   }
 
-  encodeJson(value: Geometry): JsonValue {
+  encodeJson(value: Geometry): string {
     assertGeometry(value);
     return encodeEWKBHex(value);
   }
@@ -141,6 +144,14 @@ export class PostgisGeometryCodec extends CodecImpl<
       );
     }
     return decodeEWKBHex(json);
+  }
+
+  encodePsl(value: Geometry): PslLiteral {
+    return encodeStringPsl(this.encodeJson(value));
+  }
+
+  decodePsl(literal: PslLiteral): Geometry {
+    return this.decodeJson(decodeStringPsl(this.id, literal));
   }
 }
 

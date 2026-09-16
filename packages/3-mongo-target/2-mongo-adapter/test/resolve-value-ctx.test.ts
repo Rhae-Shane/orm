@@ -30,6 +30,8 @@ describe('resolveValue — CodecCallContext threading', () => {
           observed.push(ctx);
           return v;
         },
+        encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+        decodePsl: (literal) => literal.text as never,
       }),
     );
 
@@ -50,6 +52,8 @@ describe('resolveValue — CodecCallContext threading', () => {
           observed.push(ctx);
           return v;
         },
+        encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+        decodePsl: (literal) => literal.text as never,
       }),
     );
 
@@ -86,6 +90,8 @@ describe('resolveValue — CodecCallContext threading', () => {
           receivedValue = v;
           return v;
         },
+        encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+        decodePsl: (literal) => literal.text as never,
       }),
     );
 
@@ -110,6 +116,8 @@ describe('resolveValue — CodecCallContext threading', () => {
           callCount += 1;
           return v;
         },
+        encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+        decodePsl: (literal) => literal.text as never,
       }),
     );
 
@@ -138,6 +146,8 @@ describe('resolveValue — CodecCallContext threading', () => {
         typeId: 'test/blocking@1',
         decode: (w: string) => w,
         encode: (v: string) => release.promise.then((suffix) => `${v}:${suffix}`),
+        encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+        decodePsl: (literal) => literal.text as never,
       }),
     );
 
@@ -170,6 +180,8 @@ describe('resolveValue — CodecCallContext threading', () => {
         encode: () => {
           throw cause;
         },
+        encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+        decodePsl: (literal) => literal.text as never,
       }),
     );
 
@@ -191,6 +203,8 @@ describe('resolveValue — CodecCallContext threading', () => {
         typeId: 'test/level-blocker@1',
         decode: (w: string) => w,
         encode: (v: string) => blockingLeaf.promise.then((s) => `${v}:${s}`),
+        encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+        decodePsl: (literal) => literal.text as never,
       }),
     );
 
@@ -223,6 +237,8 @@ describe('resolveValue — CodecCallContext threading', () => {
         typeId: 'test/array-blocker@1',
         decode: (w: string) => w,
         encode: (v: string) => blockingLeaf.promise.then((s) => `${v}:${s}`),
+        encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+        decodePsl: (literal) => literal.text as never,
       }),
     );
 

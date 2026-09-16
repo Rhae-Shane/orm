@@ -27,6 +27,8 @@ function registryWithDefaults(): MongoCodecRegistry {
       typeId: 'mongo/string@1',
       encode: (v: string) => v,
       decode: (w: string) => w,
+      encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+      decodePsl: (literal) => literal.text as never,
     }),
   );
   registry.register(
@@ -34,6 +36,8 @@ function registryWithDefaults(): MongoCodecRegistry {
       typeId: 'mongo/objectId@1',
       encode: (v: string) => new ObjectId(v),
       decode: (w: { toHexString: () => string }) => w.toHexString(),
+      encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+      decodePsl: (literal) => literal.text as never,
     }),
   );
   return registry;
@@ -65,6 +69,8 @@ describe('decodeMongoRow', () => {
         typeId: 'test/spy@1',
         encode: (v: string) => v,
         decode: decodeSpy,
+        encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+        decodePsl: (literal) => literal.text as never,
       }),
     );
     const shape: MongoResultShape = {
@@ -127,6 +133,8 @@ describe('decodeMongoRow', () => {
           if (w === 'bad') throw new Error('boom');
           return w;
         },
+        encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+        decodePsl: (literal) => literal.text as never,
       }),
     );
     const shapeThrow: MongoResultShape = {
@@ -251,6 +259,8 @@ describe('decodeMongoRow', () => {
           // Codec authors throwing a non-Error happens — the wrapper has to render something for the message. The cast is a deliberate exercise of `wrapDecodeFailure`'s `error instanceof Error` false-branch (pure type-system: `throw` accepts `unknown`).
           throw 'string-error' as unknown as Error;
         },
+        encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+        decodePsl: (literal) => literal.text as never,
       }),
     );
     const shape: MongoResultShape = {
@@ -278,6 +288,8 @@ describe('decodeMongoRow', () => {
         decode: () => {
           throw new Error('boom');
         },
+        encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+        decodePsl: (literal) => literal.text as never,
       }),
     );
     const shape: MongoResultShape = {
@@ -306,6 +318,8 @@ describe('decodeMongoRow', () => {
         decode: () => {
           throw new Error('boom');
         },
+        encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+        decodePsl: (literal) => literal.text as never,
       }),
     );
     const shape: MongoResultShape = {
@@ -408,6 +422,8 @@ describe('decodeMongoRow', () => {
         decode: () => {
           throw new Error('inner');
         },
+        encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+        decodePsl: (literal) => literal.text as never,
       }),
     );
     const shape: MongoResultShape = {
@@ -446,6 +462,8 @@ describe('decodeMongoRow', () => {
         decode: () => {
           throw envelope;
         },
+        encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+        decodePsl: (literal) => literal.text as never,
       }),
     );
     const shape: MongoResultShape = {
@@ -472,6 +490,8 @@ describe('decodeMongoRow', () => {
         decode: () => {
           throw envelope;
         },
+        encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+        decodePsl: (literal) => literal.text as never,
       }),
     );
     const shape: MongoResultShape = {
@@ -501,6 +521,8 @@ describe('decodeMongoRow', () => {
           callOrder.push('a-start');
           return dA.promise.then((s) => `${w}:${s}`);
         },
+        encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+        decodePsl: (literal) => literal.text as never,
       }),
     );
     registry.register(
@@ -511,6 +533,8 @@ describe('decodeMongoRow', () => {
           callOrder.push('b-start');
           return dB.promise.then((s) => `${w}:${s}`);
         },
+        encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+        decodePsl: (literal) => literal.text as never,
       }),
     );
     const shape: MongoResultShape = {

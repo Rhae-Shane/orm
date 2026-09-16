@@ -64,6 +64,8 @@ const codecLookup: CodecLookup = {
       decode: async (wire: unknown) => wire,
       encodeJson: codec.encodeJson as (value: unknown) => JsonValue,
       decodeJson: codec.decodeJson,
+      encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+      decodePsl: (literal) => literal.text,
     };
   },
   descriptorFor: (id) => {

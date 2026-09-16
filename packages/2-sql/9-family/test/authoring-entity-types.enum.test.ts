@@ -60,6 +60,8 @@ const pgTextCodec: Codec = {
     if (typeof json !== 'string') throw new Error(`expected string, got ${typeof json}`);
     return json;
   },
+  encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+  decodePsl: (literal) => literal.text as never,
 };
 
 const pgIntCodec: Codec = {
@@ -71,6 +73,8 @@ const pgIntCodec: Codec = {
     if (typeof json !== 'number') throw new Error(`expected number, got ${typeof json}`);
     return json;
   },
+  encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+  decodePsl: (literal) => literal.text as never,
 };
 
 const testCodecLookup: CodecLookup = {

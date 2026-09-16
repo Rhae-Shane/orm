@@ -20,6 +20,11 @@ import {
   CodecDescriptorImpl,
   CodecImpl,
   type CodecInstanceContext,
+  decodeNumberPsl,
+  decodeStringPsl,
+  encodeNumberPsl,
+  encodeStringPsl,
+  type PslLiteral,
   voidParamsSchema,
 } from '@internal/framework-components/codec';
 import {
@@ -68,6 +73,12 @@ class StubPolicyTextCodec extends CodecImpl<
   }
   decodeJson(json: JsonValue): string {
     return json as string;
+  }
+  encodePsl(value: string): PslLiteral {
+    return encodeStringPsl(value);
+  }
+  decodePsl(literal: PslLiteral): string {
+    return decodeStringPsl(this.id, literal);
   }
 }
 
@@ -232,6 +243,12 @@ describe('generic extension-block printer (P2)', () => {
       // … and re-encode to a bare JSON number, which prints unquoted.
       encodeJson(value: number): JsonValue {
         return value;
+      }
+      encodePsl(value: number): PslLiteral {
+        return encodeNumberPsl(value);
+      }
+      decodePsl(literal: PslLiteral): number {
+        return decodeNumberPsl(this.id, literal);
       }
     }
 

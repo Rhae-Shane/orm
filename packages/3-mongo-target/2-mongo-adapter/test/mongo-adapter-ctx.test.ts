@@ -31,6 +31,8 @@ function recordingRegistry(observed: (CodecCallContext | undefined)[]) {
         observed.push(ctx);
         return v;
       },
+      encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+      decodePsl: (literal) => literal.text as never,
     }),
   );
   return registry;
@@ -201,6 +203,8 @@ describe('MongoAdapter — CodecCallContext threading', () => {
               callCount += 1;
               return v;
             },
+            encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+            decodePsl: (literal) => literal.text as never,
           }),
         );
         return reg;

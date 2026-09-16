@@ -35,6 +35,8 @@ const transformingCodec = {
   decode: async (wire: unknown) => wire,
   encodeJson: (value: unknown) => value,
   decodeJson: (json: unknown) => json,
+  encodePsl: (value: unknown) => ({ kind: 'string' as const, text: String(value) }),
+  decodePsl: (literal: { text: string }) => literal.text as never,
 } as unknown as Codec;
 
 const transformingDescriptor: AnySqliteCodecDescriptor = {
@@ -218,6 +220,8 @@ const transformingQueryCodec: Codec = {
   decode: async (wire: unknown) => wire,
   encodeJson: (v) => v as never,
   decodeJson: (v) => v as never,
+  encodePsl: (value: unknown) => ({ kind: 'string' as const, text: String(value) }),
+  decodePsl: (literal: { text: string }) => literal.text as never,
 };
 
 const testRegistry: ContractCodecRegistry = {
@@ -287,6 +291,8 @@ class ExtTransformDescriptor extends CodecDescriptorImpl<void> {
         decode: async (wire: unknown) => wire,
         encodeJson: (v: unknown) => v as never,
         decodeJson: (v: unknown) => v as never,
+        encodePsl: (value: unknown) => ({ kind: 'string' as const, text: String(value) }),
+        decodePsl: (literal: { text: string }) => literal.text as never,
       }) as unknown as Codec;
   }
 }

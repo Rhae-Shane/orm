@@ -60,6 +60,8 @@ const mongoStringCodec: Codec = {
     if (typeof json !== 'string') throw new Error(`expected string, got ${typeof json}`);
     return json;
   },
+  encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+  decodePsl: (literal) => literal.text as never,
 };
 
 const mongoIntCodec: Codec = {
@@ -71,6 +73,8 @@ const mongoIntCodec: Codec = {
     if (typeof json !== 'number') throw new Error(`expected number, got ${typeof json}`);
     return json;
   },
+  encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+  decodePsl: (literal) => literal.text as never,
 };
 
 const testCodecLookup: CodecLookup = {

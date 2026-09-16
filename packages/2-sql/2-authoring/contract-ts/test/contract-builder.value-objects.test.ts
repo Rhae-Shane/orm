@@ -47,6 +47,8 @@ describe('value objects in contract definition builder', () => {
             };
           },
           decodeJson: (json: unknown) => json,
+          encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+          decodePsl: (literal) => literal.text as never,
         };
       },
       targetTypesFor: (id) => (id === 'pg/jsonb@1' ? ['jsonb'] : undefined),

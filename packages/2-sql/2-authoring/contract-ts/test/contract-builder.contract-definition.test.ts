@@ -200,6 +200,8 @@ describe('shared contract definition lowering', () => {
           encodeJson: (value: unknown) =>
             value instanceof Date ? value.toISOString() : (value as string),
           decodeJson: (json: unknown) => new Date(json as string),
+          encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+          decodePsl: (literal) => literal.text as never,
         };
       },
       targetTypesFor: (id) => (id === 'pg/timestamptz-temporal@1' ? ['timestamptz'] : undefined),

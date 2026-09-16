@@ -222,6 +222,8 @@ const transformingCodec: Codec = {
   decode: async (wire: unknown) => wire,
   encodeJson: (v) => v as never,
   decodeJson: (v) => v as never,
+  encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+  decodePsl: (literal) => literal.text as never,
 };
 
 const transformingCodecDescriptor: AnyCodecDescriptor = {

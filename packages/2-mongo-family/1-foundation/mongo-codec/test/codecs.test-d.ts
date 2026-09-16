@@ -16,6 +16,8 @@ test('MongoCodecInput extracts the JS application type used for both write input
     typeId: 'demo/text@1',
     encode: (value: string) => value,
     decode: (wire: string) => wire,
+    encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+    decodePsl: (literal) => literal.text as never,
   });
 
   expectTypeOf<MongoCodecInput<typeof text>>().toEqualTypeOf<string>();

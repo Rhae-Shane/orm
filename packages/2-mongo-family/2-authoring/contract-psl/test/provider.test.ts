@@ -26,6 +26,8 @@ const stringCodec: Codec = {
   decode: async (wire: unknown) => wire,
   encodeJson: (value) => value as JsonValue,
   decodeJson: (json) => json,
+  encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+  decodePsl: (literal) => literal.text as never,
 };
 
 const enumEntityType = {

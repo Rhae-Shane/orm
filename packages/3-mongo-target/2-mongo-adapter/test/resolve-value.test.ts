@@ -14,6 +14,8 @@ const uppercaseCodec = mongoCodec({
   typeId: 'test/uppercase@1',
   decode: (wire: string) => wire.toLowerCase(),
   encode: (value: string) => value.toUpperCase(),
+  encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+  decodePsl: (literal) => literal.text as never,
 });
 
 function testRegistry() {
@@ -108,6 +110,8 @@ describe('resolveValue', () => {
           callOrder.push('encode-a-start');
           return dA.promise.then((suffix) => `${value}:${suffix}`);
         },
+        encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+        decodePsl: (literal) => literal.text as never,
       });
       const asyncBCodec = mongoCodec({
         typeId: 'test/async-b@1',
@@ -116,6 +120,8 @@ describe('resolveValue', () => {
           callOrder.push('encode-b-start');
           return dB.promise.then((suffix) => `${value}:${suffix}`);
         },
+        encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+        decodePsl: (literal) => literal.text as never,
       });
 
       const registry = newMongoCodecRegistry();
@@ -154,6 +160,8 @@ describe('resolveValue', () => {
           if (value === 'one') return d1.promise;
           return d2.promise;
         },
+        encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+        decodePsl: (literal) => literal.text as never,
       });
 
       const registry = newMongoCodecRegistry();
@@ -192,6 +200,8 @@ describe('resolveValue', () => {
         encode: async (_v: string) => {
           throw new Error('kms-key-resolution-failed');
         },
+        encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+        decodePsl: (literal) => literal.text as never,
       });
       const registry = newMongoCodecRegistry();
       registry.register(failingCodec);
@@ -216,6 +226,8 @@ describe('resolveValue', () => {
         encode: async (_v: string) => {
           throw new Error('boom');
         },
+        encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+        decodePsl: (literal) => literal.text as never,
       });
       const registry = newMongoCodecRegistry();
       registry.register(failingCodec);
@@ -239,6 +251,8 @@ describe('resolveValue', () => {
         encode: async (_v: string) => {
           throw new Error('boom');
         },
+        encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+        decodePsl: (literal) => literal.text as never,
       });
       const registry = newMongoCodecRegistry();
       registry.register(failingCodec);
@@ -260,6 +274,8 @@ describe('resolveValue', () => {
           err.code = 'RUNTIME.ENCODE_FAILED';
           throw err;
         },
+        encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+        decodePsl: (literal) => literal.text as never,
       });
       const registry = newMongoCodecRegistry();
       registry.register(innerCodec);
@@ -281,6 +297,8 @@ describe('resolveValue', () => {
         encode: async (_v: string) => {
           throw envelope;
         },
+        encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+        decodePsl: (literal) => literal.text as never,
       });
       const registry = newMongoCodecRegistry();
       registry.register(innerCodec);
@@ -298,6 +316,8 @@ describe('resolveValue', () => {
         encode: async (_v: string) => {
           throw new Error('plain failure');
         },
+        encodePsl: (value) => ({ kind: 'string', text: String(value) }),
+        decodePsl: (literal) => literal.text as never,
       });
       const registry = newMongoCodecRegistry();
       registry.register(innerCodec);
