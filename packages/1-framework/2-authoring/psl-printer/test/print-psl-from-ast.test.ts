@@ -916,4 +916,57 @@ describe('printPslFromAst', () => {
       expect(printed).toMatch(/user\s+supabase:auth\.User\?\s+@relation/);
     });
   });
+
+  describe('the header comment', () => {
+    const headerAst: PslDocumentAst = {
+      kind: 'document',
+      sourceId: 'header.prisma',
+      namespaces: [
+        makeNs(
+          UNSPECIFIED_PSL_NAMESPACE_ID,
+          [
+            {
+              kind: 'model',
+              name: 'X',
+              fields: [
+                {
+                  kind: 'field',
+                  name: 'id',
+                  typeName: 'Int',
+                  optional: false,
+                  list: false,
+                  attributes: [attr('field', 'id', [], 1)],
+                  span: span(0),
+                },
+              ],
+              attributes: [],
+              span: span(0),
+            },
+          ],
+          [],
+          0,
+        ),
+      ],
+      span: span(0),
+    };
+
+    function headerOf(printed: string): string {
+      return printed.split('\n\n')[0] ?? '';
+    }
+
+    it('describes an inferred contract when the caller names none', () => {
+      expect(headerOf(printPslFromAst(headerAst))).toBe(
+        '// use prisma-8\n// Contract inferred from the live database schema. Edit as needed, then run `prisma contract emit`.',
+      );
+    });
+
+    it('opens with the header the caller names', () => {
+      const printed = printPslFromAst(headerAst, {
+        headerComment: '// use prisma-8\n// Converted from prisma/schema.prisma.',
+      });
+
+      expect(headerOf(printed)).toBe('// use prisma-8\n// Converted from prisma/schema.prisma.');
+      expect(printed).toContain('model X {');
+    });
+  });
 });
