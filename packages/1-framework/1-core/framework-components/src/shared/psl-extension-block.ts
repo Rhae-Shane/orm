@@ -77,6 +77,18 @@ export type PslDiagnosticCode =
    * round-trip) but reports this code anchored on the string token's span.
    */
   | 'PSL_UNTERMINATED_STRING'
+  /** A backtick-fenced template literal with no closing backtick; anchored on the opening backtick. */
+  | 'PSL_UNTERMINATED_TEMPLATE_LITERAL'
+  /** Whitespace, a newline, or a comment separates a tagged literal's tag from its fence. */
+  | 'PSL_TAGGED_LITERAL_FENCE_EXPECTED'
+  /** A `@default` tagged literal whose tag no pack in the stack registered. */
+  | 'PSL_UNKNOWN_DEFAULT_LITERAL_TAG'
+  /** A tagged literal body contains `${`. */
+  | 'PSL_TAGGED_LITERAL_INTERPOLATION'
+  /** A tagged literal body contains a NUL character. */
+  | 'PSL_TAGGED_LITERAL_NUL'
+  /** A tagged literal body is larger than 65536 UTF-8 bytes. */
+  | 'PSL_TAGGED_LITERAL_TOO_LARGE'
   /**
    * An unknown parameter key in an extension-contributed block — a key present
    * in the source block but absent from the descriptor's `parameters` map.

@@ -1,0 +1,83 @@
+import { describe, expect, it } from 'vitest';
+import { canonicalizeTaggedLiteralBody } from '../src/shared/tagged-literal';
+
+const MAX_BYTES = 65536;
+
+describe('canonicalizeTaggedLiteralBody', () => {
+  it.each([
+    ['single line unchanged', 'gen_random_uuid()', 'gen_random_uuid()'],
+    ['CRLF becomes LF', 'a\r\nb', 'a\nb'],
+    ['lone CR becomes LF', 'a\rb', 'a\nb'],
+    ['blank first line dropped', '\n  a', 'a'],
+    ['first line of only spaces and tabs dropped', ' \t\n  a', 'a'],
+    ['blank last line dropped', 'a\n  ', 'a'],
+    ['trailing newline dropped with the blank last line', 'a\n', 'a'],
+    ['common leading whitespace removed', '  a\n    b', 'a\n  b'],
+    ['tabs count as single characters', '\ta\n\t\tb', 'a\n\tb'],
+    ['mixed tabs and spaces counted as characters', ' \ta\n \t  b', 'a\n  b'],
+    ['internal blank line kept as an empty line', '  a\n\n  b', 'a\n\nb'],
+    ['internal whitespace-only line kept as an empty line', '  a\n      \n  b', 'a\n\nb'],
+    ['no trailing newline added', 'a\nb', 'a\nb'],
+    ['blank first and last lines both dropped', '\n  select 1\n', 'select 1'],
+    ['empty body stays empty', '', ''],
+    ['whitespace-only body becomes empty', '  \n  ', ''],
+  ])('%s', (_name, input, expected) => {
+    expect(canonicalizeTaggedLiteralBody(input)).toEqual({ ok: true, body: expected });
+  });
+
+  it('fails on ${ with the offset of the first occurrence', () => {
+    expect(canonicalizeTaggedLiteralBody('a $' + '{x} $' + '{y}')).toEqual({
+      ok: false,
+      reason: 'interpolation',
+      offset: 2,
+    });
+  });
+
+  it('checks for interpolation before line normalisation', () => {
+    expect(canonicalizeTaggedLiteralBody('\r\n$' + '{x}')).toEqual({
+      ok: false,
+      reason: 'interpolation',
+      offset: 2,
+    });
+  });
+
+  it('fails on a NUL character with its offset', () => {
+    expect(canonicalizeTaggedLiteralBody('ab\0c')).toEqual({ ok: false, reason: 'nul', offset: 2 });
+  });
+
+  it('reports interpolation before NUL', () => {
+    expect(canonicalizeTaggedLiteralBody('\0$' + '{')).toMatchObject({ reason: 'interpolation' });
+  });
+
+  it('accepts a body of exactly 65536 bytes', () => {
+    expect(canonicalizeTaggedLiteralBody('a'.repeat(MAX_BYTES))).toEqual({
+      ok: true,
+      body: 'a'.repeat(MAX_BYTES),
+    });
+  });
+
+  it('rejects a body of 65537 bytes', () => {
+    expect(canonicalizeTaggedLiteralBody('a'.repeat(MAX_BYTES + 1))).toEqual({
+      ok: false,
+      reason: 'too-large',
+      offset: MAX_BYTES,
+    });
+  });
+
+  it('measures the limit in UTF-8 bytes, not characters', () => {
+    const twoByteChars = 'é'.repeat(MAX_BYTES / 2 + 1);
+    expect(canonicalizeTaggedLiteralBody(twoByteChars)).toEqual({
+      ok: false,
+      reason: 'too-large',
+      offset: MAX_BYTES / 2,
+    });
+  });
+
+  it('measures the size after dedenting', () => {
+    const indented = `  ${'a'.repeat(MAX_BYTES)}`;
+    expect(canonicalizeTaggedLiteralBody(indented)).toEqual({
+      ok: true,
+      body: 'a'.repeat(MAX_BYTES),
+    });
+  });
+});

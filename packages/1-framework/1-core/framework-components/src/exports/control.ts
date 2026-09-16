@@ -138,3 +138,5 @@ export type {
   SourceSpan,
   TypedDefaultFunctionCall,
 } from '../shared/mutation-default-types';
+export type { TaggedLiteralCanonicalization } from '../shared/tagged-literal';
+export { canonicalizeTaggedLiteralBody, TAGGED_LITERAL_MAX_BYTES } from '../shared/tagged-literal';
