@@ -193,6 +193,10 @@ describe('contract convert', () => {
       },
     ]);
     expect(run.presented?.presentation.next).toEqual([
+      {
+        kind: 'user-choice',
+        label: 'Point contract in prisma.config.ts at generated/contract.prisma',
+      },
       { kind: 'run-command', label: 'Emit the converted contract', command: '{bin} contract emit' },
       {
         kind: 'run-command',

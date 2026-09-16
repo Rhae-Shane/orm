@@ -10,7 +10,7 @@ import { loadContractSource } from '../../control-api/operations/load-contract-s
 import type { ControlClient, ControlClientOptions } from '../../control-api/types';
 import { errorContractConfigMissing, errorRuntime } from '../../utils/cli-errors';
 import { closeQuietly } from '../../utils/command-helpers';
-import { runCommandAction } from '../../utils/next-actions';
+import { chooseAction, runCommandAction } from '../../utils/next-actions';
 import { publishTextArtifact } from '../../utils/publish-text-artifact';
 import { ormConfigSection } from '../config-section';
 import { defineOrmCommand } from '../define-command';
@@ -28,22 +28,26 @@ interface ConvertDocument {
 
 /**
  * The routine that carries a converted contract onto the database Prisma 7
- * built: emit, plan a baseline, sign, then point the `db` ref at the baseline.
+ * built: point the config at the written file, emit, plan a baseline, sign,
+ * then point the `db` ref at the baseline.
  */
-const CUTOVER_ACTIONS: readonly NextAction[] = [
-  runCommandAction('Emit the converted contract', '{bin} contract emit'),
-  runCommandAction('Plan the baseline migration', '{bin} migration plan --name baseline'),
-  runCommandAction('Sign the database', '{bin} db sign'),
-  runCommandAction(
-    'Point the db ref at the baseline migration',
-    '{bin} migration ref set db <timestamp>_baseline',
-  ),
-];
+function cutoverActions(writtenPath: string): readonly NextAction[] {
+  return [
+    chooseAction(`Point contract in prisma.config.ts at ${writtenPath}`),
+    runCommandAction('Emit the converted contract', '{bin} contract emit'),
+    runCommandAction('Plan the baseline migration', '{bin} migration plan --name baseline'),
+    runCommandAction('Sign the database', '{bin} db sign'),
+    runCommandAction(
+      'Point the db ref at the baseline migration',
+      '{bin} migration ref set db <timestamp>_baseline',
+    ),
+  ];
+}
 
 function convertPresentations(document: ConvertDocument): Presentations {
   return {
     stdout: () => [],
-    next: () => CUTOVER_ACTIONS,
+    next: () => cutoverActions(document.psl.path),
     human: (): readonly Block[] => [
       {
         kind: 'summary',
