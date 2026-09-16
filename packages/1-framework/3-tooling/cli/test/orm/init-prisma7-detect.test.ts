@@ -275,6 +275,32 @@ describe('detectPrisma7Project', () => {
     );
 
     it(
+      'reads the schema field of a prisma7.config.* beside an unreadable prisma.config.ts',
+      async () => {
+        writeProjectFile('prisma.config.ts', "throw new Error('config module exploded');\n");
+        writeProjectFile('prisma7.config.ts', prisma7Config('db/schema.prisma'));
+        writeProjectFile('db/schema.prisma', POSTGRES_SCHEMA);
+        writeProjectFile('prisma/schema.prisma', MONGO_SCHEMA);
+
+        const detection = await detect();
+
+        expect(detection).toMatchObject({
+          config: {
+            kind: 'unreadable',
+            path: 'prisma.config.ts',
+            prisma7ConfigPath: 'prisma7.config.ts',
+            schema: 'db/schema.prisma',
+          },
+          schema: { kind: 'datasource', path: 'db/schema.prisma', provider: 'postgresql' },
+          schemaPathSource: 'config',
+          warnings: [expect.stringContaining('prisma.config.ts could not be evaluated')],
+        });
+        expect(detection.warnings[0]).not.toContain('default schema path');
+      },
+      timeouts.coldTransformImport,
+    );
+
+    it(
       'accepts prisma7.config.* alone as the Prisma 7 config',
       async () => {
         writeProjectFile('prisma7.config.ts', prisma7Config('db/schema.prisma'));

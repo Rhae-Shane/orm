@@ -10,7 +10,8 @@ import { join, resolve } from 'pathe';
  * - `prisma7`: the file evaluated to an object without the marker; only its
  *   `schema` field is read.
  * - `unreadable`: the file exists but did not evaluate; detection continues
- *   with the default schema path.
+ *   with the `schema` of a Prisma 7 `prisma7.config.*` beside it, else the
+ *   default schema path.
  * - `collision`: a Prisma 7 `prisma.config.*` sits beside a `prisma7.config.*`,
  *   so init could not rename the former onto the latter.
  */
@@ -24,6 +25,8 @@ export type Prisma7ConfigDetection =
       readonly why: string;
       /** A `prisma7.config.*` beside it, which makes the unreadable file Prisma 8's. */
       readonly prisma7ConfigPath: string | undefined;
+      /** The `schema` field of `prisma7ConfigPath`, when that file evaluates as a Prisma 7 config. */
+      readonly schema: string | undefined;
     }
   | {
       readonly kind: 'collision';
@@ -104,6 +107,17 @@ async function evaluateConfig(cwd: string, path: string): Promise<EvaluatedConfi
   return { kind: 'prisma7', schema: typeof schema === 'string' ? schema : undefined };
 }
 
+async function schemaDeclaredBy(
+  cwd: string,
+  path: string | undefined,
+): Promise<string | undefined> {
+  if (path === undefined) {
+    return undefined;
+  }
+  const evaluated = await evaluateConfig(cwd, path);
+  return evaluated.kind === 'prisma7' ? evaluated.schema : undefined;
+}
+
 async function detectConfig(cwd: string): Promise<Prisma7ConfigDetection> {
   const prismaConfigPath = findConfigFile(cwd, 'prisma.config');
   const prisma7ConfigPath = findConfigFile(cwd, 'prisma7.config');
@@ -114,7 +128,12 @@ async function detectConfig(cwd: string): Promise<Prisma7ConfigDetection> {
       return { kind: 'collision', prismaConfigPath, prisma7ConfigPath };
     }
     if (evaluated.kind === 'unreadable') {
-      return { ...evaluated, path: prismaConfigPath, prisma7ConfigPath };
+      return {
+        ...evaluated,
+        path: prismaConfigPath,
+        prisma7ConfigPath,
+        schema: await schemaDeclaredBy(cwd, prisma7ConfigPath),
+      };
     }
     if (evaluated.kind === 'prisma7') {
       return { ...evaluated, path: prismaConfigPath };
@@ -132,7 +151,12 @@ async function detectConfig(cwd: string): Promise<Prisma7ConfigDetection> {
     return { kind: 'none' };
   }
   if (evaluated.kind === 'unreadable') {
-    return { ...evaluated, path: prisma7ConfigPath, prisma7ConfigPath: undefined };
+    return {
+      ...evaluated,
+      path: prisma7ConfigPath,
+      prisma7ConfigPath: undefined,
+      schema: undefined,
+    };
   }
   return { ...evaluated, path: prisma7ConfigPath };
 }
@@ -238,7 +262,9 @@ function warningsFor(config: Prisma7ConfigDetection): string[] {
   switch (config.kind) {
     case 'unreadable':
       return [
-        `${config.path} could not be evaluated, so the default schema path is assumed: ${config.why}`,
+        config.schema === undefined
+          ? `${config.path} could not be evaluated, so the default schema path is assumed: ${config.why}`
+          : `${config.path} could not be evaluated, so the schema path is read from ${config.prisma7ConfigPath}: ${config.why}`,
       ];
     case 'collision':
       return [
@@ -262,7 +288,8 @@ export async function detectPrisma7Project(ctx: {
   readonly schemaPath: string | undefined;
 }): Promise<Prisma7Detection> {
   const config = await detectConfig(ctx.cwd);
-  const configSchema = config.kind === 'prisma7' ? config.schema : undefined;
+  const configSchema =
+    config.kind === 'prisma7' || config.kind === 'unreadable' ? config.schema : undefined;
   const [path, schemaPathSource]: [string, Prisma7Detection['schemaPathSource']] =
     ctx.schemaPath !== undefined
       ? [ctx.schemaPath, 'flag']
