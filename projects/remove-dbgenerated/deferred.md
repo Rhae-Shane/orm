@@ -8,6 +8,8 @@ Items the project deliberately leaves open. Each names the decision, why it is d
 
 **Reopen when:** a user reports a raw default that verifies as drift when it is not. Not before.
 
+**Known asymmetry, deliberate:** on Postgres the introspection parser runs over the authored default in the shared schema derivation, which both the planner and verify use; on SQLite it runs only in verify (`diffSqliteSchema`), because SQLite's parser would rewrite `CURRENT_TIMESTAMP` to `now()` and the planner would then render different DDL from what the author wrote (project spec D4). Postgres's parser returns unrecognised expressions unchanged, so the same placement there changes nothing in DDL.
+
 ## 2. Tagged literals for index expressions, check bodies, and RLS predicates
 
 **Decision open:** whether `@@index(where: "...")`, `@@check(expression: "...")`, and RLS `using:` / `withCheck:` move from plain strings to tagged literals so ADR 129's "single mechanism" claim becomes true.
