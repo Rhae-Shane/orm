@@ -75,6 +75,7 @@ import {
   computeCheckContentHash,
   derivedCheckPrefixes,
 } from '@internal/sql-schema-ir/naming';
+import { invariant } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
@@ -1345,14 +1346,11 @@ export function buildSqlContractFromDefinition(
         relation.toNamespaceId,
         'Relation',
       );
-      if (relation.toTable !== undefined) {
-        assertTargetTableMatches(
-          semanticModel.modelName,
-          targetModel,
-          relation.toTable,
-          'Relation',
-        );
-      }
+      invariant(
+        relation.toTable !== undefined,
+        `Relation "${semanticModel.modelName}.${relation.fieldName}" is local but carries no target table; only cross-space relations may leave it unset.`,
+      );
+      assertTargetTableMatches(semanticModel.modelName, targetModel, relation.toTable, 'Relation');
 
       const targetColumnToField = new Map(
         targetModel.fields.map((f) => [f.columnName, f.fieldName]),

@@ -712,11 +712,24 @@ function lowerCrossSpaceForeignKeyNode(
     readonly index?: boolean | undefined;
   },
 ): ForeignKeyNode {
+  if (foreignKey.targetTableName === undefined) {
+    throw contractError(
+      'CONTRACT.FOREIGN_KEY_INVALID',
+      `Foreign key on "${spec.modelName}" references model "${foreignKey.targetModel}" in contract space "${foreignKey.targetSpaceId}" but the target table name is unknown: the handle's .sql() stage is a factory function, so its table cannot be read statically. Declare the target model's .sql() stage with a static object carrying \`table\`.`,
+      {
+        meta: {
+          sourceModel: spec.modelName,
+          targetModel: foreignKey.targetModel,
+          spaceId: foreignKey.targetSpaceId,
+        },
+      },
+    );
+  }
   return {
     columns: mapFieldNamesToColumnNames(spec.modelName, foreignKey.fields, spec.fieldToColumn),
     references: {
       model: foreignKey.targetModel,
-      table: foreignKey.targetTableName ?? foreignKey.targetModel,
+      table: foreignKey.targetTableName,
       columns: foreignKey.targetFields,
       ...(foreignKey.targetNamespaceId !== undefined
         ? { namespaceId: foreignKey.targetNamespaceId }
@@ -917,6 +930,10 @@ function resolveModelNode(
   };
 }
 
+/**
+ * `ContractInput`'s `Extensions` parameter defaults to `undefined`, but lowering
+ * reads the extension-pack record at runtime, so the input is widened here.
+ */
 type LoweringInput = Omit<ContractInput, 'extensions'> & {
   readonly extensions?: Record<string, ExtensionPackRef<'sql', string>> | undefined;
 };
