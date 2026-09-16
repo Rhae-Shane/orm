@@ -8,6 +8,7 @@ model A {
   bs B[] @relation("X")
 
   @@schema("one")
+  @@map("a")
 }
 
 model B {
@@ -15,6 +16,7 @@ model B {
   as A[] @relation("X")
 
   @@schema("one")
+  @@map("b")
 }
 
 model C {
@@ -22,6 +24,7 @@ model C {
   ds D[] @relation("X")
 
   @@schema("two")
+  @@map("c")
 }
 
 model D {
@@ -29,4 +32,5 @@ model D {
   cs C[] @relation("X")
 
   @@schema("two")
+  @@map("d")
 }

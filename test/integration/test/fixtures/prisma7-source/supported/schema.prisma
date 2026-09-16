@@ -58,6 +58,7 @@ model Scalars {
   roleList     Role[]
 
   @@schema("public")
+  @@map("scalars")
 }
 
 model NativeTypes {
@@ -87,6 +88,7 @@ model NativeTypes {
   timestamptzOpt  DateTime? @db.Timestamptz(3)
 
   @@schema("public")
+  @@map("nativeTypes")
 }
 
 model Timestamps {
@@ -98,6 +100,7 @@ model Timestamps {
   updatedAtTz  DateTime  @updatedAt @db.Timestamptz(6)
 
   @@schema("public")
+  @@map("timestamps")
 }
 
 model Defaults {
@@ -128,6 +131,7 @@ model Defaults {
   enumList        Role[]     @default([ADMIN])
 
   @@schema("public")
+  @@map("defaults")
 }
 
 model User {
@@ -145,6 +149,7 @@ model User {
   reviews   Review[]  @relation("ReviewAuthor")
 
   @@schema("public")
+  @@map("user")
 }
 
 model Post {
@@ -168,6 +173,7 @@ model Post {
   @@index([title, category], map: "post_title_category")
   @@index([hashed], type: Hash)
   @@schema("public")
+  @@map("post")
 }
 
 model Tag {
@@ -176,6 +182,7 @@ model Tag {
   posts Post[]
 
   @@schema("public")
+  @@map("tag")
 }
 
 model Profile {
@@ -185,6 +192,7 @@ model Profile {
   user   User   @relation(fields: [userId], references: [id])
 
   @@schema("public")
+  @@map("profile")
 }
 
 model Settings {
@@ -194,6 +202,7 @@ model Settings {
   user   User? @relation(fields: [userId], references: [id])
 
   @@schema("public")
+  @@map("settings")
 }
 
 model Composite {
@@ -203,6 +212,7 @@ model Composite {
 
   @@id([a, b])
   @@schema("audit")
+  @@map("composite")
 }
 
 model AuditLog {
@@ -230,6 +240,7 @@ model LegacyThing {
 
   @@ignore
   @@schema("public")
+  @@map("legacyThing")
 }
 
 model NumberDefaults {
@@ -246,6 +257,7 @@ model NumberDefaults {
   negativeBigInt   BigInt  @default(-9007199254740993)
 
   @@schema("public")
+  @@map("numberDefaults")
 }
 
 model ListDefaults {
@@ -259,6 +271,7 @@ model ListDefaults {
   emptyVarChar String[]   @default([]) @db.VarChar(32)
 
   @@schema("public")
+  @@map("listDefaults")
 }
 
 model TemporalDefaults {
@@ -270,6 +283,7 @@ model TemporalDefaults {
   beforeYearOne DateTime @default("0001-01-01T00:30:00+01:00") @db.Timestamptz(3)
 
   @@schema("public")
+  @@map("temporalDefaults")
 }
 
 model Review {
@@ -278,6 +292,7 @@ model Review {
   author   User? @relation("ReviewAuthor", fields: [authorId], references: [id])
 
   @@schema("public")
+  @@map("review")
 }
 
 model CompositeChild {
@@ -287,6 +302,7 @@ model CompositeChild {
   composite  Composite? @relation(fields: [compositeA, compositeB], references: [a, b])
 
   @@schema("audit")
+  @@map("compositeChild")
 }
 
 model Label {
@@ -295,4 +311,5 @@ model Label {
   posts Post[]
 
   @@schema("audit")
+  @@map("label")
 }

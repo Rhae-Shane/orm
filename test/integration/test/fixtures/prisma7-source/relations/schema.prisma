@@ -39,6 +39,7 @@ model User {
   reviews     Review[]  @relation("ReviewAuthor")
 
   @@schema("public")
+  @@map("user")
 }
 
 model Post {
@@ -59,6 +60,7 @@ model Post {
 
   @@unique([title, category])
   @@schema("public")
+  @@map("post")
 }
 
 model Tag {
@@ -67,6 +69,7 @@ model Tag {
   posts Post[]
 
   @@schema("public")
+  @@map("tag")
 }
 
 model Profile {
@@ -76,6 +79,7 @@ model Profile {
   user   User   @relation(fields: [userId], references: [id])
 
   @@schema("public")
+  @@map("profile")
 }
 
 model Settings {
@@ -85,6 +89,7 @@ model Settings {
   user   User? @relation(fields: [userId], references: [id])
 
   @@schema("public")
+  @@map("settings")
 }
 
 model Composite {
@@ -94,6 +99,7 @@ model Composite {
 
   @@id([a, b])
   @@schema("audit")
+  @@map("composite")
 }
 
 model AuditLog {
@@ -110,6 +116,7 @@ model LegacyThing {
 
   @@ignore
   @@schema("public")
+  @@map("legacyThing")
 }
 
 model Review {
@@ -118,6 +125,7 @@ model Review {
   author   User? @relation("ReviewAuthor", fields: [authorId], references: [id])
 
   @@schema("public")
+  @@map("review")
 }
 
 model CompositeChild {
@@ -127,6 +135,7 @@ model CompositeChild {
   composite  Composite? @relation(fields: [compositeA, compositeB], references: [a, b])
 
   @@schema("audit")
+  @@map("compositeChild")
 }
 
 model Label {
@@ -135,4 +144,5 @@ model Label {
   posts Post[]
 
   @@schema("audit")
+  @@map("label")
 }
