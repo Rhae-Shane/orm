@@ -439,6 +439,61 @@ describe('relations', () => {
     const models = postAndUser({ onDelete: 'cascade', onUpdate: 'cascade' });
     expect(models[0]?.fields.map(fieldText)[1]).toBe('posts Post[]');
   });
+
+  it('takes its actions from the foreign key that references the columns the relation names', () => {
+    const models = print({
+      models: {
+        User: {
+          table: 'user',
+          fields: { id: { column: 'id' }, altId: { column: 'altId' } },
+          relations: {},
+        },
+        Post: {
+          table: 'post',
+          fields: { id: { column: 'id' }, authorId: { column: 'authorId' } },
+          relations: {
+            author: {
+              to: { namespace: asNamespaceId('public'), model: 'User' },
+              cardinality: 'N:1',
+              nullable: false,
+              on: { localFields: ['authorId'], targetFields: ['altId'] },
+            },
+          },
+        },
+      },
+      tables: {
+        user: table({
+          columns: { id: INT_COLUMN, altId: INT_COLUMN },
+          primaryKey: { columns: ['id'] },
+          uniques: [{ columns: ['altId'], name: 'user_altId_key' }],
+        }),
+        post: table({
+          columns: { id: INT_COLUMN, authorId: INT_COLUMN },
+          primaryKey: { columns: ['id'] },
+          foreignKeys: [
+            {
+              source: { namespaceId: 'public', tableName: 'post', columns: ['authorId'] },
+              target: { namespaceId: 'public', tableName: 'user', columns: ['id'] },
+              name: 'post_author_id_fkey',
+              onDelete: 'cascade',
+              onUpdate: 'cascade',
+            },
+            {
+              source: { namespaceId: 'public', tableName: 'post', columns: ['authorId'] },
+              target: { namespaceId: 'public', tableName: 'user', columns: ['altId'] },
+              name: 'post_author_altId_fkey',
+              onDelete: 'restrict',
+              onUpdate: 'restrict',
+            },
+          ],
+        }),
+      },
+    });
+
+    expect(models[1]?.fields.map(fieldText)[2]).toBe(
+      'author User @relation(fields: [authorId], references: [altId], onDelete: Restrict, onUpdate: Restrict, map: "post_author_altId_fkey", index: false)',
+    );
+  });
 });
 
 describe('native enum blocks', () => {

@@ -76,11 +76,13 @@ function sameColumns(a: readonly string[], b: readonly string[]): boolean {
 /** The foreign key that backs an owning relation. */
 export function foreignKeyFor(entry: RelationEntry, target: ModelEntry): ForeignKey | undefined {
   const localColumns = columnsOf(entry, entry.relation.on.localFields);
+  const targetColumns = columnsIn(target, entry.relation.on.targetFields);
   return entry.owner.table.foreignKeys.find(
     (fk) =>
       fk.target.tableName === target.tableName &&
       fk.target.namespaceId === target.namespaceId &&
-      sameColumns(fk.source.columns, localColumns),
+      sameColumns(fk.source.columns, localColumns) &&
+      sameColumns(fk.target.columns, targetColumns),
   );
 }
 
