@@ -171,7 +171,9 @@ model N {
           message:
             'Field "N.payload": @default(1234) is not a value of pg/bytea@1: pg/bytea@1 reads a string literal; got a number 1234',
           sourceId: 'schema.prisma',
-          span: { start: expect.any(Object), end: expect.any(Object) },
+          span: expect.objectContaining({
+            start: expect.objectContaining({ line: 3, column: 17 }),
+          }),
         },
       ],
     });

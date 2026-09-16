@@ -72,11 +72,17 @@ describe('interpretPslDocumentToSqlContract default lowering', () => {
     return { columns, diagnostics: [] };
   }
 
-  const invalidLiteral = (field: string, source: string, codecId: string, reason: string) => ({
+  const invalidLiteral = (
+    field: string,
+    source: string,
+    codecId: string,
+    reason: string,
+    column: number,
+  ) => ({
     code: 'PSL_INVALID_DEFAULT_LITERAL',
     message: `Field "N.${field}": @default(${source}) is not a value of ${codecId}: ${reason}`,
     sourceId: 'schema.prisma',
-    span: { start: expect.any(Object), end: expect.any(Object) },
+    span: expect.objectContaining({ start: expect.objectContaining({ line: 3, column }) }),
   });
 
   describe('literal defaults read through the column codec', () => {
@@ -145,6 +151,7 @@ describe('interpretPslDocumentToSqlContract default lowering', () => {
         '1.5',
         'pg/int4@1',
         'pg/int4@1 reads a whole number literal; got a number 1.5',
+        13,
       ],
       [
         'count Int @default("1")',
@@ -152,6 +159,7 @@ describe('interpretPslDocumentToSqlContract default lowering', () => {
         '"1"',
         'pg/int4@1',
         'pg/int4@1 reads a whole number literal; got a string "1"',
+        13,
       ],
       [
         'payload Bytes @default(1234)',
@@ -159,6 +167,7 @@ describe('interpretPslDocumentToSqlContract default lowering', () => {
         '1234',
         'pg/bytea@1',
         'pg/bytea@1 reads a string literal; got a number 1234',
+        17,
       ],
       [
         'xs Int[] @default([1, "x"])',
@@ -166,13 +175,17 @@ describe('interpretPslDocumentToSqlContract default lowering', () => {
         '[1, "x"]',
         'pg/int4@1',
         'pg/int4@1 reads a whole number literal; got a string "x"',
+        12,
       ],
-    ])('reports %s as PSL_INVALID_DEFAULT_LITERAL', (field, name, source, codecId, reason) => {
-      expect(literalDefaults(`model N {\n  id Int @id\n  ${field}\n}`)).toEqual({
-        columns: {},
-        diagnostics: [invalidLiteral(name, source, codecId, reason)],
-      });
-    });
+    ])(
+      'reports %s as PSL_INVALID_DEFAULT_LITERAL at the attribute',
+      (field, name, source, codecId, reason, column) => {
+        expect(literalDefaults(`model N {\n  id Int @id\n  ${field}\n}`)).toEqual({
+          columns: {},
+          diagnostics: [invalidLiteral(name, source, codecId, reason, column)],
+        });
+      },
+    );
   });
   it('lowers supported default functions into execution and storage contract shapes', () => {
     const document = symbolTableInputFromParseArgs({
