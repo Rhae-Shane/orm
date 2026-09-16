@@ -253,7 +253,7 @@ describe('interpretPslDocumentToMongoContract', () => {
   });
 
   describe('collection naming', () => {
-    it('uses lowerFirst(modelName) as default collection name', () => {
+    it('uses the model name verbatim as the default collection name', () => {
       const ir = interpretOk(`
         model UserProfile {
           id ObjectId @id @map("_id")
@@ -261,16 +261,9 @@ describe('interpretPslDocumentToMongoContract', () => {
       `);
 
       expect(modelsOf(ir)['UserProfile']).toMatchObject({
-        storage: { collection: 'userProfile' },
+        storage: { collection: 'UserProfile' },
       });
-      expect(ir.storage).toMatchObject({
-        namespaces: {
-          [UNBOUND_NAMESPACE_ID]: {
-            id: UNBOUND_NAMESPACE_ID,
-            entries: { collection: { userProfile: {} } },
-          },
-        },
-      });
+      expect(Object.keys(mongoCollectionsFromIr(ir))).toEqual(['UserProfile']);
     });
 
     it('uses @@map() to override collection name', () => {

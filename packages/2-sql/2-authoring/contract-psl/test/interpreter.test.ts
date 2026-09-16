@@ -424,6 +424,29 @@ model Comment {
     });
   });
 
+  it('names the storage table after the model verbatim when there is no @@map', () => {
+    const document = symbolTableInputFromParseArgs({
+      schema: `model UserProfile {
+  id Int @id
+}
+`,
+      sourceId: 'schema.prisma',
+    });
+
+    const result = interpretPslDocumentToSqlContract({
+      ...document,
+      controlMutationDefaults: builtinControlMutationDefaults,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.value.roots).toEqual({ UserProfile: crossRef('UserProfile', 'public') });
+    expect(Object.keys(result.value.storage.namespaces['public']!.entries.table ?? {})).toEqual([
+      'UserProfile',
+    ]);
+  });
+
   it('maps @@map and @map to storage table and column names', () => {
     const document = symbolTableInputFromParseArgs({
       schema: `model Team {
