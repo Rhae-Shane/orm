@@ -17,7 +17,14 @@ export function rewritePrisma7ConfigImport(content: string): {
   return { content: rewritten, found: rewritten !== content };
 }
 
-const SHELL_OPERATOR = /&&|\|\||;|\|/g;
+/**
+ * One shell token: a quoted string (to the end of the script when unterminated),
+ * a backslash escape, a command operator, whitespace, or a run of other characters.
+ */
+const SHELL_TOKEN =
+  /"(?:\\[\s\S]|[^"\\])*(?:"|$)|'[^']*(?:'|$)|\\[\s\S]?|&&|\|\||[;|]|\s+|[^\s"'\\;|&]+|&/g;
+
+const SHELL_OPERATORS: ReadonlySet<string> = new Set(['&&', '||', ';', '|']);
 
 const ENV_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
 
@@ -54,21 +61,29 @@ interface Word {
   readonly end: number;
 }
 
-function wordsOf(script: string, start: number, end: number): Word[] {
-  return [...script.slice(start, end).matchAll(/\S+/g)].map((match) => ({
-    text: match[0],
-    end: start + match.index + match[0].length,
-  }));
-}
-
+/**
+ * Splits a script into commands at the operators outside quotes, and each
+ * command into words. A quoted string belongs to the word it sits in, so no
+ * word inside quotes is ever a command.
+ */
 function commandsOf(script: string): Word[][] {
-  const commands: Word[][] = [];
-  let start = 0;
-  for (const operator of script.matchAll(SHELL_OPERATOR)) {
-    commands.push(wordsOf(script, start, operator.index));
-    start = operator.index + operator[0].length;
+  let words: Word[] = [];
+  const commands = [words];
+  let inWord = false;
+  for (const token of script.matchAll(SHELL_TOKEN)) {
+    const [text] = token;
+    if (SHELL_OPERATORS.has(text)) {
+      words = [];
+      commands.push(words);
+      inWord = false;
+    } else if (/^\s/.test(text)) {
+      inWord = false;
+    } else {
+      const previous = inWord ? (words.pop()?.text ?? '') : '';
+      words.push({ text: `${previous}${text}`, end: token.index + text.length });
+      inWord = true;
+    }
   }
-  commands.push(wordsOf(script, start, script.length));
   return commands;
 }
 
@@ -110,9 +125,10 @@ function prismaCommandWord(words: readonly Word[], at: number): Word | undefined
 
 /**
  * Rewrites `prisma` to `prisma7` wherever it is the command a script runs: at
- * the start of the script or after `&&`, `||`, `;`, or `|`, behind any
- * `NAME=value` assignments and recognised wrappers. `prisma` as an argument,
- * and words that only start with it (`prisma@7`, `prisma-erd`), are left alone.
+ * the start of the script or after `&&`, `||`, `;`, or `|` outside quotes,
+ * behind any `NAME=value` assignments and recognised wrappers. `prisma` as an
+ * argument, inside quotes (`sh -c "prisma generate"`), or as the start of a
+ * longer word (`prisma@7`, `prisma-erd`) is left alone.
  */
 export function rewritePrismaBinary(script: string): string {
   const ends = commandsOf(script)

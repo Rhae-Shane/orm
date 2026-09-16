@@ -73,6 +73,16 @@ describe('rewritePrismaBinary', () => {
       'A=1 B=two prisma7 generate',
     ],
     [
+      'after an assignment whose quoted value mentions prisma',
+      'cross-env MSG="run prisma generate" prisma migrate dev',
+      'cross-env MSG="run prisma generate" prisma7 migrate dev',
+    ],
+    [
+      'after a quoted argument that holds an operator',
+      'echo "a; b" && prisma generate',
+      'echo "a; b" && prisma7 generate',
+    ],
+    [
       'twice in one script',
       'prisma generate && prisma migrate dev',
       'prisma7 generate && prisma7 migrate dev',
@@ -96,6 +106,16 @@ describe('rewritePrismaBinary', () => {
     ['the prisma of another pnpm workspace package', 'pnpm --filter x exec prisma generate'],
     ['the prisma of another yarn workspace package', 'yarn workspace x prisma generate'],
     ['prisma after a runner flag that is not recognised', 'bunx --silent prisma generate'],
+    [
+      'prisma inside a double-quoted sh -c command',
+      'sh -c "prisma generate && prisma migrate deploy"',
+    ],
+    [
+      'prisma inside a single-quoted sh -c command',
+      "sh -c 'prisma generate && prisma migrate deploy'",
+    ],
+    ['an operator and prisma inside a quoted argument', 'echo "a && prisma generate"'],
+    ['an operator and prisma after an unterminated quote', 'echo "a && prisma generate'],
   ])('leaves %s alone', (_case, script) => {
     expect(rewritePrismaBinary(script)).toBe(script);
   });
