@@ -330,7 +330,7 @@ describe('printPsl', () => {
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
       model Item {
-        id Uuid @id @default(dbgenerated("gen_random_uuid()"))
+        id Uuid @id @default(gen_random_uuid())
 
         @@map("item")
       }

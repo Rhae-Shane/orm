@@ -1,7 +1,11 @@
 import type { ExecutionMutationDefaultValue } from '@internal/contract/types';
-import { timestampNowControlDescriptor } from '@internal/family-sql/control';
+import {
+  sqlDefaultLiteralTagEntry,
+  timestampNowControlDescriptor,
+} from '@internal/family-sql/control';
 import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
 import type {
+  ControlDefaultLiteralTagEntry,
   ControlMutationDefaultEntry,
   DefaultFunctionLoweringContext,
   LoweredDefaultResult,
@@ -254,6 +258,16 @@ export function createSqliteDefaultFunctionRegistry(): ReadonlyMap<
   ControlMutationDefaultEntry
 > {
   return new Map(sqliteDefaultFunctionRegistryEntries);
+}
+
+export function createSqliteDefaultLiteralTagRegistry(): ReadonlyMap<
+  string,
+  ControlDefaultLiteralTagEntry
+> {
+  return new Map([
+    ['sql', sqlDefaultLiteralTagEntry('sql`...`')],
+    ['sqlite.sql', sqlDefaultLiteralTagEntry('sqlite.sql`...`')],
+  ]);
 }
 
 export function createSqliteMutationDefaultGeneratorDescriptors(): readonly MutationDefaultGeneratorDescriptor[] {

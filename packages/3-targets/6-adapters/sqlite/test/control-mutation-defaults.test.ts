@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { createSqliteBuiltinCodecLookup } from '../src/core/codec-lookup';
 import {
   createSqliteDefaultFunctionRegistry,
+  createSqliteDefaultLiteralTagRegistry,
   createSqliteMutationDefaultGeneratorDescriptors,
   sqliteScalarAuthoringTypes,
 } from '../src/core/control-mutation-defaults';
@@ -76,6 +77,35 @@ describe('createSqliteDefaultFunctionRegistry — dbgenerated canonicalization',
       ok: true,
       value: { kind: 'storage', defaultValue: { kind: 'function', expression: 'random()' } },
     });
+  });
+});
+
+describe('createSqliteDefaultLiteralTagRegistry', () => {
+  const registry = createSqliteDefaultLiteralTagRegistry();
+
+  it('registers sql and sqlite.sql, in that order', () => {
+    expect([...registry.keys()]).toEqual(['sql', 'sqlite.sql']);
+    expect(registry.get('sqlite.sql')?.usage).toBe('sqlite.sql`...`');
+  });
+
+  it('lowers sql`CURRENT_TIMESTAMP` verbatim, with no rewrite to now()', () => {
+    const result = registry.get('sql')!.lower({
+      literal: { tag: 'sql', body: 'CURRENT_TIMESTAMP', span: stubSpan },
+      context: stubContext,
+    });
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        kind: 'storage',
+        defaultValue: { kind: 'function', expression: 'CURRENT_TIMESTAMP' },
+      },
+    });
+  });
+
+  it('is wired as the adapter descriptor tag registry', () => {
+    expect([
+      ...sqliteAdapterDescriptor.controlMutationDefaults.defaultLiteralTagRegistry.keys(),
+    ]).toEqual(['sql', 'sqlite.sql']);
   });
 });
 

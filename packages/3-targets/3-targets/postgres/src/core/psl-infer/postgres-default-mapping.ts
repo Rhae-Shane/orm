@@ -1,7 +1,7 @@
 import type { DefaultMappingOptions } from '@internal/family-sql/psl-infer';
 
 const POSTGRES_FUNCTION_ATTRIBUTES: Readonly<Record<string, string>> = {
-  'gen_random_uuid()': '@default(dbgenerated("gen_random_uuid()"))',
+  'gen_random_uuid()': '@default(gen_random_uuid())',
 };
 
 function formatDbGeneratedAttribute(expression: string): string {

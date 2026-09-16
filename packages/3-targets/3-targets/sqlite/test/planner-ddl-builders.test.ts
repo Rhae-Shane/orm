@@ -92,6 +92,12 @@ describe('buildColumnDefaultSql', () => {
     );
   });
 
+  it('renders a tagged-literal body verbatim inside DEFAULT (...)', () => {
+    expect(buildColumnDefaultSql({ kind: 'function', expression: 'CURRENT_TIMESTAMP' })).toBe(
+      'DEFAULT (CURRENT_TIMESTAMP)',
+    );
+  });
+
   it('rejects unsafe default expressions', () => {
     expect(() =>
       buildColumnDefaultSql({ kind: 'function', expression: 'foo(); DROP TABLE' }),

@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { createPostgresBuiltinCodecLookup } from '../src/core/codec-lookup';
 import {
   createPostgresDefaultFunctionRegistry,
+  createPostgresDefaultLiteralTagRegistry,
   createPostgresMutationDefaultGeneratorDescriptors,
   postgresAuthoringTypes,
   postgresNativeAuthoringTypes,
@@ -39,6 +40,7 @@ describe('createPostgresDefaultFunctionRegistry', () => {
       expect.arrayContaining([
         'autoincrement',
         'now',
+        'gen_random_uuid',
         'uuid',
         'cuid',
         'ulid',
@@ -61,6 +63,24 @@ describe('createPostgresDefaultFunctionRegistry', () => {
           type: { kind: 'oneOf', optional: true },
         },
       ],
+    });
+  });
+
+  it('registers gen_random_uuid immediately after now', () => {
+    const keys = [...registry.keys()];
+    expect(keys.indexOf('gen_random_uuid')).toBe(keys.indexOf('now') + 1);
+  });
+
+  it('lowers gen_random_uuid() to a storage default', () => {
+    const handler = registry.get('gen_random_uuid')!;
+    expect(handler.usageSignatures).toEqual(['gen_random_uuid()']);
+    const result = handler.lower({ call: makeCall('gen_random_uuid'), context: stubContext });
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        kind: 'storage',
+        defaultValue: { kind: 'function', expression: 'gen_random_uuid()' },
+      },
     });
   });
 
@@ -395,5 +415,32 @@ describe('postgresNativeAuthoringTypes', () => {
         [-1],
       ),
     ).toThrow('must be >= 0');
+  });
+});
+
+describe('createPostgresDefaultLiteralTagRegistry', () => {
+  const registry = createPostgresDefaultLiteralTagRegistry();
+
+  it('registers sql and pg.sql, in that order', () => {
+    expect([...registry.keys()]).toEqual(['sql', 'pg.sql']);
+    expect(registry.get('sql')?.usage).toBe('sql`...`');
+    expect(registry.get('pg.sql')?.usage).toBe('pg.sql`...`');
+  });
+
+  it('lowers a body verbatim as a function default', () => {
+    const result = registry.get('pg.sql')!.lower({
+      literal: { tag: 'pg.sql', body: "'{}'::jsonb", span: stubSpan },
+      context: stubContext,
+    });
+    expect(result).toEqual({
+      ok: true,
+      value: { kind: 'storage', defaultValue: { kind: 'function', expression: "'{}'::jsonb" } },
+    });
+  });
+
+  it('is wired as the adapter descriptor tag registry', () => {
+    expect([
+      ...postgresAdapterDescriptor.controlMutationDefaults.defaultLiteralTagRegistry.keys(),
+    ]).toEqual(['sql', 'pg.sql']);
   });
 });
