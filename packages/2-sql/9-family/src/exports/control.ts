@@ -90,6 +90,7 @@ export type {
   SqlPlanTargetDetails,
   StorageTypePlanResult,
 } from '../core/migrations/types';
+export { checkSqlDefaultBody, sqlDefaultLiteralTagEntry } from '../core/sql-default-literal-tag';
 export {
   TIMESTAMP_NOW_GENERATOR_ID,
   temporalAuthoringPresets,

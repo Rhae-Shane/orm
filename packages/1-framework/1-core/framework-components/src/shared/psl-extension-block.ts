@@ -83,6 +83,8 @@ export type PslDiagnosticCode =
   | 'PSL_TAGGED_LITERAL_FENCE_EXPECTED'
   /** A `@default` tagged literal whose tag no pack in the stack registered. */
   | 'PSL_UNKNOWN_DEFAULT_LITERAL_TAG'
+  /** A `sql`...`` default body the SQL family refuses to render as `DEFAULT (<body>)`. */
+  | 'PSL_INVALID_DEFAULT_SQL'
   /** A tagged literal body contains `${`. */
   | 'PSL_TAGGED_LITERAL_INTERPOLATION'
   /** A tagged literal body contains a NUL character. */

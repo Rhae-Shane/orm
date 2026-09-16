@@ -81,7 +81,32 @@ export interface ControlMutationDefaultEntry {
 
 export type ControlMutationDefaultRegistry = ReadonlyMap<string, ControlMutationDefaultEntry>;
 
+/** A `tag`body`` default literal as the attribute spec accepted it: tag, canonical body, and span. */
+export interface TypedDefaultLiteral {
+  readonly tag: string;
+  readonly body: string;
+  readonly span: SourceSpan;
+}
+
+export interface ControlDefaultLiteralTagEntry {
+  /** How the tag is written, for messages: `sql`...``. */
+  readonly usage: string;
+  readonly lower: (input: {
+    readonly literal: TypedDefaultLiteral;
+    readonly context: DefaultFunctionLoweringContext;
+  }) => LoweredDefaultResult;
+}
+
+export type ControlDefaultLiteralTagRegistry = ReadonlyMap<string, ControlDefaultLiteralTagEntry>;
+
 export interface ControlMutationDefaults {
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
+  readonly defaultLiteralTagRegistry: ControlDefaultLiteralTagRegistry;
   readonly generatorDescriptors: readonly MutationDefaultGeneratorDescriptor[];
 }
+
+/** The two registries an attribute spec needs to build its `@default` arms. */
+export type ControlDefaultRegistries = Pick<
+  ControlMutationDefaults,
+  'defaultFunctionRegistry' | 'defaultLiteralTagRegistry'
+>;

@@ -127,6 +127,9 @@ export type {
 } from '../control/verifier-disposition';
 export { dispositionForCategory } from '../control/verifier-disposition';
 export type {
+  ControlDefaultLiteralTagEntry,
+  ControlDefaultLiteralTagRegistry,
+  ControlDefaultRegistries,
   ControlMutationDefaultEntry,
   ControlMutationDefaultRegistry,
   ControlMutationDefaults,
@@ -137,6 +140,7 @@ export type {
   SourceDiagnostic,
   SourceSpan,
   TypedDefaultFunctionCall,
+  TypedDefaultLiteral,
 } from '../shared/mutation-default-types';
 export type { TaggedLiteralCanonicalization } from '../shared/tagged-literal';
 export { canonicalizeTaggedLiteralBody, TAGGED_LITERAL_MAX_BYTES } from '../shared/tagged-literal';

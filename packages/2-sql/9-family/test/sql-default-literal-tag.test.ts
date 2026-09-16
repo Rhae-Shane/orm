@@ -1,0 +1,72 @@
+import { describe, expect, it } from 'vitest';
+import {
+  checkSqlDefaultBody,
+  sqlDefaultLiteralTagEntry,
+} from '../src/core/sql-default-literal-tag';
+
+const span = {
+  start: { offset: 0, line: 1, column: 1 },
+  end: { offset: 5, line: 1, column: 6 },
+} as const;
+const context = { sourceId: 'schema.prisma', modelName: 'T', fieldName: 'id' } as const;
+const REJECTION =
+  'Default SQL must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.';
+
+describe('checkSqlDefaultBody', () => {
+  it.each([
+    ['gen_random_uuid()'],
+    ["(now() + '00:03:00'::interval)"],
+    ["'{}'::text[]"],
+    ['CURRENT_TIMESTAMP'],
+    ['selected_at'],
+    [''],
+  ])('accepts %j', (body) => {
+    expect(checkSqlDefaultBody(body)).toBeUndefined();
+  });
+
+  it.each([
+    ['a semicolon', "eek(); DROP TABLE 'x'"],
+    ['a line comment', 'now() -- x'],
+    ['a block comment', 'now() /* x */'],
+    ['dollar quoting', '$$x$$'],
+    ['a subquery', '(select 1)'],
+    ['an upper-case subquery', '(SELECT 1)'],
+  ])('rejects %s', (_name, body) => {
+    expect(checkSqlDefaultBody(body)).toBe(REJECTION);
+  });
+});
+
+describe('sqlDefaultLiteralTagEntry', () => {
+  const entry = sqlDefaultLiteralTagEntry('pg.sql`...`');
+
+  it('records its usage', () => {
+    expect(entry.usage).toBe('pg.sql`...`');
+  });
+
+  it('lowers the body verbatim as a function default', () => {
+    const body = "(now() + '00:03:00'::interval)";
+    expect(entry.lower({ literal: { tag: 'pg.sql', body, span }, context })).toEqual({
+      ok: true,
+      value: { kind: 'storage', defaultValue: { kind: 'function', expression: body } },
+    });
+  });
+
+  it('lowers an empty body without a diagnostic', () => {
+    expect(entry.lower({ literal: { tag: 'sql', body: '', span }, context })).toEqual({
+      ok: true,
+      value: { kind: 'storage', defaultValue: { kind: 'function', expression: '' } },
+    });
+  });
+
+  it('reports a rejected body as PSL_INVALID_DEFAULT_SQL at the literal', () => {
+    expect(entry.lower({ literal: { tag: 'sql', body: 'x; y', span }, context })).toEqual({
+      ok: false,
+      diagnostic: {
+        code: 'PSL_INVALID_DEFAULT_SQL',
+        message: REJECTION,
+        sourceId: 'schema.prisma',
+        span,
+      },
+    });
+  });
+});
