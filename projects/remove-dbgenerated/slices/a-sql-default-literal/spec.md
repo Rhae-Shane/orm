@@ -70,7 +70,7 @@ export function canonicalizeTaggedLiteralBody(resolved: string): TaggedLiteralCa
 
 Steps, in this order, on the escape-resolved text:
 
-1. If the text contains `${`, fail with `interpolation` and the offset of the first occurrence. (A body that needs those two characters writes `\${` in a backtick fence, which resolves to `${` before this step only when escaped as `\$` followed by `{`; the check therefore runs on the resolved text and the escaped form passes. Document this in the ADR amendment.)
+1. If the text contains `${`, fail with `interpolation` and the offset of the first occurrence. The check runs on the escape-resolved text, so `\${` in a backtick fence resolves to `${` and is rejected too. There is no way to put those two characters in a body, in either fence. The TypeScript tag behaves the same way on its cooked strings. ADR 129's `\${}` escape is not honoured; the ADR amendment records this.
 2. If the text contains a NUL character, fail with `nul`.
 3. Replace `\r\n` and lone `\r` with `\n`.
 4. If the first line is blank (empty or only spaces and tabs), drop it.
@@ -222,7 +222,7 @@ Tokenizer and parser (`psl-parser/test`):
 - backtick fence single line; multi-line; escaped backtick; `\\`; `\$`; unterminated → `PSL_UNTERMINATED_TEMPLATE_LITERAL`; tag with dots; whitespace between tag and fence → `PSL_TAGGED_LITERAL_FENCE_EXPECTED`; quote fence; `printSyntax` round-trips source; formatter leaves a multi-line body byte-identical.
 
 Canonicalization (`framework-components/test`):
-- each of the nine steps with a table of input → output; `${` → `interpolation`; `\${` resolved → passes; NUL; 65537 bytes → `too-large`; 65536 bytes passes.
+- each of the nine steps with a table of input → output; `${` → `interpolation`; `\${` → `interpolation` too; NUL; 65537 bytes → `too-large`; 65536 bytes passes.
 
 Combinator (`psl-parser/test/attribute-spec`):
 - known tag ok; unknown tag → `PSL_UNKNOWN_DEFAULT_LITERAL_TAG` listing tags; non-literal argument → `Expected a tagged literal`.
