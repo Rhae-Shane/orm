@@ -26,10 +26,7 @@ export type {
   ResolvedTableRename,
   TableRename,
 } from '../core/migrations/apply-table-rename';
-export {
-  applyTableRename,
-  TABLE_RENAME_UNMATCHED_CODE,
-} from '../core/migrations/apply-table-rename';
+export { applyTableRename } from '../core/migrations/apply-table-rename';
 export type {
   ContractToSchemaIROptions,
   DefaultRenderer,

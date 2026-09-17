@@ -136,8 +136,6 @@ export class SqliteMigrationPlanner
     const policyResult = this.ensureAdditivePolicy(options.policy);
     if (policyResult) return policyResult;
 
-    const fromContract = options.fromContract;
-
     const { expected, actual, issues: diffIssues } = this.collectSchemaIssues(options);
     const replacedIndexes = pairIndexReplacements(diffIssues, indexNameCaseChange);
     const disallowedIndexCalls = replacedIndexes.calls.filter(
@@ -189,7 +187,7 @@ export class SqliteMigrationPlanner
     // Hook fires only at the application emitter — extension-space planning
     // (M2 R2) never reaches this helper.
     const fieldEventOps = planFieldEventOperations({
-      priorContract: fromContract,
+      priorContract: options.fromContract,
       newContract: options.contract,
       codecHooks,
     });

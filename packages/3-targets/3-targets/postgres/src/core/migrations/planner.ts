@@ -205,18 +205,15 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
       return policyResult;
     }
 
-    const fromContract = options.fromContract;
-    const previousSchema = options.schema;
-
     // The one combined tree diff drives the whole plan: relational findings
     // become structural DDL via `planIssues`, policy findings become RLS ops
     // via `planPostgresSchemaDiff`. Verify runs its own full-tree node diff
     // (`diffSchema`) over the same schema and rejects on a
     // surviving failure.
-    PostgresDatabaseSchemaNode.assert(previousSchema);
+    PostgresDatabaseSchemaNode.assert(options.schema);
     const { issues: rawIssues } = buildPostgresPlanDiff({
       contract: options.contract,
-      actualSchema: previousSchema,
+      actualSchema: options.schema,
       frameworkComponents: options.frameworkComponents,
     });
     const policyDiffIssues = rawIssues.filter((issue) => isPolicyDiffIssue(issue));
@@ -263,7 +260,7 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
     // sibling-space scoping, matching the retired coordinate walk exactly.
     const namespaceIssues = verifyPostgresNamespacePresence({
       contract: options.contract,
-      schema: previousSchema,
+      schema: options.schema,
     });
     const schemaIssues = [...namespaceIssues, ...gated];
 
@@ -288,7 +285,7 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
     // per-schema namespace node — never the whole tree root, and never a flat
     // merge of every namespace (which would collide same-named tables across
     // schemas). Probing more than one namespace at once is future work.
-    const relationalSchema = relationalNamespaceNode(previousSchema, schemaName);
+    const relationalSchema = relationalNamespaceNode(options.schema, schemaName);
 
     // Input-side control-policy partition. `external` / `observed` subjects
     // — and non-creation issues for `tolerated` subjects — are dropped from
@@ -344,7 +341,7 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
       // from/to comparisons (unsafe type change, nullable tightening) are
       // inapplicable there — reconciliation falls through to
       // `mapNodeIssueToCall`'s direct destructive handlers.
-      fromContract,
+      fromContract: options.fromContract,
       schemaName,
       codecHooks,
       storageTypes,
@@ -377,7 +374,7 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
     // byte-stable. The hook fires only at the application emitter —
     // extension-space planning never reaches this helper.
     const fieldEventOps = planFieldEventOperations({
-      priorContract: fromContract,
+      priorContract: options.fromContract,
       newContract: options.contract,
       codecHooks,
     });

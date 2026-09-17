@@ -184,17 +184,19 @@ function withEntries(namespace: SqlNamespaceBase, entries: SqlNamespaceEntries):
   return Object.freeze(copy);
 }
 
-function renameTablesInNamespace(
+function renameTableInNamespace(
   namespace: SqlNamespace,
-  renames: readonly ResolvedTableRename[],
+  rename: ResolvedTableRename,
   renameTableReferences: RenameTableReferences | undefined,
 ): SqlNamespace {
-  const own = renames.filter((rename) => rename.namespaceId === namespace.id);
-  const tables = Object.entries(namespace.entries.table ?? {}).map(([name, table]) => {
-    const renamedTo = own.find((rename) => rename.from === name)?.to;
-    const withForeignKeys = renames.reduce(renameForeignKeys, table);
-    return [renamedTo ?? name, withForeignKeys] as const;
-  });
+  const ownsTable = rename.namespaceId === namespace.id;
+  const tables = Object.entries(namespace.entries.table ?? {}).map(
+    ([name, table]) =>
+      [
+        ownsTable && name === rename.from ? rename.to : name,
+        renameForeignKeys(table, rename),
+      ] as const,
+  );
   const untouched = tables.every(([name, table]) => namespace.entries.table?.[name] === table);
   if (untouched) return namespace;
   if (!isMaterializedSqlNamespace(namespace)) {
@@ -208,21 +210,21 @@ function renameTablesInNamespace(
   };
   return withEntries(
     namespace,
-    renameTableReferences === undefined
+    renameTableReferences === undefined || !ownsTable
       ? renamedTables
-      : own.reduce(renameTableReferences, renamedTables),
+      : renameTableReferences(renamedTables, rename),
   );
 }
 
-function renameTablesInContract(
+function renameTableInContract(
   contract: Contract<SqlStorage>,
-  renames: readonly ResolvedTableRename[],
+  rename: ResolvedTableRename,
   renameTableReferences: RenameTableReferences | undefined,
 ): Contract<SqlStorage> {
   const namespaces = Object.fromEntries(
     Object.entries(contract.storage.namespaces).map(([id, namespace]) => [
       id,
-      renameTablesInNamespace(namespace, renames, renameTableReferences),
+      renameTableInNamespace(namespace, rename, renameTableReferences),
     ]),
   );
   const materialized: Record<string, SqlNamespaceBase> = {};
@@ -258,9 +260,9 @@ export function applyTableRename(
   const resolved = resolveTableRename(input.rename, input.startContract, input.endContract);
   if (!resolved.ok) return resolved;
   return ok({
-    contract: renameTablesInContract(
+    contract: renameTableInContract(
       input.startContract,
-      [resolved.value],
+      resolved.value,
       input.renameTableReferences,
     ),
     rename: resolved.value,
