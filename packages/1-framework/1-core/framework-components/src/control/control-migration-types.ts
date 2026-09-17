@@ -421,13 +421,6 @@ export interface SchemaOwnership {
 }
 
 /**
- * Migration planner interface for planning schema changes.
- * This is the minimal interface that CLI commands use.
- *
- * @template TFamilyId - The family ID (e.g., 'sql', 'document')
- * @template TTargetId - The target ID (e.g., 'postgres', 'mysql')
- */
-/**
  * One side of a {@link StorageEntityRename}: a storage entity named within a
  * namespace. `namespaceId` is omitted when the operator did not qualify the
  * name; the family resolves it against the contract.
@@ -449,6 +442,13 @@ export interface StorageEntityRename {
   readonly to: StorageEntityRenameCoordinate;
 }
 
+/**
+ * Migration planner interface for planning schema changes.
+ * This is the minimal interface that CLI commands use.
+ *
+ * @template TFamilyId - The family ID (e.g., 'sql', 'document')
+ * @template TTargetId - The target ID (e.g., 'postgres', 'mysql')
+ */
 export interface MigrationPlanner<
   TFamilyId extends string = string,
   TTargetId extends string = string,
@@ -511,10 +511,9 @@ export interface MigrationPlanner<
      */
     readonly snapshotsImportPath: string;
     /**
-     * Operator-stated renames to apply to the previous state before the
-     * diff, in the order given. Each becomes one rename operation at the
-     * head of the plan; one that matches neither side is a planning
-     * failure. Absent or empty means no renames.
+     * Operator-stated renames, in the order given. Each becomes one rename operation at the head of the plan; one that matches neither side is a planning failure. Absent or empty means no renames.
+     *
+     * When renames are present, the planner applies them to `fromContract`, re-derives the previous schema from that renamed contract, and ignores `schema`. Pass renames only where `schema` is itself derived from `fromContract` (offline `migration plan`), never with a live introspected schema, whose drift and unowned objects would be lost. A planner that cannot rename returns a failure result.
      */
     readonly renames?: readonly StorageEntityRename[];
   }): MigrationPlannerResult;
@@ -530,6 +529,8 @@ export interface MigrationPlanner<
    * `spaceId` is stamped onto the produced plan; reconciliation flows
    * (`db init`, `db update`) and authoring flows (`migration new`) all
    * pass it explicitly.
+   *
+   * A planner that cannot rename throws a structured error when `context.renames` is not empty.
    */
   emptyMigration(
     context: MigrationScaffoldContext,
