@@ -45,13 +45,12 @@ export function renamedTableIndex(renamedTables: ReadonlySet<string>): IndexRepl
 }
 
 /**
- * An index whose name changes only in case on the same table and columns, as after a table renamed by hand.
+ * An index on the same table whose new name SQLite takes for the old one, as after a table renamed by hand. Its content is not compared: the old index must be dropped before the new one can be created whatever either defines, and the new one is created from its own definition.
  */
 export const indexNameCaseChange: IndexReplacementMatch = (old, replacement) =>
   old.tableName === replacement.tableName &&
   old.index.name !== replacement.index.name &&
-  sqliteIdentifiersCollide(old.index.name, replacement.index.name) &&
-  JSON.stringify(old.index.columns ?? []) === JSON.stringify(replacement.index.columns ?? []);
+  sqliteIdentifiersCollide(old.index.name, replacement.index.name);
 
 /**
  * Pairs each index the plan drops with the index that replaces it, and plans every paired drop before every paired create. SQLite cannot rename an index, and it compares index names without regard to the case of ASCII letters, so a replacement whose name differs from the old one only in that case would otherwise collide with it. The paired issues are returned as consumed so the ordinary diff does not plan them again.
