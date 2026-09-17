@@ -55,7 +55,7 @@ Files: `packages/1-framework/2-authoring/psl-parser/src/syntax/` (syntax kinds, 
 
 Escape resolution happens before canonicalization and depends on the fence:
 
-- Backtick fence: `` \` `` becomes a backtick; `\\` becomes one backslash; `\$` becomes `$`. Every other backslash sequence is kept as written, both characters. So a SQL body may contain `E'\n'` unchanged.
+- Backtick fence: `` \` `` becomes a backtick; `\\` becomes one backslash. Every other backslash sequence is kept as written, both characters. So a SQL body may contain `E'\n'` unchanged.
 - Quote fence: the existing PSL string-literal escape rules apply, exactly as `StringLiteralExprAst.value()` resolves them. Backticks need no escaping inside a quote fence.
 
 Canonicalization is one shared function used by PSL and TypeScript. New file `packages/1-framework/1-core/framework-components/src/shared/tagged-literal.ts` exporting:
@@ -63,15 +63,14 @@ Canonicalization is one shared function used by PSL and TypeScript. New file `pa
 ```ts
 export type TaggedLiteralCanonicalization =
   | { readonly ok: true; readonly body: string }
-  | { readonly ok: false; readonly reason: 'interpolation' | 'nul' | 'too-large'; readonly offset: number };
+  | { readonly ok: false; readonly reason: 'nul' | 'too-large'; readonly offset: number };
 
 export function canonicalizeTaggedLiteralBody(resolved: string): TaggedLiteralCanonicalization;
 ```
 
 Steps, in this order, on the escape-resolved text:
 
-1. If the text contains `${`, fail with `interpolation` and the offset of the first occurrence. The check runs on the escape-resolved text, so `\${` in a backtick fence resolves to `${` and is rejected too. There is no way to put those two characters in a body, in either fence. The TypeScript tag behaves the same way on its cooked strings. ADR 129's `\${}` escape is not honoured; the ADR amendment records this.
-2. If the text contains a NUL character, fail with `nul`.
+1. If the text contains a NUL character, fail with `nul`. (An earlier draft also rejected `${`; that rule was dropped: a PSL tagged literal has no interpolation, so there is nothing to reject.)
 3. Replace `\r\n` and lone `\r` with `\n`.
 4. If the first line is blank (empty or only spaces and tabs), drop it.
 5. If the last line is blank, drop it.
@@ -97,7 +96,7 @@ export function taggedLiteral(tags: readonly string[]): TaggedLiteralArgType<Att
 ```
 
 - `ArgTypeKind` gains `'taggedLiteral'`. The `label` is `` `tag`...` `` for the first tag, used in "expected one of" messages.
-- `parse` casts the argument to `TaggedLiteralExprAst`. If it is not one, the leaf diagnostic is `Expected a tagged literal`. If `tag()` is not in `tags`, the diagnostic is `PSL_UNKNOWN_DEFAULT_LITERAL_TAG` with message `Unknown literal tag "<tag>". Known tags: <comma-separated tags in registration order>.` If `body()` is undefined, the diagnostic is one of `PSL_TAGGED_LITERAL_INTERPOLATION` (`Tagged literals do not support ${...} interpolation.`), `PSL_TAGGED_LITERAL_NUL` (`Tagged literals must not contain NUL characters.`), `PSL_TAGGED_LITERAL_TOO_LARGE` (`Tagged literal exceeds 65536 bytes.`), each at the literal's span. Otherwise `ok({ tag, body, span })`.
+- `parse` casts the argument to `TaggedLiteralExprAst`. If it is not one, the leaf diagnostic is `Expected a tagged literal`. If `tag()` is not in `tags`, the diagnostic is `PSL_UNKNOWN_DEFAULT_LITERAL_TAG` with message `Unknown literal tag "<tag>". Known tags: <comma-separated tags in registration order>.` If `body()` is undefined, the diagnostic is one of `PSL_TAGGED_LITERAL_NUL` (`Tagged literals must not contain NUL characters.`), `PSL_TAGGED_LITERAL_TOO_LARGE` (`Tagged literal exceeds 65536 bytes.`), each at the literal's span. Otherwise `ok({ tag, body, span })`.
 
 ### A5. The tag registry
 
@@ -224,7 +223,7 @@ Tokenizer and parser (`psl-parser/test`):
 - backtick fence single line; multi-line; escaped backtick; `\\`; `\$`; unterminated → `PSL_UNTERMINATED_TEMPLATE_LITERAL`; tag with dots; whitespace between tag and fence → `PSL_TAGGED_LITERAL_FENCE_EXPECTED`; quote fence; `printSyntax` round-trips source; formatter leaves a multi-line body byte-identical.
 
 Canonicalization (`framework-components/test`):
-- each of the nine steps with a table of input → output; `${` → `interpolation`; `\${` → `interpolation` too; NUL; 65537 bytes → `too-large`; 65536 bytes passes.
+- each of the nine steps with a table of input → output; NUL; 65537 bytes → `too-large`; 65536 bytes passes.
 
 Combinator (`psl-parser/test/attribute-spec`):
 - known tag ok; unknown tag → `PSL_UNKNOWN_DEFAULT_LITERAL_TAG` listing tags; non-literal argument → `Expected a tagged literal`.
