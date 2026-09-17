@@ -66,6 +66,34 @@ describe('sql template tag', () => {
     expect(sql`a\\b`).toEqual({ kind: 'function', expression: 'a\\b' });
   });
 
+  it('refuses sql`now()` with CONTRACT.DEFAULT_INVALID, naming the form to write', () => {
+    expect(() => sql`now()`).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.DEFAULT_INVALID',
+        message:
+          'Write .default(now()) instead of sql`now()`; now() is a Prisma default function, not raw SQL.',
+      }),
+    );
+  });
+
+  it('refuses sql`autoincrement()` with CONTRACT.DEFAULT_INVALID, naming the form to write', () => {
+    expect(() => sql` autoincrement() `).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.DEFAULT_INVALID',
+        message:
+          'Write .default(autoincrement()) instead of sql`autoincrement()`; autoincrement() is a Prisma default function, not raw SQL.',
+      }),
+    );
+  });
+
+  it('passes NOW(), gen_random_uuid() and uuid() through verbatim', () => {
+    expect([sql`NOW()`, sql`gen_random_uuid()`, sql`uuid()`]).toEqual([
+      { kind: 'function', expression: 'NOW()' },
+      { kind: 'function', expression: 'gen_random_uuid()' },
+      { kind: 'function', expression: 'uuid()' },
+    ]);
+  });
+
   it('rejects a body the SQL check refuses with CONTRACT.DEFAULT_INVALID', () => {
     expect(() => sql`x; drop table t`).toThrow(
       expect.objectContaining({

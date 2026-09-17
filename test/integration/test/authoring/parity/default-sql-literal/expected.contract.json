@@ -22,6 +22,13 @@
                   "kind": "scalar"
                 }
               },
+              "digest": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
               "escaped": {
                 "nullable": false,
                 "type": {
@@ -64,6 +71,9 @@
               "fields": {
                 "createdAt": {
                   "column": "createdAt"
+                },
+                "digest": {
+                  "column": "digest"
                 },
                 "escaped": {
                   "column": "escaped"
@@ -112,6 +122,15 @@
                   "nativeType": "timestamptz",
                   "nullable": false
                 },
+                "digest": {
+                  "codecId": "pg/text@1",
+                  "default": {
+                    "expression": "md5(random()::text)",
+                    "kind": "function"
+                  },
+                  "nativeType": "text",
+                  "nullable": false
+                },
                 "escaped": {
                   "codecId": "pg/text@1",
                   "default": {
@@ -133,7 +152,7 @@
                 "id": {
                   "codecId": "pg/text@1",
                   "default": {
-                    "expression": "md5(random()::text)",
+                    "expression": "gen_random_uuid()",
                     "kind": "function"
                   },
                   "nativeType": "text",
@@ -171,7 +190,7 @@
         "id": "public"
       }
     },
-    "storageHash": "50dd67500b63fc6a4ffd9c5adb2f70fff2f090fa5c9f459c400e67d87ee4189a"
+    "storageHash": "8f7c205fba3f96a6c7a1f484c67ed18296164755d5aa24adafa7d0ec9f61119f"
   },
   "capabilities": {
     "postgres": {

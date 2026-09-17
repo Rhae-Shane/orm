@@ -4,7 +4,7 @@ import {
   describeTaggedLiteralFailure,
   resolveBacktickEscapes,
 } from '@internal/framework-components/control';
-import { checkSqlDefaultBody } from '@internal/sql-contract/validators';
+import { checkSqlDefaultBody, reservedSqlDefaultBody } from '@internal/sql-contract/validators';
 import { contractError } from './contract-errors';
 
 /**
@@ -29,6 +29,14 @@ export function sql(strings: TemplateStringsArray, ...values: readonly never[]):
       {
         meta: { reason: canonical.reason, offset: canonical.offset },
       },
+    );
+  }
+  const reserved = reservedSqlDefaultBody(canonical.body);
+  if (reserved !== undefined) {
+    throw contractError(
+      'CONTRACT.DEFAULT_INVALID',
+      `Write .default(${reserved}()) instead of sql\`${reserved}()\`; ${reserved}() is a Prisma default function, not raw SQL.`,
+      { meta: { reason: 'reserved-function', expression: canonical.body } },
     );
   }
   const rejected = checkSqlDefaultBody(canonical.body);

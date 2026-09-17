@@ -82,8 +82,6 @@ describe('createSqliteDefaultFunctionRegistry — dbgenerated canonicalization',
 
 describe('createSqliteDefaultLiteralTagRegistry', () => {
   const tagRegistry = createSqliteDefaultLiteralTagRegistry();
-  const registry = createSqliteDefaultFunctionRegistry();
-  const registries = { defaultFunctionRegistry: registry, defaultLiteralTagRegistry: tagRegistry };
 
   it('registers sql and sqlite.sql, in that order', () => {
     expect([...tagRegistry.keys()]).toEqual(['sql', 'sqlite.sql']);
@@ -94,7 +92,6 @@ describe('createSqliteDefaultLiteralTagRegistry', () => {
     const result = tagRegistry.get('sql')!.lower({
       literal: { tag: 'sql', body: 'CURRENT_TIMESTAMP', span: stubSpan },
       context: stubContext,
-      registries,
     });
     expect(result).toEqual({
       ok: true,
@@ -112,29 +109,27 @@ describe('createSqliteDefaultLiteralTagRegistry', () => {
     expect([...registries.defaultLiteralTagRegistry.keys()]).toEqual(['sql', 'sqlite.sql']);
   });
 
-  it.each([['now'], ['autoincrement']])(
-    'refuses sql`%s()`, which spells a registered function',
-    (name) => {
-      const result = tagRegistry.get('sql')!.lower({
-        literal: { tag: 'sql', body: `${name}()`, span: stubSpan },
-        context: stubContext,
-        registries,
-      });
-      expect(result).toMatchObject({
-        ok: false,
-        diagnostic: {
-          code: 'PSL_INVALID_DEFAULT_SQL',
-          message: `Write @default(${name}()) instead of sql\`${name}()\`; the named form is the one Prisma understands.`,
-        },
-      });
-    },
-  );
+  it.each([
+    ['sql', 'now'],
+    ['sqlite.sql', 'autoincrement'],
+  ])('refuses %s`%s()`, which is a Prisma default function', (tag, name) => {
+    const result = tagRegistry.get(tag)!.lower({
+      literal: { tag, body: `${name}()`, span: stubSpan },
+      context: stubContext,
+    });
+    expect(result).toMatchObject({
+      ok: false,
+      diagnostic: {
+        code: 'PSL_INVALID_DEFAULT_SQL',
+        message: `Write @default(${name}()) instead of ${tag}\`${name}()\`; ${name}() is a Prisma default function, not raw SQL.`,
+      },
+    });
+  });
 
   it("accepts sql`now() + interval '1 day'`", () => {
     const result = tagRegistry.get('sql')!.lower({
       literal: { tag: 'sql', body: "now() + interval '1 day'", span: stubSpan },
       context: stubContext,
-      registries,
     });
     expect(result).toMatchObject({ ok: true });
   });

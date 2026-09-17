@@ -420,8 +420,6 @@ describe('postgresNativeAuthoringTypes', () => {
 
 describe('createPostgresDefaultLiteralTagRegistry', () => {
   const tagRegistry = createPostgresDefaultLiteralTagRegistry();
-  const registry = createPostgresDefaultFunctionRegistry();
-  const registries = { defaultFunctionRegistry: registry, defaultLiteralTagRegistry: tagRegistry };
 
   it('registers sql and pg.sql, in that order', () => {
     expect([...tagRegistry.keys()]).toEqual(['sql', 'pg.sql']);
@@ -433,7 +431,6 @@ describe('createPostgresDefaultLiteralTagRegistry', () => {
     const result = tagRegistry.get('pg.sql')!.lower({
       literal: { tag: 'pg.sql', body: "'{}'::jsonb", span: stubSpan },
       context: stubContext,
-      registries,
     });
     expect(result).toEqual({
       ok: true,
@@ -448,29 +445,41 @@ describe('createPostgresDefaultLiteralTagRegistry', () => {
     expect([...registries.defaultLiteralTagRegistry.keys()]).toEqual(['sql', 'pg.sql']);
   });
 
-  it.each([['now'], ['autoincrement'], ['gen_random_uuid']])(
-    'refuses sql`%s()`, which spells a registered function',
-    (name) => {
-      const result = tagRegistry.get('sql')!.lower({
-        literal: { tag: 'sql', body: `${name}()`, span: stubSpan },
-        context: stubContext,
-        registries,
-      });
-      expect(result).toMatchObject({
-        ok: false,
-        diagnostic: {
-          code: 'PSL_INVALID_DEFAULT_SQL',
-          message: `Write @default(${name}()) instead of sql\`${name}()\`; the named form is the one Prisma understands.`,
-        },
-      });
-    },
-  );
+  it.each([
+    ['sql', 'now'],
+    ['pg.sql', 'autoincrement'],
+  ])('refuses %s`%s()`, which is a Prisma default function', (tag, name) => {
+    const result = tagRegistry.get(tag)!.lower({
+      literal: { tag, body: `${name}()`, span: stubSpan },
+      context: stubContext,
+    });
+    expect(result).toMatchObject({
+      ok: false,
+      diagnostic: {
+        code: 'PSL_INVALID_DEFAULT_SQL',
+        message: `Write @default(${name}()) instead of ${tag}\`${name}()\`; ${name}() is a Prisma default function, not raw SQL.`,
+      },
+    });
+  });
+
+  it('lowers sql`gen_random_uuid()` verbatim', () => {
+    const result = tagRegistry.get('sql')!.lower({
+      literal: { tag: 'sql', body: 'gen_random_uuid()', span: stubSpan },
+      context: stubContext,
+    });
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        kind: 'storage',
+        defaultValue: { kind: 'function', expression: 'gen_random_uuid()' },
+      },
+    });
+  });
 
   it("accepts sql`now() + interval '1 day'`", () => {
     const result = tagRegistry.get('sql')!.lower({
       literal: { tag: 'sql', body: "now() + interval '1 day'", span: stubSpan },
       context: stubContext,
-      registries,
     });
     expect(result).toMatchObject({ ok: true });
   });

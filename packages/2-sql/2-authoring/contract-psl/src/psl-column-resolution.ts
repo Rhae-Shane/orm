@@ -25,7 +25,6 @@ import {
 import type { AnyCodecDescriptor, CodecLookup } from '@internal/framework-components/codec';
 import type {
   ControlDefaultLiteralTagRegistry,
-  ControlDefaultRegistries,
   ControlMutationDefaultRegistry,
   DefaultFunctionLoweringContext,
   LoweredDefaultResult,
@@ -706,16 +705,16 @@ export function resolveFieldTypeDescriptor(input: {
 /** The attribute spec only accepts registered tags, so a missing entry is a wiring bug, not user input. */
 function lowerTaggedLiteral(
   literal: TaggedLiteralValue,
-  registries: ControlDefaultRegistries,
+  registry: ControlDefaultLiteralTagRegistry,
   context: DefaultFunctionLoweringContext,
 ): LoweredDefaultResult {
-  const entry = registries.defaultLiteralTagRegistry.get(literal.tag);
+  const entry = registry.get(literal.tag);
   if (entry === undefined) {
     throw new InternalError(
       `Default literal tag "${literal.tag}" was accepted by the attribute spec but has no registry entry`,
     );
   }
-  return entry.lower({ literal, context, registries });
+  return entry.lower({ literal, context });
 }
 
 export function lowerDefaultForField(input: {
@@ -785,14 +784,7 @@ export function lowerDefaultForField(input: {
     };
     const lowered =
       'tag' in value
-        ? lowerTaggedLiteral(
-            value,
-            {
-              defaultFunctionRegistry: input.defaultFunctionRegistry,
-              defaultLiteralTagRegistry: input.defaultLiteralTagRegistry,
-            },
-            context,
-          )
+        ? lowerTaggedLiteral(value, input.defaultLiteralTagRegistry, context)
         : lowerDefaultFunctionWithRegistry({
             call: value,
             registry: input.defaultFunctionRegistry,

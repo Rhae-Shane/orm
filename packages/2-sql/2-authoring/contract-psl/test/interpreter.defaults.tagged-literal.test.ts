@@ -102,14 +102,25 @@ describe('interpretPslDocumentToSqlContract tagged literal defaults', () => {
     ]);
   });
 
-  it('refuses a body that only spells a registered function, naming the form to write', () => {
-    expect(diagnostics('v DateTime @default(sql`now()`)')).toEqual([
+  it.each([
+    ['sql', 'now', 'v DateTime @default(sql`now()`)'],
+    ['sql', 'autoincrement', 'v Int @default(sql`autoincrement()`)'],
+    ['pg.sql', 'now', 'v DateTime @default(pg.sql`now()`)'],
+  ])('refuses %s`%s()`, naming the tag and the form to write', (tag, name, fieldLine) => {
+    expect(diagnostics(fieldLine)).toEqual([
       expect.objectContaining({
         code: 'PSL_INVALID_DEFAULT_SQL',
-        message:
-          'Write @default(now()) instead of sql`now()`; the named form is the one Prisma understands.',
+        message: `Write @default(${name}()) instead of ${tag}\`${name}()\`; ${name}() is a Prisma default function, not raw SQL.`,
       }),
     ]);
+  });
+
+  it.each([
+    ['NOW()', 'v DateTime @default(sql`NOW()`)'],
+    ['gen_random_uuid()', 'v String @default(sql`gen_random_uuid()`)'],
+    ['uuid()', 'v String @default(sql`uuid()`)'],
+  ])('lowers sql`%s` verbatim', (expression, fieldLine) => {
+    expect(columnDefault(fieldLine, 'v')).toEqual({ kind: 'function', expression });
   });
 
   it('still rejects a client-side generator on a list column', () => {

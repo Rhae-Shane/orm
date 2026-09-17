@@ -41,6 +41,7 @@ import {
 import type { SourceFile } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
 import type { SqlNamespaceBase, SqlNamespaceInput } from '@internal/sql-contract/types';
+import { checkSqlDefaultBody, reservedSqlDefaultBody } from '@internal/sql-contract/validators';
 import { type EnumTypeHandle, enumType } from '@internal/sql-contract-ts/contract-builder';
 import { blindCast } from '@internal/utils/casts';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
@@ -646,7 +647,7 @@ function sqlLiteralTagEntry(usage: string): ControlDefaultLiteralTagEntry {
   return {
     usage,
     documentation: "Uses the SQL between the fences, verbatim, as the column's default expression.",
-    lower: ({ literal, context, registries }) => {
+    lower: ({ literal, context }) => {
       const reject = (message: string) => ({
         ok: false as const,
         diagnostic: {
@@ -656,17 +657,14 @@ function sqlLiteralTagEntry(usage: string): ControlDefaultLiteralTagEntry {
           span: literal.span,
         },
       });
-      const namedFunction = /^([A-Za-z_][A-Za-z0-9_]*)\(\)$/.exec(literal.body.trim())?.[1];
-      if (namedFunction !== undefined && registries.defaultFunctionRegistry.has(namedFunction)) {
+      const reserved = reservedSqlDefaultBody(literal.body);
+      if (reserved !== undefined) {
         return reject(
-          `Write @default(${namedFunction}()) instead of sql\`${namedFunction}()\`; the named form is the one Prisma understands.`,
+          `Write @default(${reserved}()) instead of ${literal.tag}\`${reserved}()\`; ${reserved}() is a Prisma default function, not raw SQL.`,
         );
       }
-      if (/;|--|\/\*|\$\$|\bSELECT\b/i.test(literal.body)) {
-        return reject(
-          'Default SQL must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.',
-        );
-      }
+      const unsafe = checkSqlDefaultBody(literal.body);
+      if (unsafe !== undefined) return reject(unsafe);
       return {
         ok: true as const,
         value: {
