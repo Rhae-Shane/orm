@@ -266,6 +266,8 @@ export interface MigrationPlannerConflict {
   readonly summary: string;
   /** Optional explanation of why this conflict occurred. */
   readonly why?: string;
+  /** Structured details for machine consumers, such as the conflict's error `code`. */
+  readonly meta?: Readonly<Record<string, unknown>>;
 }
 
 /**

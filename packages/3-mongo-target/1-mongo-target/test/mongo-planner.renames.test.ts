@@ -58,6 +58,7 @@ describe('MongoMigrationPlanner stated renames', () => {
           summary:
             'MIGRATION.RENAME_UNSUPPORTED: MongoDB does not support stated renames ("userProfile=UserProfile"), so nothing was planned.',
           why: 'The MongoDB planner has no rename operation, so it cannot keep the documents of a renamed collection. Rename the collection by hand with renameCollection, then plan again without the rename.',
+          meta: { code: 'MIGRATION.RENAME_UNSUPPORTED' },
         },
       ],
     });

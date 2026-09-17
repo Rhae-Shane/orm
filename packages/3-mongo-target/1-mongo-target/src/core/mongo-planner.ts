@@ -330,6 +330,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
             kind: 'renameUnsupported',
             summary: `${RENAME_UNSUPPORTED_CODE}: MongoDB does not support stated renames (${renamesLabel(options.renames)}), so nothing was planned.`,
             why: renamesUnsupportedWhy('plan'),
+            meta: { code: RENAME_UNSUPPORTED_CODE },
           },
         ],
       };
