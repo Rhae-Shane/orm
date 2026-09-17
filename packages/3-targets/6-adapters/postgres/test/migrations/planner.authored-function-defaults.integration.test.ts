@@ -159,7 +159,8 @@ describe('authored function defaults on Postgres', { concurrent: false }, () => 
 
   async function replannedOperationIds(contract: Contract<SqlStorage>) {
     const schema = await familyInstance.introspect({ driver: driver!, contract });
-    return plan(contract, schema, additiveAndWidening).operations.map((operation) => operation.id);
+    const operations = await Promise.all(plan(contract, schema, additiveAndWidening).operations);
+    return operations.map((operation) => operation.id);
   }
 
   const authoredColumns = [
