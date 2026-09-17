@@ -217,7 +217,9 @@ function scanString(source: string, pos: number): Token | undefined {
  * backslashes is escaped and does not close it. With no closing backtick the
  * text becomes one `Invalid` token, which the parser reports; it ends before
  * the first later line whose first non-blank character is `}`, so the parser
- * resumes at the block's closing brace, or at the end of the input.
+ * resumes at the block's closing brace, or at the end of the input. That
+ * recovery only happens when no later backtick exists: a later backtick,
+ * such as the opening fence of another tagged literal, closes the fence first.
  */
 function scanTemplateLiteral(source: string, pos: number): Token | undefined {
   if (source.charAt(pos) !== '`') return undefined;

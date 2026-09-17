@@ -1,17 +1,16 @@
 import type { TaggedLiteralValue } from '@internal/framework-components/control';
 import { describeTaggedLiteralFailure } from '@internal/framework-components/control';
 import type { PslDiagnostic, PslDiagnosticCode } from '@internal/framework-components/psl-ast';
-
-const CANONICALIZATION_CODES: Record<'nul' | 'too-large', PslDiagnosticCode> = {
-  nul: 'PSL_TAGGED_LITERAL_NUL',
-  'too-large': 'PSL_TAGGED_LITERAL_TOO_LARGE',
-};
-
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { nodePslSpan } from '../../resolve';
 import { TaggedLiteralExprAst } from '../../syntax/ast/expressions';
 import type { AttributeCtx, TaggedLiteralArgType } from '../types';
 import { leafDiagnostic } from './diagnostic';
+
+const CANONICALIZATION_CODES: Record<'nul' | 'too-large', PslDiagnosticCode> = {
+  nul: 'PSL_TAGGED_LITERAL_NUL',
+  'too-large': 'PSL_TAGGED_LITERAL_TOO_LARGE',
+};
 
 /** A `` tag`...` `` or `tag"..."` argument whose tag is one of `tags`, in registration order. */
 export function taggedLiteral(
