@@ -61,6 +61,19 @@ function scaffold(input: {
   );
 }
 
+function plan(from: Contract<SqlStorage>, to: Contract<SqlStorage>) {
+  return createPostgresMigrationPlanner(stubLowerer).plan({
+    contract: to,
+    schema: postgresContractToSchema(from, []),
+    policy: { allowedOperationClasses: ['additive', 'widening', 'destructive'] },
+    fromContract: from,
+    frameworkComponents: [],
+    spaceId: APP_SPACE_ID,
+    snapshotsImportPath: '../../snapshots',
+    renames: [RENAME],
+  });
+}
+
 async function labelsOf(plan: MigrationPlanWithAuthoringSurface): Promise<readonly string[]> {
   return (await Promise.all(plan.operations)).map((op) => op.label);
 }
@@ -77,16 +90,7 @@ describe('Postgres scaffold rename-table intents', () => {
   it('carries the same operations migration plan plans for the rename', async () => {
     const from = contractOf('userProfile', withObjects, FROM_HASH);
     const to = contractOf('UserProfile', withObjects, TO_HASH);
-    const planned = createPostgresMigrationPlanner(stubLowerer).plan({
-      contract: to,
-      schema: postgresContractToSchema(from, []),
-      policy: { allowedOperationClasses: ['additive', 'widening', 'destructive'] },
-      fromContract: from,
-      frameworkComponents: [],
-      spaceId: APP_SPACE_ID,
-      snapshotsImportPath: '../../snapshots',
-      renames: [RENAME],
-    });
+    const planned = plan(from, to);
     expect(planned.kind).toBe('success');
     if (planned.kind !== 'success') return;
 
@@ -153,6 +157,20 @@ describe('Postgres scaffold rename-table intents', () => {
       }),
     );
   });
+
+  it.each(['external', 'observed', 'tolerated'] as const)(
+    'carries no rename for a %s table, as migration plan plans none',
+    async (control) => {
+      const from = contractOf('userProfile', { ...withObjects, control }, FROM_HASH);
+      const to = contractOf('UserProfile', { ...withObjects, control }, TO_HASH);
+      const planned = plan(from, to);
+      expect(planned.kind).toBe('success');
+      if (planned.kind !== 'success') return;
+
+      expect(await labelsOf(planned.plan)).toEqual([]);
+      expect(await labelsOf(scaffold({ from, to }))).toEqual([]);
+    },
+  );
 
   it('scaffolds an empty body without renames', () => {
     const empty = createPostgresMigrationPlanner(stubLowerer).emptyMigration(

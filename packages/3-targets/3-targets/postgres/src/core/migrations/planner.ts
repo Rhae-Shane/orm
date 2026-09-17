@@ -101,6 +101,18 @@ function emissionSchemaForNamespace(contract: Contract<SqlStorage>, namespaceId:
     : resolveDdlSchemaForNamespaceStorage(contract.storage, namespaceId);
 }
 
+function partitionPostgresCallsByControlPolicy<TCall extends PostgresOpFactoryCall>(
+  calls: readonly TCall[],
+  contract: Contract<SqlStorage>,
+) {
+  return partitionCallsByControlPolicy({
+    calls,
+    contract,
+    resolveControlPolicySubject: (call) => resolvePostgresCallControlPolicySubject(call, contract),
+    resolveFactoryName: (call) => call.factoryName,
+  });
+}
+
 const SCAFFOLD_POLICY: MigrationOperationPolicy = {
   allowedOperationClasses: ['additive', 'widening', 'destructive', 'data'],
 };
@@ -214,7 +226,7 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
   }
 
   /**
-   * The rename operations `planSql` plans for the stated renames, and nothing else: the table and constraint renames, then the index and check renames on the renamed tables. Every other difference between the two contracts is left to the author.
+   * The rename operations `planSql` plans for the stated renames, and nothing else: the table and constraint renames, then the index and check renames on the renamed tables, less those the tables' control policies suppress. Every other difference between the two contracts is left to the author.
    */
   private scaffoldTableRenames(
     context: MigrationScaffoldContext<'sql', 'postgres'>,
@@ -257,11 +269,14 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
       renamedTables.some(
         (renamed) => renamed.schemaName === call.schemaName && renamed.tableName === call.tableName,
       );
-    return [
-      ...planned.value.calls,
-      ...this.pairIndexRenames(options, relationalIssues).calls.filter(onRenamedTable),
-      ...this.pairCheckRenames(options, relationalIssues).calls.filter(onRenamedTable),
-    ];
+    return partitionPostgresCallsByControlPolicy(
+      [
+        ...planned.value.calls,
+        ...this.pairIndexRenames(options, relationalIssues).calls.filter(onRenamedTable),
+        ...this.pairCheckRenames(options, relationalIssues).calls.filter(onRenamedTable),
+      ],
+      contract,
+    ).kept;
   }
 
   /**
@@ -493,29 +508,20 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
       return plannerFailure([...(result.ok ? [] : result.failure), ...schemaDiff.conflicts]);
     }
 
-    const renameTablePartition = partitionCallsByControlPolicy({
-      calls: renameTableCalls,
-      contract: options.contract,
-      resolveControlPolicySubject: (call) =>
-        resolvePostgresCallControlPolicySubject(call, options.contract),
-      resolveFactoryName: (call) => call.factoryName,
-    });
+    const renameTablePartition = partitionPostgresCallsByControlPolicy(
+      renameTableCalls,
+      options.contract,
+    );
 
-    const indexRenamePartition = partitionCallsByControlPolicy({
-      calls: [...indexRenames.calls, ...checkRenames.calls],
-      contract: options.contract,
-      resolveControlPolicySubject: (call) =>
-        resolvePostgresCallControlPolicySubject(call, options.contract),
-      resolveFactoryName: (call) => call.factoryName,
-    });
+    const indexRenamePartition = partitionPostgresCallsByControlPolicy(
+      [...indexRenames.calls, ...checkRenames.calls],
+      options.contract,
+    );
 
-    const schemaDiffPartition = partitionCallsByControlPolicy({
-      calls: schemaDiff.calls,
-      contract: options.contract,
-      resolveControlPolicySubject: (call) =>
-        resolvePostgresCallControlPolicySubject(call, options.contract),
-      resolveFactoryName: (call) => call.factoryName,
-    });
+    const schemaDiffPartition = partitionPostgresCallsByControlPolicy(
+      schemaDiff.calls,
+      options.contract,
+    );
 
     // Inline `onFieldEvent`-emitted ops after structural DDL. The fixed
     // ordering is `structural → added → dropped → altered`, with
@@ -533,13 +539,10 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
       readonly PostgresOpFactoryCall[],
       'Codec hook ops conform to PostgresOpFactoryCall at the app emitter boundary'
     >(fieldEventOps);
-    const fieldEventPartition = partitionCallsByControlPolicy({
-      calls: fieldEventPostgresCalls,
-      contract: options.contract,
-      resolveControlPolicySubject: (call) =>
-        resolvePostgresCallControlPolicySubject(call, options.contract),
-      resolveFactoryName: (call) => call.factoryName,
-    });
+    const fieldEventPartition = partitionPostgresCallsByControlPolicy(
+      fieldEventPostgresCalls,
+      options.contract,
+    );
     // The table renames run first: every later operation addresses the
     // renamed table by its new name.
     const calls = [
