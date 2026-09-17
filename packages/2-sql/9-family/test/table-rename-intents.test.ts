@@ -13,6 +13,7 @@ import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../1-core/contract/test/test-support';
 import {
   applyTableRenameIntents,
+  TABLE_RENAME_NO_PREVIOUS_CONTRACT_CODE,
   TABLE_RENAME_UNMATCHED_CODE,
 } from '../src/core/migrations/table-rename-intents';
 
@@ -314,7 +315,7 @@ describe('applyTableRenameIntents', () => {
       expect(result.failure[0]?.summary).toContain('more than one namespace');
     });
 
-    it('rejects intents without a prior contract to apply them to', () => {
+    it('rejects intents without a prior contract to apply them to, with its own code', () => {
       const result = applyTableRenameIntents({
         fromContract: null,
         toContract,
@@ -323,7 +324,58 @@ describe('applyTableRenameIntents', () => {
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      expect(result.failure.map((conflict) => conflict.kind)).toEqual(['unsupportedOperation']);
+      expect(result.failure).toEqual([
+        {
+          kind: 'unsupportedOperation',
+          summary: `${TABLE_RENAME_NO_PREVIOUS_CONTRACT_CODE}: --rename-table "userProfile=UserProfile" needs a previous contract to apply the rename to, and this plan starts from an empty database.`,
+          why: 'A rename intent only makes sense between two contracts. Plan from the migration that created the table. A database managed with db update has no migration history: rename the table there by hand with ALTER TABLE ... RENAME TO ..., and drop the flag.',
+          meta: { code: TABLE_RENAME_NO_PREVIOUS_CONTRACT_CODE },
+        },
+      ]);
+    });
+
+    describe('two intents that resolve to the same table', () => {
+      const authFrom = contractOf({ auth: { userProfile: table(), account: table() } });
+      const authTo = contractOf({ auth: { Profile: table(), Member: table(), account: table() } });
+
+      function conflictsBetween(intents: readonly StorageEntityRename[]) {
+        const result = applyTableRenameIntents({
+          fromContract: authFrom,
+          toContract: authTo,
+          intents,
+        });
+        expect(result.ok).toBe(false);
+        return result.ok ? [] : result.failure;
+      }
+
+      it('reports the second intent that renames the same old table', () => {
+        expect(
+          conflictsBetween([
+            rename('userProfile', 'Profile'),
+            { from: { namespaceId: 'auth', name: 'userProfile' }, to: { name: 'Member' } },
+          ]),
+        ).toEqual([
+          expect.objectContaining({
+            kind: 'tableRenameUnmatched',
+            summary: `${TABLE_RENAME_UNMATCHED_CODE}: --rename-table "auth.userProfile=Member" does not match the contracts: table "auth.userProfile" is already renamed by --rename-table "userProfile=Profile".`,
+            meta: { code: TABLE_RENAME_UNMATCHED_CODE, from: 'userProfile', to: 'Member' },
+          }),
+        ]);
+      });
+
+      it('reports the second intent that renames to the same new table', () => {
+        expect(
+          conflictsBetween([
+            rename('userProfile', 'Profile'),
+            { from: { name: 'account' }, to: { namespaceId: 'auth', name: 'Profile' } },
+          ]),
+        ).toEqual([
+          expect.objectContaining({
+            kind: 'tableRenameUnmatched',
+            summary: `${TABLE_RENAME_UNMATCHED_CODE}: --rename-table "account=auth.Profile" does not match the contracts: table "auth.Profile" is already the new name in --rename-table "userProfile=Profile".`,
+          }),
+        ]);
+      });
     });
   });
 });

@@ -1,5 +1,6 @@
 import type { Contract } from '@internal/contract/types';
 import type { StorageEntityRename } from '@internal/framework-components/control';
+import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
   ForeignKey,
   type ForeignKeyReference,
@@ -16,6 +17,7 @@ import { notOk, ok, type Result } from '@internal/utils/result';
 import type { SqlPlannerConflict } from './types';
 
 export const TABLE_RENAME_UNMATCHED_CODE = 'MIGRATION.TABLE_RENAME_UNMATCHED';
+export const TABLE_RENAME_NO_PREVIOUS_CONTRACT_CODE = 'MIGRATION.TABLE_RENAME_NO_PREVIOUS_CONTRACT';
 
 /** A `--rename-table <from>=<to>` intent as the CLI parsed it. */
 export type TableRenameIntent = StorageEntityRename;
@@ -74,6 +76,14 @@ function lookupTable(
   const [only] = namespaceIds;
   if (only !== undefined && namespaceIds.length === 1) return { kind: 'found', namespaceId: only };
   return namespaceIds.length === 0 ? { kind: 'missing' } : { kind: 'ambiguous', namespaceIds };
+}
+
+function qualifiedTableKey(namespaceId: string, tableName: string): string {
+  return JSON.stringify([namespaceId, tableName]);
+}
+
+function resolvedTableLabel(namespaceId: string, tableName: string): string {
+  return namespaceId === UNBOUND_NAMESPACE_ID ? tableName : `${namespaceId}.${tableName}`;
 }
 
 function unmatched(intent: TableRenameIntent, reason: string): SqlPlannerConflict {
@@ -247,7 +257,8 @@ function renameTablesInContract(
  * ordinary diff sees each renamed table under its new name. Every intent is
  * matched first: its old name must exist in the previous contract (in
  * exactly one namespace when unqualified), its new name must not, and its
- * new name must exist in the next contract. One conflict per unmatched
+ * new name must exist in the next contract. Two intents may not resolve to
+ * the same old table or the same new table. One conflict per unmatched
  * intent; nothing is applied unless every intent matches.
  *
  * Foreign keys that name a renamed table on either side are retargeted so
@@ -265,22 +276,50 @@ export function applyTableRenameIntents(
     return ok({ contract: input.fromContract, renames: [] });
   }
   if (input.fromContract === null) {
-    return notOk([
-      {
+    return notOk(
+      input.intents.map((intent) => ({
         kind: 'unsupportedOperation',
-        summary:
-          '--rename-table needs a previous contract to apply the rename to, and this plan starts from an empty database.',
-        why: 'A rename intent only makes sense between two contracts. Plan from the migration that created the table, or drop the flag.',
-      },
-    ]);
+        summary: `${TABLE_RENAME_NO_PREVIOUS_CONTRACT_CODE}: --rename-table "${tableRenameIntentLabel(intent)}" needs a previous contract to apply the rename to, and this plan starts from an empty database.`,
+        why: 'A rename intent only makes sense between two contracts. Plan from the migration that created the table. A database managed with db update has no migration history: rename the table there by hand with ALTER TABLE ... RENAME TO ..., and drop the flag.',
+        meta: { code: TABLE_RENAME_NO_PREVIOUS_CONTRACT_CODE },
+      })),
+    );
   }
   const fromContract = input.fromContract;
   const conflicts: SqlPlannerConflict[] = [];
   const renames: ResolvedTableRename[] = [];
+  const oldNamesTaken = new Map<string, TableRenameIntent>();
+  const newNamesTaken = new Map<string, TableRenameIntent>();
   for (const intent of input.intents) {
     const resolved = resolveIntent(intent, fromContract, input.toContract);
-    if (resolved.ok) renames.push(resolved.value);
-    else conflicts.push(resolved.failure);
+    if (!resolved.ok) {
+      conflicts.push(resolved.failure);
+      continue;
+    }
+    const { namespaceId, from, to } = resolved.value;
+    const oldName = qualifiedTableKey(namespaceId, from);
+    const newName = qualifiedTableKey(namespaceId, to);
+    const earlierOld = oldNamesTaken.get(oldName);
+    const earlierNew = newNamesTaken.get(newName);
+    if (earlierOld !== undefined) {
+      conflicts.push(
+        unmatched(
+          intent,
+          `table "${resolvedTableLabel(namespaceId, from)}" is already renamed by --rename-table "${tableRenameIntentLabel(earlierOld)}"`,
+        ),
+      );
+    } else if (earlierNew !== undefined) {
+      conflicts.push(
+        unmatched(
+          intent,
+          `table "${resolvedTableLabel(namespaceId, to)}" is already the new name in --rename-table "${tableRenameIntentLabel(earlierNew)}"`,
+        ),
+      );
+    } else {
+      oldNamesTaken.set(oldName, intent);
+      newNamesTaken.set(newName, intent);
+      renames.push(resolved.value);
+    }
   }
   if (conflicts.length > 0) return notOk(conflicts);
   return ok({ contract: renameTablesInContract(fromContract, renames), renames });

@@ -1310,9 +1310,13 @@ SQLite twin of `MIGRATION.POSTGRES_CONTROL_STACK_MISSING`: a `SqliteMigration` o
 
 The planner would drop table `X` and create table `Y` in the same namespace, where `X` is `Y` with its first letter lowered; the columns are not compared. That is the shape of a schema upgraded across the release in which a model with no `@@map` stopped lowering the first letter of its table name (`model UserProfile` now names `"UserProfile"`, previously `"userProfile"`); planning it would recreate the table empty. Reported as a conflict inside `MIGRATION.PLANNING_FAILED`. Add `@@map("X")` to the model (or run the `add-model-map` codemod) to keep the existing table, or state the rename when planning with `prisma migration plan --rename-table "X=Y"`, which plans one `renameTable` operation in place of the drop and the create. Payload: `droppedTable`, `createdTable`.
 
+### MIGRATION.TABLE_RENAME_NO_PREVIOUS_CONTRACT
+
+A `--rename-table <from>=<to>` intent was given to `migration plan`, but the plan has no previous contract to rename the table in: there is no migration history, so the plan starts from an empty database. Nothing is planned; reported as a conflict inside `MIGRATION.PLANNING_FAILED`, one per intent. Plan from the migration that created the table. A database managed with `db update` has no migration history, so rename the table there by hand with `ALTER TABLE "X" RENAME TO "Y"` and drop the flag. Payload: none.
+
 ### MIGRATION.TABLE_RENAME_UNMATCHED
 
-A `--rename-table <from>=<to>` intent given to `migration plan` does not match the two contracts being planned: `from` does not exist in the previous contract (or, unqualified, exists in more than one namespace), `to` already exists in the previous contract, `to` does not exist in the next contract, or the two sides name different namespaces. Nothing is planned; reported as a conflict inside `MIGRATION.PLANNING_FAILED`. `migration new` on SQLite raises it directly when either side carries a namespace qualifier, since SQLite has no namespaces; nothing is written. Check the spelling and the schema qualifier, or drop the flag if the table was not renamed. Payload: `from`, `to`.
+A `--rename-table <from>=<to>` intent given to `migration plan` does not match the two contracts being planned: `from` does not exist in the previous contract (or, unqualified, exists in more than one namespace), `to` already exists in the previous contract, `to` does not exist in the next contract, the two sides name different namespaces, or an earlier intent on the same command already resolved to the same old table or the same new table. Nothing is planned; reported as a conflict inside `MIGRATION.PLANNING_FAILED`. `migration new` on SQLite raises it directly when either side carries a namespace qualifier, since SQLite has no namespaces; nothing is written. Check the spelling and the schema qualifier, or drop the flag if the table was not renamed. Payload: `from`, `to`.
 
 ### MIGRATION.TARGET_MISMATCH
 
