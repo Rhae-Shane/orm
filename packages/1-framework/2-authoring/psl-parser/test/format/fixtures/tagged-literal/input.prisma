@@ -6,6 +6,8 @@ model Token {
       SELECT   1
         FROM   t   -- keep   this   spacing
   `)
+  spaced  DateTime @default(sql   `x`)
+  dotted  String   @default(pg . sql "y")
   after   Int      @default(0)
   z       Boolean?
 }

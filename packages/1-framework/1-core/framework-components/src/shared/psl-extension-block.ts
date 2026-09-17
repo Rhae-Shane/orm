@@ -71,16 +71,15 @@ export type PslDiagnosticCode =
    */
   | 'PSL_INVALID_OBJECT_LITERAL'
   /**
-   * A string literal with no closing quote — the tokenizer stops the literal at
-   * a newline or at EOF when no terminating `"` is found, and the
-   * recursive-descent parser still consumes the token (preserving the lossless
-   * round-trip) but reports this code anchored on the string token's span.
+   * A string literal with no closing quote — the tokenizer stops a `"` or `'`
+   * literal at a newline or at EOF, and a backtick literal before the next line
+   * that opens with `}` or at EOF. The recursive-descent parser still consumes
+   * the token (preserving the lossless round-trip) but reports this code
+   * anchored on the string token's span.
    */
   | 'PSL_UNTERMINATED_STRING'
-  /** A backtick-fenced template literal with no closing backtick; anchored on the opening backtick. */
-  | 'PSL_UNTERMINATED_TEMPLATE_LITERAL'
-  /** Whitespace, a newline, or a comment separates a tagged literal's tag from its fence. */
-  | 'PSL_TAGGED_LITERAL_FENCE_EXPECTED'
+  /** A backtick string that is not the string literal of a tagged literal; anchored on the string. */
+  | 'PSL_BACKTICK_STRING_REQUIRES_TAG'
   /** A `@default` tagged literal whose tag no pack in the stack registered. */
   | 'PSL_UNKNOWN_DEFAULT_LITERAL_TAG'
   /** A tagged literal body contains a NUL character. */

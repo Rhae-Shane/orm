@@ -559,25 +559,21 @@ A `@default` value the source cannot read: an unknown function, an enum member o
 
 A `view` block; Prisma 8 has no views. Remove the view, or replace it with a model over the underlying table. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
-### PSL_UNTERMINATED_TEMPLATE_LITERAL
+### PSL_BACKTICK_STRING_REQUIRES_TAG
 
-A backtick-fenced template literal has no closing backtick: `Unterminated template literal`. The tokenizer turns the rest of the source into one invalid token and the parser reports this code at the opening backtick, whether or not a tag precedes it. Close the fence with a backtick; a backtick inside the body is written `` \` ``.
-
-### PSL_TAGGED_LITERAL_FENCE_EXPECTED
-
-Whitespace, a newline, or a comment sits between a tagged literal's tag and its fence: `Expected the literal fence to follow the tag "<tag>" directly`. Reported at the last tag segment; the literal is still read so the rest of the line parses. Write `` sql`...` `` or `sql"..."` with nothing between the tag and the fence.
+A backtick string appears somewhere other than after a tag, for example `` @map(`x`) `` or `` provider = `x` ``: `` A backtick string must follow a tag, as in tag`...`. `` Reported at the string. Write a `"` or `'` string there, or put the tag in front of it, as in `` @default(sql`...`) ``.
 
 ### PSL_UNKNOWN_DEFAULT_LITERAL_TAG
 
-A `@default` tagged literal uses a tag no pack in the stack registered: `Unknown literal tag "<tag>". Known tags: <tags in registration order>.` Every SQL target registers `sql`; Postgres also registers `pg.sql` and SQLite `sqlite.sql`. Reported at the literal.
+A `@default` tagged literal uses a tag no pack in the stack registered: `Unknown literal tag "<tag>". Known tags: <tags in registration order>.` Every SQL target registers `sql`; Postgres also registers `pg.sql` and SQLite `sqlite.sql`. Reported at the literal when the default is lowered.
 
 ### PSL_TAGGED_LITERAL_NUL
 
-A tagged literal's body contains a NUL character: `Tagged literals must not contain NUL characters.` Reported at the literal.
+A tagged literal's body contains a NUL character: `Tagged literals must not contain NUL characters.` Reported at the literal when the default is lowered.
 
 ### PSL_TAGGED_LITERAL_TOO_LARGE
 
-A tagged literal's canonical body is larger than 65536 UTF-8 bytes: `Tagged literal exceeds 65536 bytes.` Reported at the literal.
+A tagged literal's canonical body is larger than 65536 UTF-8 bytes: `Tagged literal exceeds 65536 bytes.` Reported at the literal when the default is lowered.
 
 ### PSL_LIST_AUTOINCREMENT_UNSUPPORTED
 

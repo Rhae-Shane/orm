@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { parse } from '../src/parse';
 import type { FieldAttributeAst } from '../src/syntax/ast/attributes';
 import { FieldDeclarationAst, ModelDeclarationAst } from '../src/syntax/ast/declarations';
-import { TaggedLiteralExprAst } from '../src/syntax/ast/expressions';
+import { StringLiteralExprAst, TaggedLiteralExprAst } from '../src/syntax/ast/expressions';
 import { IdentifierAst } from '../src/syntax/ast/identifier';
 import { printSyntax } from '../src/syntax/ast-helpers';
 import { highlight, printTree } from './support';
@@ -32,26 +32,36 @@ function taggedDefault(argument: string) {
   return { result, literal };
 }
 
+function stringDefault(argument: string) {
+  const { result, value } = firstDefaultArg(`model T {\n  id String @default(${argument})\n}\n`);
+  const literal = value ? StringLiteralExprAst.cast(value.syntax) : undefined;
+  if (!literal) throw new Error(`expected a string literal, got ${value?.syntax.kind}`);
+  return { result, literal };
+}
+
 describe('TaggedLiteral parsing', () => {
-  it('reads a backtick fence on one line', () => {
+  it('reads a tag followed by a backtick string', () => {
     const { result, literal } = taggedDefault('sql`gen_random_uuid()`');
     expect(result.diagnostics).toEqual([]);
-    expect(literal.tag()).toBe('sql');
-    expect(literal.fence()).toBe('backtick');
-    expect(literal.rawBody()).toBe('gen_random_uuid()');
+    expect(literal.tagName()).toBe('sql');
+    expect(literal.tag()?.path()).toEqual(['sql']);
+    expect(literal.literal()?.quote()).toBe('`');
+    expect(literal.literal()?.value()).toBe('gen_random_uuid()');
     expect(literal.body()).toBe('gen_random_uuid()');
   });
 
-  it('pins the tree shape', () => {
+  it('is a qualified name followed by a string literal expression', () => {
     const { literal } = taggedDefault('pg.sql`now()`');
     expect(printTree(literal.syntax.green)).toMatchInlineSnapshot(`
       "TaggedLiteral
-        Identifier
-          Ident "pg"
-        Dot "."
-        Identifier
-          Ident "sql"
-        TemplateLiteral "\`now()\`""
+        QualifiedName
+          Identifier
+            Ident "pg"
+          Dot "."
+          Identifier
+            Ident "sql"
+        StringLiteralExpr
+          StringLiteral "\`now()\`""
     `);
   });
 
@@ -60,24 +70,8 @@ describe('TaggedLiteral parsing', () => {
       "sql`\n    (now()\n      + '00:03:00'::interval)\n  `",
     );
     expect(result.diagnostics).toEqual([]);
-    expect(literal.rawBody()).toBe("\n    (now()\n      + '00:03:00'::interval)\n  ");
+    expect(literal.literal()?.value()).toBe("\n    (now()\n      + '00:03:00'::interval)\n  ");
     expect(literal.body()).toBe("(now()\n  + '00:03:00'::interval)");
-  });
-
-  it('resolves an escaped backtick', () => {
-    const { literal } = taggedDefault('sql`a\\`b`');
-    expect(literal.rawBody()).toBe('a\\`b');
-    expect(literal.body()).toBe('a`b');
-  });
-
-  it('resolves a double backslash to one backslash', () => {
-    const { literal } = taggedDefault('sql`a\\\\b`');
-    expect(literal.body()).toBe('a\\b');
-  });
-
-  it('keeps a backslash before a dollar sign as written', () => {
-    const { literal } = taggedDefault('sql`\\$1`');
-    expect(literal.body()).toBe('\\$1');
   });
 
   it('passes a body containing a dollar-brace sequence through verbatim', () => {
@@ -86,18 +80,48 @@ describe('TaggedLiteral parsing', () => {
     expect(literal.body()).toBe('a $' + '{x} b');
   });
 
-  it('reads a single-quoted fence as a quote fence with the same body as the double-quoted one', () => {
-    const single = taggedDefault("sql'now()'");
-    expect(single.result.diagnostics).toEqual([]);
-    expect(single.literal.fence()).toBe('quote');
-    expect(single.literal.body()).toBe(taggedDefault('sql"now()"').literal.body());
+  it.each([
+    ['whitespace', 'sql `x`'],
+    ['a newline', 'sql\n`x`'],
+    ['a comment', 'sql // raw\n`x`'],
+    ['whitespace inside the qualified name', 'pg . sql"x"'],
+  ])('allows %s between the tag and the string', (_name, argument) => {
+    const source = `model T {\n  id String @default(${argument})\n}\n`;
+    const { result, literal } = taggedDefault(argument);
+    expect(result.diagnostics).toEqual([]);
+    expect(literal.body()).toBe('x');
+    expect(printSyntax(result.document.syntax)).toBe(source);
   });
 
-  it('resumes at the closing brace after an unterminated fence, so the next model still parses', () => {
+  it('reads a tag followed by a double- or single-quoted string with the same body', () => {
+    const double = taggedDefault('sql"now()"');
+    const single = taggedDefault("sql'now()'");
+    expect([double.result.diagnostics, single.result.diagnostics]).toEqual([[], []]);
+    expect([double.literal.literal()?.quote(), single.literal.literal()?.quote()]).toEqual([
+      '"',
+      "'",
+    ]);
+    expect(single.literal.body()).toBe('now()');
+    expect(double.literal.body()).toBe('now()');
+  });
+
+  it('resolves double-quoted string escapes in the body', () => {
+    const { result, literal } = taggedDefault('sql"a\\"b `c`"');
+    expect(result.diagnostics).toEqual([]);
+    expect(literal.body()).toBe('a"b `c`');
+  });
+
+  it('gives the same body for a backtick and a double-quoted string', () => {
+    expect(taggedDefault('sql`gen_random_uuid()`').literal.body()).toBe(
+      taggedDefault('sql"gen_random_uuid()"').literal.body(),
+    );
+  });
+
+  it('resumes at the closing brace after an unterminated backtick string, so the next model still parses', () => {
     const source =
       'model A {\n  id String @default(sql`abc\n  more\n}\n\nmodel B {\n  id Int @id\n}\n';
     const result = parse(source);
-    expect(result.diagnostics.map((d) => d.code)).toEqual(['PSL_UNTERMINATED_TEMPLATE_LITERAL']);
+    expect(result.diagnostics.map((d) => d.code)).toEqual(['PSL_UNTERMINATED_STRING']);
     const models = [...result.document.declarations()].map((d) =>
       ModelDeclarationAst.cast(d.syntax)?.name()?.name(),
     );
@@ -108,100 +132,29 @@ describe('TaggedLiteral parsing', () => {
   it('swallows to the end of the input when no line starts with a closing brace', () => {
     const source = 'model A {\n  id String @default(sql`abc\n  more\n';
     const result = parse(source);
-    expect(result.diagnostics.map((d) => d.code)).toContain('PSL_UNTERMINATED_TEMPLATE_LITERAL');
+    expect(result.diagnostics.map((d) => d.code)).toContain('PSL_UNTERMINATED_STRING');
     expect(printSyntax(result.document.syntax)).toBe(source);
   });
 
-  it('keeps every other backslash sequence as written', () => {
-    const { literal } = taggedDefault("sql`E'\\n'`");
-    expect(literal.body()).toBe("E'\\n'");
-  });
-
-  it('reports an unterminated template literal at the opening backtick', () => {
+  it('reports an unterminated backtick string as PSL_UNTERMINATED_STRING at the string', () => {
     const source = 'model T {\n  id String @default(sql`abc\n}\n';
     const result = parse(source);
-    const diagnostic = result.diagnostics.find(
-      (d) => d.code === 'PSL_UNTERMINATED_TEMPLATE_LITERAL',
-    );
-    expect(diagnostic?.message).toBe('Unterminated template literal');
-    expect(highlight(result.sourceFile, diagnostic!.range)).toMatchInlineSnapshot(`
-      "
-      model T {
-        id String @default(sql\`abc
-                              ~
-      }
-
-      "
-    `);
-    expect(printSyntax(result.document.syntax)).toBe(source);
-  });
-
-  it('joins a dotted tag', () => {
-    const { result, literal } = taggedDefault('a.b.c`x`');
-    expect(result.diagnostics).toEqual([]);
-    expect(literal.tag()).toBe('a.b.c');
-  });
-
-  it('reports whitespace between the tag and the fence at the identifier', () => {
-    const source = 'model T {\n  id String @default(sql `x`)\n}\n';
-    const result = parse(source);
-    expect(result.diagnostics.map((d) => d.code)).toEqual(['PSL_TAGGED_LITERAL_FENCE_EXPECTED']);
-    expect(result.diagnostics[0]?.message).toBe(
-      'Expected the literal fence to follow the tag "sql" directly',
-    );
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]).toMatchObject({
+      code: 'PSL_UNTERMINATED_STRING',
+      message: 'Unterminated string literal',
+    });
     expect(highlight(result.sourceFile, result.diagnostics[0]!.range)).toMatchInlineSnapshot(`
       "
       model T {
-        id String @default(sql \`x\`)
-                           ~~~
+        id String @default(sql\`abc
+                              ~~~~
       }
+      ~
 
       "
     `);
     expect(printSyntax(result.document.syntax)).toBe(source);
-  });
-
-  it('reports a newline between the tag and the fence', () => {
-    const result = parse('model T {\n  id String @default(sql\n`x`)\n}\n');
-    expect(result.diagnostics.map((d) => d.code)).toEqual(['PSL_TAGGED_LITERAL_FENCE_EXPECTED']);
-  });
-
-  it('reads a quote fence with string escapes resolved', () => {
-    const { result, literal } = taggedDefault('sql"a\\"b `c`"');
-    expect(result.diagnostics).toEqual([]);
-    expect(literal.fence()).toBe('quote');
-    expect(literal.rawBody()).toBe('a\\"b `c`');
-    expect(literal.body()).toBe('a"b `c`');
-  });
-
-  it('gives the same body for both fences', () => {
-    expect(taggedDefault('sql`gen_random_uuid()`').literal.body()).toBe(
-      taggedDefault('sql"gen_random_uuid()"').literal.body(),
-    );
-  });
-
-  it('reports a bare unterminated backtick with no tag at the opening backtick', () => {
-    const source = 'model T {\n  id String @default(`abc\n}\n';
-    const result = parse(source);
-    const diagnostic = result.diagnostics.find(
-      (d) => d.code === 'PSL_UNTERMINATED_TEMPLATE_LITERAL',
-    );
-    expect(diagnostic?.message).toBe('Unterminated template literal');
-    expect(highlight(result.sourceFile, diagnostic!.range)).toMatchInlineSnapshot(`
-      "
-      model T {
-        id String @default(\`abc
-                           ~
-      }
-
-      "
-    `);
-    expect(printSyntax(result.document.syntax)).toBe(source);
-  });
-
-  it('reports an unterminated backtick at the top level', () => {
-    const result = parse('`oops');
-    expect(result.diagnostics.map((d) => d.code)).toContain('PSL_UNTERMINATED_TEMPLATE_LITERAL');
   });
 
   it('round-trips the source through printSyntax', () => {
@@ -232,5 +185,86 @@ describe('TaggedLiteral parsing', () => {
     const model = ModelDeclarationAst.cast([...result.document.declarations()][0]!.syntax);
     const field = [...model!.fields()][0];
     expect(field).toBeInstanceOf(FieldDeclarationAst);
+  });
+});
+
+describe('string literal quote styles', () => {
+  it.each([
+    ['"a"', '"'],
+    ["'a'", "'"],
+    ['sql`a`', '`'],
+  ])('reports the quote of %s', (argument, quote) => {
+    const literal = argument.startsWith('sql')
+      ? taggedDefault(argument).literal.literal()
+      : stringDefault(argument).literal;
+    expect(literal?.quote()).toBe(quote);
+  });
+
+  it.each([
+    ['resolves an escaped backtick', 'sql`a\\`b`', 'a`b'],
+    ['resolves a double backslash to one backslash', 'sql`a\\\\b`', 'a\\b'],
+    ['keeps a backslash before a dollar sign as written', 'sql`\\$1`', '\\$1'],
+    ['keeps every other backslash sequence as written', "sql`E'\\n'`", "E'\\n'"],
+    ['keeps an escaped double quote as written', 'sql`a\\"b`', 'a\\"b'],
+  ])('a backtick string %s', (_name, argument, value) => {
+    expect(taggedDefault(argument).literal.literal()?.value()).toBe(value);
+  });
+
+  it('keeps the double-quoted escapes', () => {
+    expect(stringDefault('"a\\nb\\"c\\u0041"').literal.value()).toBe('a\nb"cA');
+  });
+});
+
+describe('a backtick string with no tag', () => {
+  const requiresTag = {
+    code: 'PSL_BACKTICK_STRING_REQUIRES_TAG',
+    message: 'A backtick string must follow a tag, as in tag`...`.',
+  };
+
+  it('is reported at the string when it is an attribute argument', () => {
+    const source = 'model T {\n  id String @map(`x`)\n}\n';
+    const result = parse(source);
+    expect(result.diagnostics).toEqual([expect.objectContaining(requiresTag)]);
+    expect(highlight(result.sourceFile, result.diagnostics[0]!.range)).toMatchInlineSnapshot(`
+      "
+      model T {
+        id String @map(\`x\`)
+                       ~~~
+      }
+
+      "
+    `);
+    expect(printSyntax(result.document.syntax)).toBe(source);
+  });
+
+  it('is reported at the string when it is a key-value value', () => {
+    const source = 'generator g {\n  provider = `x`\n}\n';
+    const result = parse(source);
+    expect(result.diagnostics).toEqual([expect.objectContaining(requiresTag)]);
+    expect(highlight(result.sourceFile, result.diagnostics[0]!.range)).toMatchInlineSnapshot(`
+      "
+      generator g {
+        provider = \`x\`
+                   ~~~
+      }
+
+      "
+    `);
+  });
+
+  it('is reported alongside PSL_UNTERMINATED_STRING when it is also unterminated', () => {
+    const source = 'model T {\n  id String @default(`abc\n}\n';
+    const result = parse(source);
+    expect(result.diagnostics.map((d) => d.code).sort()).toEqual([
+      'PSL_BACKTICK_STRING_REQUIRES_TAG',
+      'PSL_UNTERMINATED_STRING',
+    ]);
+    expect(printSyntax(result.document.syntax)).toBe(source);
+  });
+
+  it('at the top level is reported like a double-quoted string there', () => {
+    expect(parse('`oops').diagnostics.map((d) => d.code)).toEqual(
+      parse('"oops').diagnostics.map((d) => d.code),
+    );
   });
 });

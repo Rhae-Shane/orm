@@ -12,7 +12,6 @@ import {
   TypesBlockAst,
 } from '../syntax/ast/declarations';
 import { type SyntaxElement, SyntaxNode, type SyntaxToken } from '../syntax/red';
-import type { SyntaxKind } from '../syntax/syntax-kind';
 import type { TokenKind } from '../tokenizer';
 
 export function emitDocument(document: DocumentAst, indentUnit: string, newline: string): string {
@@ -104,11 +103,6 @@ class LineWriter {
   }
 }
 
-/** Nodes whose tokens are written with no space between them: dotted names and `` tag`body` ``. */
-function hugsTokens(kind: SyntaxKind): boolean {
-  return kind === 'QualifiedName' || kind === 'TaggedLiteral';
-}
-
 // Qualified-name separators hug; argument/object colons keep the usual value space.
 function spaceBetween(
   prev: TokenKind | undefined,
@@ -117,6 +111,8 @@ function spaceBetween(
 ): boolean {
   if (prev === undefined) return false;
   if (inQualifiedName) return false;
+  // Only a tagged literal puts a string directly after an identifier, and its tag and string hug.
+  if (prev === 'Ident' && cur === 'StringLiteral') return false;
 
   switch (cur) {
     case 'LParen':
@@ -153,7 +149,7 @@ function streamNode(writer: LineWriter, node: SyntaxNode, padTo?: number): numbe
   const walk = (parent: SyntaxNode, qualified: boolean): void => {
     for (const child of parent.children()) {
       if (child instanceof SyntaxNode) {
-        walk(child, qualified || hugsTokens(child.kind));
+        walk(child, qualified || child.kind === 'QualifiedName');
         continue;
       }
       if (child.kind === 'Whitespace' || child.kind === 'Newline') continue;
@@ -628,7 +624,7 @@ function renderTokens(node: SyntaxNode | undefined): string {
   const walk = (parent: SyntaxNode, qualified: boolean): void => {
     for (const child of parent.children()) {
       if (child instanceof SyntaxNode) {
-        walk(child, qualified || hugsTokens(child.kind));
+        walk(child, qualified || child.kind === 'QualifiedName');
         continue;
       }
       if (child.kind === 'Whitespace' || child.kind === 'Newline' || child.kind === 'Comment') {

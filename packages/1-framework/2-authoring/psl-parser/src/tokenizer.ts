@@ -1,7 +1,6 @@
 export type TokenKind =
   | 'Ident'
   | 'StringLiteral'
-  | 'TemplateLiteral'
   | 'NumberLiteral'
   | 'At'
   | 'DoubleAt'
@@ -91,7 +90,6 @@ function scan(source: string, pos: number): Token {
     scanIdent(source, pos) ??
     scanNumber(source, pos) ??
     scanString(source, pos) ??
-    scanTemplateLiteral(source, pos) ??
     scanPunctuation(source, pos) ?? {
       kind: 'Invalid' as const,
       text: readChar(source, pos),
@@ -189,9 +187,21 @@ function scanNumber(source: string, pos: number): Token | undefined {
   return { kind: 'NumberLiteral', text: source.slice(pos, end) };
 }
 
+const QUOTES: ReadonlySet<string> = new Set(['"', "'", '`']);
+
+/**
+ * A string in any of the three quote styles. A backslash escapes the next
+ * character, so it never closes the string. A `"` or `'` string ends at the
+ * end of its line when unterminated. A backtick string may span lines; when
+ * unterminated it ends before the first later line whose first non-blank
+ * character is `}`, so the parser resumes at the block's closing brace, or at
+ * the end of the input. That recovery only applies when no later backtick
+ * exists: a later backtick closes the string first.
+ */
 function scanString(source: string, pos: number): Token | undefined {
   const quote = source.charAt(pos);
-  if (quote !== '"' && quote !== "'") return undefined;
+  if (!QUOTES.has(quote)) return undefined;
+  const multiline = quote === '`';
   let end = pos + 1;
   while (end < source.length) {
     const c = source.charAt(end);
@@ -203,42 +213,16 @@ function scanString(source: string, pos: number): Token | undefined {
       end++;
       return { kind: 'StringLiteral', text: source.slice(pos, end) };
     }
-    if (c === '\n' || c === '\r') {
-      // Unterminated string: stop before the newline.
+    if (!multiline && (c === '\n' || c === '\r')) {
       return { kind: 'StringLiteral', text: source.slice(pos, end) };
     }
     end++;
   }
-  return { kind: 'StringLiteral', text: source.slice(pos, end) };
+  const unterminatedEnd = multiline ? unterminatedBacktickStringEnd(source, pos + 1) : end;
+  return { kind: 'StringLiteral', text: source.slice(pos, unterminatedEnd) };
 }
 
-/**
- * A backtick fence may span lines. A backtick preceded by an odd number of
- * backslashes is escaped and does not close it. With no closing backtick the
- * text becomes one `Invalid` token, which the parser reports; it ends before
- * the first later line whose first non-blank character is `}`, so the parser
- * resumes at the block's closing brace, or at the end of the input. That
- * recovery only happens when no later backtick exists: a later backtick,
- * such as the opening fence of another tagged literal, closes the fence first.
- */
-function scanTemplateLiteral(source: string, pos: number): Token | undefined {
-  if (source.charAt(pos) !== '`') return undefined;
-  let end = pos + 1;
-  while (end < source.length) {
-    const c = source.charAt(end);
-    if (c === '\\' && end + 1 < source.length) {
-      end += 2;
-      continue;
-    }
-    if (c === '`') {
-      return { kind: 'TemplateLiteral', text: source.slice(pos, end + 1) };
-    }
-    end++;
-  }
-  return { kind: 'Invalid', text: source.slice(pos, unterminatedFenceEnd(source, pos + 1)) };
-}
-
-function unterminatedFenceEnd(source: string, from: number): number {
+function unterminatedBacktickStringEnd(source: string, from: number): number {
   let lineStart = source.indexOf('\n', from);
   while (lineStart !== -1) {
     lineStart++;
@@ -269,7 +253,7 @@ function unterminatedFenceEnd(source: string, from: number): number {
  */
 export function isTerminatedStringLiteral(text: string): boolean {
   const quote = text.charAt(0);
-  if (quote !== '"' && quote !== "'") return false;
+  if (!QUOTES.has(quote)) return false;
   if (text.length < 2 || text.charAt(text.length - 1) !== quote) {
     return false;
   }

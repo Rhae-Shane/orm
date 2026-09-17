@@ -245,11 +245,11 @@ describe('Tokenizer', () => {
   });
 });
 
-describe('template literals', () => {
-  it('scans a single-line backtick fence as one token, fences included', () => {
+describe('backtick strings', () => {
+  it('scans a backtick string as a StringLiteral token, quotes included', () => {
     expect(tokenize('sql`gen_random_uuid()`')).toMatchInlineSnapshot(`
       "Ident          "sql"
-      TemplateLiteral"\`gen_random_uuid()\`"
+      StringLiteral  "\`gen_random_uuid()\`"
       Eof            """
     `);
   });
@@ -259,48 +259,41 @@ describe('template literals', () => {
     assertLossless(source);
     expect(tokenize(source)).toMatchInlineSnapshot(`
       "Ident          "sql"
-      TemplateLiteral"\`\\n  now()\\n\`"
+      StringLiteral  "\`\\n  now()\\n\`"
       Eof            """
     `);
   });
 
-  it('treats a backslash-escaped backtick as part of the body', () => {
+  it('treats a backslash-escaped backtick as part of the string', () => {
     expect(tokenize('`a\\`b`')).toMatchInlineSnapshot(`
-      "TemplateLiteral"\`a\\\\\`b\`"
+      "StringLiteral  "\`a\\\\\`b\`"
       Eof            """
     `);
   });
 
   it('lets an escaped backslash precede the closing backtick', () => {
     expect(tokenize('`a\\\\` x')).toMatchInlineSnapshot(`
-      "TemplateLiteral"\`a\\\\\\\\\`"
+      "StringLiteral  "\`a\\\\\\\\\`"
       Whitespace     " "
       Ident          "x"
       Eof            """
     `);
   });
 
-  it('keeps a dollar escape inside the body', () => {
-    expect(tokenize('`\\$' + '{x}`')).toMatchInlineSnapshot(`
-      "TemplateLiteral"\`\\\\\${x}\`"
-      Eof            """
-    `);
-  });
-
-  it('makes an unterminated template literal an Invalid token for the rest of the source', () => {
+  it('keeps an unterminated backtick string to the end of the source', () => {
     const source = '`abc\n  more\n';
     assertLossless(source);
     expect(tokenize(source)).toMatchInlineSnapshot(`
-      "Invalid        "\`abc\\n  more\\n"
+      "StringLiteral  "\`abc\\n  more\\n"
       Eof            """
     `);
   });
 
-  it('ends an unterminated template literal before the first line that opens with a closing brace', () => {
+  it('ends an unterminated backtick string before the first line that opens with a closing brace', () => {
     const source = '`abc\n  more\n  }\nnext';
     assertLossless(source);
     expect(collectAll(source).map((t) => t.kind)).toEqual([
-      'Invalid',
+      'StringLiteral',
       'Whitespace',
       'RBrace',
       'Newline',
@@ -310,8 +303,18 @@ describe('template literals', () => {
     expect(collectAll(source)[0]?.text).toBe('`abc\n  more\n');
   });
 
-  it('is lossless with a dotted tag and a quote fence beside it', () => {
-    assertLossless('pg.sql`a` sql"b"');
+  it('still ends an unterminated double- or single-quoted string at the newline', () => {
+    expect(collectAll('"abc\n}').map((t) => t.kind)).toEqual([
+      'StringLiteral',
+      'Newline',
+      'RBrace',
+      'Eof',
+    ]);
+    expect(collectAll("'abc\n}")[0]?.text).toBe("'abc");
+  });
+
+  it('is lossless with a dotted tag, whitespace before the string, and a double-quoted string', () => {
+    assertLossless('pg.sql `a` sql"b"');
   });
 });
 
@@ -334,5 +337,18 @@ describe('isTerminatedStringLiteral', () => {
 
   it('treats a real closing quote after an escaped quote as terminated', () => {
     expect(isTerminatedStringLiteral('"a\\""')).toBe(true);
+  });
+
+  it.each([
+    ["'ok'", true],
+    ['`ok`', true],
+    ['``', true],
+    ['`a\\\\`', true],
+    ['`', false],
+    ['`oops', false],
+    ['`a\\`', false],
+    ['"ok\'', false],
+  ])('reads %s as terminated: %s', (text, terminated) => {
+    expect(isTerminatedStringLiteral(text)).toBe(terminated);
   });
 });

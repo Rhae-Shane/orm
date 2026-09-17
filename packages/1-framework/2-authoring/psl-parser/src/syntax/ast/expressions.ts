@@ -154,6 +154,8 @@ function decodeStringLiteral(raw: string): string {
   return out;
 }
 
+export type StringLiteralQuote = '"' | "'" | '`';
+
 export class StringLiteralExprAst implements AstNode {
   readonly syntax: SyntaxNode;
 
@@ -165,10 +167,20 @@ export class StringLiteralExprAst implements AstNode {
     return findChildToken(this.syntax, 'StringLiteral');
   }
 
+  quote(): StringLiteralQuote | undefined {
+    const quote = this.token()?.text.charAt(0);
+    return quote === '"' || quote === "'" || quote === '`' ? quote : undefined;
+  }
+
+  /**
+   * The decoded string. A `"` or `'` string resolves the usual escapes; a backtick string resolves
+   * only `` \` `` and `\\`, keeping every other backslash sequence as written.
+   */
   value(): string | undefined {
     const tok = this.token();
     if (!tok) return undefined;
-    return decodeStringLiteral(tok.text.slice(1, -1));
+    const raw = isTerminatedStringLiteral(tok.text) ? tok.text.slice(1, -1) : tok.text.slice(1);
+    return this.quote() === '`' ? resolveBacktickEscapes(raw) : decodeStringLiteral(raw);
   }
 
   static cast(node: SyntaxNode): StringLiteralExprAst | undefined {
@@ -176,18 +188,7 @@ export class StringLiteralExprAst implements AstNode {
   }
 }
 
-export type TaggedLiteralFence = 'backtick' | 'quote';
-
-function isTerminatedFence(text: string): boolean {
-  if (text.startsWith('`')) return text.length >= 2 && text.endsWith('`');
-  return isTerminatedStringLiteral(text);
-}
-
-/**
- * `` tag`body` `` or `tag"body"`. The tag is one or more identifiers joined by
- * dots; the fence token holds the body with its fences. `body()` is the
- * canonical text shared with the TypeScript `sql` tag.
- */
+/** `` tag`body` ``, `tag"body"`, or `tag'body'`: a qualified-name tag followed by a string literal. */
 export class TaggedLiteralExprAst implements AstNode {
   readonly syntax: SyntaxNode;
 
@@ -195,48 +196,29 @@ export class TaggedLiteralExprAst implements AstNode {
     this.syntax = syntax;
   }
 
-  *segments(): Iterable<IdentifierAst> {
-    yield* filterChildren(this.syntax, IdentifierAst.cast);
+  tag(): QualifiedNameAst | undefined {
+    return findFirstChild(this.syntax, QualifiedNameAst.cast);
   }
 
-  tag(): string {
-    const names: string[] = [];
-    for (const segment of this.segments()) {
-      const name = segment.name();
-      if (name !== undefined) names.push(name);
-    }
-    return names.join('.');
+  /** The tag without trivia, e.g. `pg.sql`. */
+  tagName(): string {
+    const tag = this.tag();
+    const space = tag?.space()?.name();
+    const namespace = tag?.namespace()?.name();
+    const spacePrefix = space === undefined ? '' : `${space}:`;
+    const namespacePrefix = namespace === undefined ? '' : `${namespace}.`;
+    return spacePrefix + namespacePrefix + (tag?.identifier()?.name() ?? '');
   }
 
-  fenceToken(): SyntaxToken | undefined {
-    for (const child of this.syntax.children()) {
-      if (child instanceof SyntaxNode) continue;
-      if (child.kind === 'TemplateLiteral' || child.kind === 'StringLiteral') return child;
-      if (child.kind === 'Invalid' && child.text.startsWith('`')) return child;
-    }
-    return undefined;
-  }
-
-  fence(): TaggedLiteralFence | undefined {
-    const text = this.fenceToken()?.text;
-    if (text === undefined) return undefined;
-    return text.startsWith('`') ? 'backtick' : 'quote';
-  }
-
-  /** The text between the fences, escapes not yet resolved. */
-  rawBody(): string {
-    const text = this.fenceToken()?.text ?? '';
-    return isTerminatedFence(text) ? text.slice(1, -1) : text.slice(1);
+  literal(): StringLiteralExprAst | undefined {
+    return findFirstChild(this.syntax, StringLiteralExprAst.cast);
   }
 
   canonicalization(): TaggedLiteralCanonicalization {
-    const raw = this.rawBody();
-    const resolved =
-      this.fence() === 'quote' ? decodeStringLiteral(raw) : resolveBacktickEscapes(raw);
-    return canonicalizeTaggedLiteralBody(resolved);
+    return canonicalizeTaggedLiteralBody(this.literal()?.value() ?? '');
   }
 
-  /** The canonical body, or `undefined` when canonicalization fails. */
+  /** The canonical body shared with the TypeScript `sql` tag, or `undefined` when canonicalization fails. */
   body(): string | undefined {
     const result = this.canonicalization();
     return result.ok ? result.body : undefined;

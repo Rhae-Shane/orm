@@ -25,7 +25,7 @@ export function describeTaggedLiteralFailure(reason: 'nul' | 'too-large'): strin
 const BACKTICK_ESCAPES: ReadonlySet<string> = new Set(['`', '\\']);
 
 /**
- * Resolves the escapes a backtick fence understands, in PSL and in the TypeScript `sql` tag's raw
+ * Resolves the escapes a backtick string understands, in PSL and in the TypeScript `sql` tag's raw
  * text: `` \` `` is a backtick and `\\` one backslash. Every other backslash sequence is kept as
  * written, both characters, so a SQL body may contain `E'\n'` unchanged.
  */

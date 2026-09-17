@@ -113,29 +113,6 @@ export class Cursor {
   }
 
   /**
-   * Whether the significant token `ahead` positions on directly follows the
-   * previous significant token, with no trivia between them.
-   */
-  isAdjacent(ahead: number): boolean {
-    let rawIndex = 0;
-    let remaining = ahead;
-    let triviaSincePrevious = false;
-    for (;;) {
-      const token = this.#tokenizer.peek(rawIndex);
-      if (token.kind === 'Eof') return false;
-      if (TRIVIA_KINDS.has(token.kind)) {
-        triviaSincePrevious = true;
-      } else if (remaining === 0) {
-        return !triviaSincePrevious;
-      } else {
-        remaining--;
-        triviaSincePrevious = false;
-      }
-      rawIndex++;
-    }
-  }
-
-  /**
    * Zero-width mark just past the last consumed significant token — anchors an
    * "expected here" diagnostic, e.g. the `{` missing after a declaration's name.
    */
@@ -160,7 +137,8 @@ export class Cursor {
     this.flushTrivia();
     const token = this.#tokenizer.peek();
     if (token.kind === 'Eof') return token;
-    this.#consume(token);
+    this.#builder.token(token.kind, token.text);
+    this.#advance();
     return token;
   }
 
@@ -170,23 +148,9 @@ export class Cursor {
       if (token.kind === 'Eof' || token.kind === 'Newline' || token.kind === 'RBrace') {
         return;
       }
-      this.#consume(token);
+      this.#builder.token(token.kind, token.text);
+      this.#advance();
     }
-  }
-
-  /**
-   * An unterminated backtick fence is the one `Invalid` token the tokenizer
-   * describes precisely, so it is reported here, wherever it is consumed.
-   */
-  #consume(token: Token): void {
-    if (isOpeningBacktick(token)) {
-      this.diagnostic('PSL_UNTERMINATED_TEMPLATE_LITERAL', 'Unterminated template literal', {
-        offset: this.#offset,
-        length: 1,
-      });
-    }
-    this.#builder.token(token.kind, token.text);
-    this.#advance();
   }
 
   flushTrivia(): void {
@@ -239,8 +203,20 @@ export function parseExpression(cursor: Cursor): GreenNode | undefined {
   );
 }
 
+/** A string literal outside a tagged literal, where a backtick string is refused. */
 export function parseStringLiteralExpr(cursor: Cursor): GreenNode | undefined {
   if (cursor.peekKind() !== 'StringLiteral') return undefined;
+  if (cursor.peekToken().text.startsWith('`')) {
+    cursor.diagnostic(
+      'PSL_BACKTICK_STRING_REQUIRES_TAG',
+      'A backtick string must follow a tag, as in tag`...`.',
+      cursor.mark(),
+    );
+  }
+  return parseStringLiteral(cursor);
+}
+
+function parseStringLiteral(cursor: Cursor): GreenNode {
   const stringMark = cursor.mark();
   const text = cursor.peekToken().text;
   cursor.startNode('StringLiteralExpr');
@@ -304,62 +280,27 @@ function parseQualifiedSegments(cursor: Cursor, separator: 'Colon' | 'Dot'): voi
   }
 }
 
-function isOpeningBacktick(token: Token): boolean {
-  return token.kind === 'Invalid' && token.text.startsWith('`');
+/**
+ * Whether the next tokens open a tagged literal: a bare `Ident` or a
+ * namespace-qualified `Ident.Ident`, then a string. Trivia may sit anywhere
+ * between them. Bounded like {@link isCallAhead}.
+ */
+function isTaggedLiteralAhead(cursor: Cursor): boolean {
+  if (cursor.peekKind() !== 'Ident') return false;
+  if (cursor.peekKind(1) === 'StringLiteral') return true;
+  return (
+    cursor.peekKind(1) === 'Dot' &&
+    cursor.peekKind(2) === 'Ident' &&
+    cursor.peekKind(3) === 'StringLiteral'
+  );
 }
 
-/**
- * How many significant tokens the tag `Ident ('.' Ident)*` spans when a fence
- * follows it, else `undefined`. An unterminated backtick fence arrives as an
- * `Invalid` token and still counts, so the parser can report it.
- */
-function taggedLiteralFenceIndex(cursor: Cursor): number | undefined {
-  if (cursor.peekKind() !== 'Ident') return undefined;
-  let index = 1;
-  while (cursor.peekKind(index) === 'Dot' && cursor.peekKind(index + 1) === 'Ident') {
-    index += 2;
-  }
-  const fence = cursor.peekToken(index);
-  if (
-    fence.kind === 'TemplateLiteral' ||
-    fence.kind === 'StringLiteral' ||
-    isOpeningBacktick(fence)
-  ) {
-    return index;
-  }
-  return undefined;
-}
-
-/**
- * Parses `` tag`body` `` or `tag"body"`. Trivia between the tag and the fence is
- * consumed into the node and reported at the last tag segment, so the rest of
- * the line still parses.
- */
+/** Parses `` tag`body` ``, `tag"body"`, or `tag'body'`: a qualified name, then a string literal. */
 export function parseTaggedLiteral(cursor: Cursor): GreenNode | undefined {
-  const fenceIndex = taggedLiteralFenceIndex(cursor);
-  if (fenceIndex === undefined) return undefined;
-  const lastSegmentMark = cursor.mark(fenceIndex - 1);
-  const lastSegmentText = cursor.peekToken(fenceIndex - 1).text;
-  const adjacent = cursor.isAdjacent(fenceIndex);
-  const fenceMark = cursor.mark(fenceIndex);
-  const fence = cursor.peekToken(fenceIndex);
+  if (!isTaggedLiteralAhead(cursor)) return undefined;
   cursor.startNode('TaggedLiteral');
-  parseIdentifier(cursor);
-  while (cursor.peekKind() === 'Dot') {
-    cursor.bump();
-    parseIdentifier(cursor);
-  }
-  if (!adjacent) {
-    cursor.diagnostic(
-      'PSL_TAGGED_LITERAL_FENCE_EXPECTED',
-      `Expected the literal fence to follow the tag "${lastSegmentText}" directly`,
-      lastSegmentMark,
-    );
-  }
-  cursor.bump();
-  if (fence.kind === 'StringLiteral' && !isTerminatedStringLiteral(fence.text)) {
-    cursor.diagnostic('PSL_UNTERMINATED_STRING', 'Unterminated string literal', fenceMark);
-  }
+  parseQualifiedName(cursor);
+  parseStringLiteral(cursor);
   return cursor.finishNode();
 }
 

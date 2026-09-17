@@ -25,7 +25,7 @@ export {
   NamespaceDeclarationAst,
   TypesBlockAst,
 } from '../syntax/ast/declarations';
-export type { ExpressionAst, TaggedLiteralFence } from '../syntax/ast/expressions';
+export type { ExpressionAst, StringLiteralQuote } from '../syntax/ast/expressions';
 export {
   ArrayLiteralAst,
   AttributeArgAst,
