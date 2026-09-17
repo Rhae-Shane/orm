@@ -51,7 +51,7 @@ describe('renameTable (postgres)', () => {
     ]);
   });
 
-  it('prechecks that the old table exists and the new one does not, then postchecks the new one', async () => {
+  it('prechecks that the old table exists and the new one does not, then postchecks both', async () => {
     const { lowerer, received } = recordingCheckLowerer();
     const op = await renameTable('public', 'userProfile', 'UserProfile', lowerer);
 
@@ -59,6 +59,7 @@ describe('renameTable (postgres)', () => {
       tableExistsAst('public', 'userProfile').tablePresent(),
       tableExistsAst('public', 'UserProfile').tableAbsent(),
       tableExistsAst('public', 'UserProfile').tablePresent(),
+      tableExistsAst('public', 'userProfile').tableAbsent(),
     ]);
     expect(op.precheck).toEqual([
       { description: 'ensure table "userProfile" exists', sql: 'LOWERED 1', params: ['p1'] },
@@ -70,6 +71,11 @@ describe('renameTable (postgres)', () => {
     ]);
     expect(op.postcheck).toEqual([
       { description: 'verify table "UserProfile" exists', sql: 'LOWERED 3', params: ['p3'] },
+      {
+        description: 'verify table "userProfile" no longer exists',
+        sql: 'LOWERED 4',
+        params: ['p4'],
+      },
     ]);
   });
 });

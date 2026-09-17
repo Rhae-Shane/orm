@@ -31,19 +31,19 @@ export async function renameTable(
   lowerer: ExecuteRequestLowerer,
 ): Promise<Op> {
   const qualified = qualifyTableName(schemaName, fromName);
-  const from = await lowerer.lowerToExecuteRequest(
-    tableExistsAst(schemaName, fromName).tablePresent(),
-  );
+  const fromChecks = tableExistsAst(schemaName, fromName);
   const toChecks = tableExistsAst(schemaName, toName);
+  const fromPresent = await lowerer.lowerToExecuteRequest(fromChecks.tablePresent());
   const toAbsent = await lowerer.lowerToExecuteRequest(toChecks.tableAbsent());
   const toPresent = await lowerer.lowerToExecuteRequest(toChecks.tablePresent());
+  const fromAbsent = await lowerer.lowerToExecuteRequest(fromChecks.tableAbsent());
   return {
     id: `renameTable.${fromName}`,
     label: `Rename table "${fromName}" to "${toName}"`,
     operationClass: 'widening',
     target: targetDetails('table', toName, schemaName),
     precheck: [
-      step(`ensure table "${fromName}" exists`, from.sql, from.params),
+      step(`ensure table "${fromName}" exists`, fromPresent.sql, fromPresent.params),
       step(`ensure table "${toName}" does not exist`, toAbsent.sql, toAbsent.params),
     ],
     execute: [
@@ -52,6 +52,12 @@ export async function renameTable(
         `ALTER TABLE ${qualified} RENAME TO ${quoteIdentifier(toName)}`,
       ),
     ],
-    postcheck: [step(`verify table "${toName}" exists`, toPresent.sql, toPresent.params)],
+    // Both postchecks: the runner skips an operation whose postcheck already
+    // holds, and "the new table exists" alone would skip a rename that never
+    // happened when both tables exist.
+    postcheck: [
+      step(`verify table "${toName}" exists`, toPresent.sql, toPresent.params),
+      step(`verify table "${fromName}" no longer exists`, fromAbsent.sql, fromAbsent.params),
+    ],
   };
 }

@@ -289,12 +289,15 @@ export class RenameTableCall extends SqliteOpFactoryCallNode {
         { meta: { factory: this.factoryName, tableName: this.oldTableName } },
       );
     }
-    const from = await lowerer.lowerToExecuteRequest(
-      tableExistsAst(this.oldTableName).tablePresent(),
-    );
+    const fromChecks = tableExistsAst(this.oldTableName);
     const toChecks = tableExistsAst(this.tableName);
+    const fromPresent = await lowerer.lowerToExecuteRequest(fromChecks.tablePresent());
     const toAbsent = await lowerer.lowerToExecuteRequest(toChecks.tableAbsent());
+    const viaAbsent = this.caseOnly()
+      ? await lowerer.lowerToExecuteRequest(tableExistsAst(this.viaName()).tableAbsent())
+      : undefined;
     const toPresent = await lowerer.lowerToExecuteRequest(toChecks.tablePresent());
+    const fromAbsent = await lowerer.lowerToExecuteRequest(fromChecks.tableAbsent());
     return {
       id: `renameTable.${this.oldTableName}`,
       label: this.label,
@@ -302,11 +305,30 @@ export class RenameTableCall extends SqliteOpFactoryCallNode {
       operationClass: 'widening',
       target: { id: 'sqlite', details: buildTargetDetails('table', this.tableName) },
       precheck: [
-        step(`ensure table "${this.oldTableName}" exists`, from.sql, from.params),
+        step(`ensure table "${this.oldTableName}" exists`, fromPresent.sql, fromPresent.params),
         step(`ensure table "${this.tableName}" does not exist`, toAbsent.sql, toAbsent.params),
+        ...(viaAbsent === undefined
+          ? []
+          : [
+              step(
+                `ensure table "${this.viaName()}" does not exist (a rename that only changes case passes through this temporary name, because SQLite compares table names without case)`,
+                viaAbsent.sql,
+                viaAbsent.params,
+              ),
+            ]),
       ],
       execute: this.executeSteps(),
-      postcheck: [step(`verify table "${this.tableName}" exists`, toPresent.sql, toPresent.params)],
+      // Both postchecks: the runner skips an operation whose postcheck
+      // already holds, and "the new table exists" alone would skip a rename
+      // that never happened when both tables exist.
+      postcheck: [
+        step(`verify table "${this.tableName}" exists`, toPresent.sql, toPresent.params),
+        step(
+          `verify table "${this.oldTableName}" no longer exists`,
+          fromAbsent.sql,
+          fromAbsent.params,
+        ),
+      ],
     };
   }
 
@@ -315,10 +337,18 @@ export class RenameTableCall extends SqliteOpFactoryCallNode {
    * changes case (`userProfile` to `UserProfile`) is refused as "already
    * exists" when done in one statement. It goes through a temporary name.
    */
+  private caseOnly(): boolean {
+    return this.oldTableName.toLowerCase() === this.tableName.toLowerCase();
+  }
+
+  private viaName(): string {
+    return `_prisma_rename_${this.tableName}`;
+  }
+
   private executeSteps(): Op['execute'] {
     const from = quoteIdentifier(this.oldTableName);
     const to = quoteIdentifier(this.tableName);
-    if (this.oldTableName.toLowerCase() !== this.tableName.toLowerCase()) {
+    if (!this.caseOnly()) {
       return [
         step(
           `rename table "${this.oldTableName}" to "${this.tableName}"`,
@@ -326,7 +356,7 @@ export class RenameTableCall extends SqliteOpFactoryCallNode {
         ),
       ];
     }
-    const viaName = `_prisma_rename_${this.tableName}`;
+    const viaName = this.viaName();
     const via = quoteIdentifier(viaName);
     return [
       step(

@@ -39,6 +39,7 @@ describe('RenameTableCall (sqlite)', () => {
       tableExistsAst('profile').tablePresent(),
       tableExistsAst('account').tableAbsent(),
       tableExistsAst('account').tablePresent(),
+      tableExistsAst('profile').tableAbsent(),
     ]);
     expect(op).toEqual({
       id: 'renameTable.profile',
@@ -58,6 +59,11 @@ describe('RenameTableCall (sqlite)', () => {
       ],
       postcheck: [
         { description: 'verify table "account" exists', sql: 'LOWERED 3', params: ['p3'] },
+        {
+          description: 'verify table "profile" no longer exists',
+          sql: 'LOWERED 4',
+          params: ['p4'],
+        },
       ],
     });
   });
@@ -69,6 +75,33 @@ describe('RenameTableCall (sqlite)', () => {
     expect(op.execute.map((step) => step.sql)).toEqual([
       'ALTER TABLE "userProfile" RENAME TO "_prisma_rename_UserProfile"',
       'ALTER TABLE "_prisma_rename_UserProfile" RENAME TO "UserProfile"',
+    ]);
+  });
+
+  it('prechecks that the temporary name is free on a case-only rename, saying why it is needed', async () => {
+    const { lowerer, received } = recordingCheckLowerer();
+    const op = await new RenameTableCall('userProfile', 'UserProfile').toOp(lowerer);
+
+    expect(received).toEqual([
+      tableExistsAst('userProfile').tablePresent(),
+      tableExistsAst('UserProfile').tableAbsent(),
+      tableExistsAst('_prisma_rename_UserProfile').tableAbsent(),
+      tableExistsAst('UserProfile').tablePresent(),
+      tableExistsAst('userProfile').tableAbsent(),
+    ]);
+    expect(op.precheck).toEqual([
+      { description: 'ensure table "userProfile" exists', sql: 'LOWERED 1', params: ['p1'] },
+      {
+        description: 'ensure table "UserProfile" does not exist',
+        sql: 'LOWERED 2',
+        params: ['p2'],
+      },
+      {
+        description:
+          'ensure table "_prisma_rename_UserProfile" does not exist (a rename that only changes case passes through this temporary name, because SQLite compares table names without case)',
+        sql: 'LOWERED 3',
+        params: ['p3'],
+      },
     ]);
   });
 
