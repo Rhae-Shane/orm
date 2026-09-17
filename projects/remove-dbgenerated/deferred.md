@@ -37,3 +37,7 @@ Items the project deliberately leaves open. Each names the decision, why it is d
 ## 6. Array-returning function defaults on list columns through a named function
 
 **Status:** pre-existing rejection, unchanged. A tagged literal on a list column is allowed (spec D8), which covers the practical cases.
+
+## 7. The shipped Supabase contract is stale against its own generator
+
+**Found 2026-09-17** while finishing slice A. On `main`, `pnpm contract:generate` in `packages/3-extensions/supabase` produces a contract that differs from the committed one by about 490 lines of `contract.prisma`: inlined `types {}` aliases, 43 added `@@check(...)` constraints, six enum defaults printed as literals, and `@noCheck(elementNotNull)` on two list columns. `CONTRACT-FIDELITY.md` says the file is byte-identical on rerun, which is no longer true, and no test compares the committed file with fresh output. Slice A did not regenerate it (only ten of those lines are slice A's). Slice C must regenerate it first, as its spec now says. A test that fails when the committed contract differs from generator output would stop this recurring.

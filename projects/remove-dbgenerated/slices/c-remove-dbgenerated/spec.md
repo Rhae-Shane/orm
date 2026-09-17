@@ -65,7 +65,9 @@ Files: [`9-family/src/core/psl-contract-infer/default-mapping.ts`](../../../../p
 | 627 | `@default(dbgenerated("'STANDARD'::storage.buckettype"))` | `@default(STANDARD)` |
 | 296 | `@default(dbgenerated("(now() + '00:03:00'::interval)"))` | `@default(sql\`(now() + '00:03:00'::interval)\`)` |
 
-Line numbers are as of `main` at 2026-09-16; the implementer re-derives them. Any other change in the diff is a halt condition.
+Line numbers are as of `main` at 2026-09-16; the implementer re-derives them.
+
+**Known pre-existing drift (found 2026-09-17).** The committed Supabase contract already differs from what `pnpm contract:generate` produces on `main`, independently of this project: the `types {}` alias block is inlined, 43 `@@check(...)` lines are added, the six enum casts already print as literal defaults such as `@default("confidential")`, and the two `String[]` columns gain `@noCheck(elementNotNull)`. Regenerating therefore changes about 490 lines of `contract.prisma`, 650 of `contract.json`, and 290 of `contract.d.ts`. Before C5 runs, that drift must be regenerated and reviewed on its own (a separate PR, or the first commit of this slice with its own verify run), so that this slice's regeneration diff is only the `dbgenerated` lines. The table above then shrinks: the six enum rows are already done, and the enum print form is a string literal, not the member name. Any change beyond the remaining `dbgenerated` lines after that first regeneration is a halt condition.
 
 - The emitted `contract.json` changes only where a literal replaces a function default (the JSON and enum lines). The storage hash moves. `test/reference-fixture-verify.integration.test.ts` must stay green: every new literal must verify equal to the live default.
 - `CONTRACT-FIDELITY.md`: rewrite the "Column defaults" paragraph. It currently claims three omitted defaults; `scripts/generate-contract.ts` `DEFAULT_OMISSIONS` holds one (`auth.users.phone`). Say so, and remove the sentence about `dbgenerated` being function-kind on list fields.

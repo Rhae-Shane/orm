@@ -12,7 +12,7 @@ After this slice, all of the following are true:
 model T {
   id        String   @id @default(sql`gen_random_uuid()`)
   expires   DateTime @default(sql"(now() + '00:03:00'::interval)")
-  createdAt DateTime @default(pg.sql`now()`)
+  createdAt DateTime @default(pg.sql`CURRENT_TIMESTAMP`)
   tags      String[] @default(sql`'{}'::text[]`)
   ident     String   @default(gen_random_uuid())
 }
@@ -30,6 +30,19 @@ const T = model('T', {
 ```
 
 Every one of those emits, migrates onto a dev database, verifies clean, and `contract infer` prints the named-function forms back.
+
+## Amendments made during the build
+
+These supersede the sections below where they differ.
+
+- A body that is exactly `now()` or `autoincrement()` is refused in PSL and TypeScript with a hint to write the named function (shared `reservedSqlDefaultBody` beside `checkSqlDefaultBody`). Any other body passes verbatim.
+- `autoincrement()` on a list column is refused (`PSL_LIST_AUTOINCREMENT_UNSUPPORTED`); other storage defaults on lists lower (project spec D8).
+- A PSL tagged literal has no interpolation rule; the backtick fence has two escapes, `` \` `` and `\\`.
+- A quoted fence is any PSL string literal, double or single quotes.
+- An unterminated backtick fence ends before the next line whose first non-whitespace character is `}`.
+- The TypeScript `sql` tag reads raw template text through the same escape resolver as PSL.
+- Both targets' planners render the authored default and compare through the resolver in planning and verification alike.
+- `PSL_INVALID_DEFAULT_SQL` and `PSL_LIST_AUTOINCREMENT_UNSUPPORTED` are contributed codes declared in the SQL layer, not framework codes.
 
 ## Design
 
