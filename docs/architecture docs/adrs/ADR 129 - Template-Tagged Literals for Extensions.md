@@ -39,7 +39,7 @@ A plain string also says nothing about who reads it. `@default("gen_random_uuid(
 TaggedLiteral := QualifiedName StringLiteral
 ```
 
-- The tag is an ordinary qualified name: one identifier, or several joined by dots. Whitespace, newlines, and comments may appear between the tag and the string, as in TypeScript. The formatter writes them together, `` sql`...` ``.
+- The tag is an ordinary qualified name of one identifier, or two joined by a dot, such as `pg.sql`. One dot is all the prefix rule below needs. Whitespace, newlines, and comments may appear between the tag and the string, as in TypeScript. The formatter writes them together, `` sql`...` ``.
 - A string literal uses one of three quote characters. A double-quoted or single-quoted string has the ordinary PSL escapes and ends at the end of its line. A backtick string may span lines, and has exactly two escapes: `` \` `` is a backtick and `\\` is one backslash. Every other backslash sequence is kept as written, so `E'\n'` reaches the database unchanged.
 - A backtick string is valid only as the string of a tagged literal. Anywhere else it is `PSL_BACKTICK_STRING_REQUIRES_TAG`. The quoted forms exist for a body full of backticks.
 - An unterminated string of any quote style is `PSL_UNTERMINATED_STRING`. An unterminated backtick string ends before the next line whose first non-whitespace character is `}`, so the rest of the file still parses.
