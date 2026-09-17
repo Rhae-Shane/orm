@@ -2,7 +2,6 @@ import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
 import { notOk } from '@internal/utils/result';
-import { structuredError } from '@internal/utils/structured-error';
 import { createTestCli } from '@prisma/cli-engine/testing';
 import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -255,31 +254,6 @@ describe('migration new', () => {
       kind: 'result',
       envelope: { ok: false, error: { code: 'MIGRATION.TARGET_UNSUPPORTED' } },
     });
-  });
-
-  it('keeps the code and explanation of a structured error the planner raises', async () => {
-    const project = await createOfflineProject({ storageHash: HASH_TO });
-    const refusal = structuredError('MIGRATION.RENAME_UNSUPPORTED', 'Renames are not supported.', {
-      why: 'Rename the collection by hand.',
-    });
-
-    const run = await harness(project, {
-      ...offlineConfig({ project, script: { throwOnEmptyMigration: refusal } }),
-    }).run(['migration', 'new', '--json'], { cwd: project.dir });
-
-    expect(run.exitCode).toBe(2);
-    expect(run.json.at(-1)).toMatchObject({
-      kind: 'result',
-      envelope: {
-        ok: false,
-        error: {
-          code: 'MIGRATION.RENAME_UNSUPPORTED',
-          summary: 'Renames are not supported.',
-          why: 'Rename the collection by hand.',
-        },
-      },
-    });
-    expect(existsSync(project.appMigrationsDir)).toBe(false);
   });
 
   it('settles every error with typed next actions and no fix prose', async () => {

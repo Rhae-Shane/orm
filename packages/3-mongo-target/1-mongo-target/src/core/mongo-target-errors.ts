@@ -3,7 +3,7 @@ import { structuredError } from '@internal/utils/structured-error';
 
 export type MongoTargetErrorCode = `MIGRATION.${MigrationSubcode}`;
 
-type MigrationSubcode = 'INVALID_OPERATION_ENTRY' | 'OPERATION_UNSUPPORTED' | 'RENAME_UNSUPPORTED';
+type MigrationSubcode = 'INVALID_OPERATION_ENTRY' | 'OPERATION_UNSUPPORTED';
 
 export function mongoTargetError(
   code: MongoTargetErrorCode,

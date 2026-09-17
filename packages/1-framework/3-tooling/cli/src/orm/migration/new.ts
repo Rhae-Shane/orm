@@ -9,7 +9,6 @@ import type { MigrationNewResult } from '../../control-api/operations/migration-
 import { executeMigrationNewCommand } from '../../control-api/operations/migration-new';
 import type { CreateControlClient } from '../../control-api/types';
 import { runCommandAction } from '../../utils/next-actions';
-import { parseRenameFlags } from '../../utils/rename-flag';
 import { ormConfigSection } from '../config-section';
 import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
@@ -84,26 +83,16 @@ export function createMigrationNewCommand(createClient: CreateControlClient) {
           brief: 'Starting contract hash (default: latest migration target)',
           placeholder: 'hash',
         }),
-        rename: flag.repeated({
-          brief:
-            'Storage a model maps to that this migration renames, as <from>=<to> (either side may be <namespace>.<name>); the scaffold starts with the operations migration plan would plan for it',
-          placeholder: 'from=to',
-        }),
       },
     },
     needs: { config: ormConfigSection },
     handler: async (args, ctx) => {
-      const renames = parseRenameFlags(args.flags.rename);
-      if (!renames.ok) {
-        return notOk(normalizeError(renames.failure));
-      }
       const scaffolded = await executeMigrationNewCommand({
         config: ctx.config,
         cwd: ctx.cwd,
         configPath: projectConfigPathFor(ctx.cwd),
         ...ifDefined('name', args.flags.name),
         ...ifDefined('from', args.flags.from),
-        ...(renames.value.length === 0 ? {} : { renames: renames.value }),
         client: createClient({
           family: ctx.config.family,
           target: ctx.config.target,

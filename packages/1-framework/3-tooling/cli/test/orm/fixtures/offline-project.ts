@@ -144,8 +144,6 @@ export interface FakePlannerScript {
   readonly operations?: readonly MigrationPlanOperation[];
   readonly conflicts?: ReadonlyArray<{ readonly kind: string; readonly summary: string }>;
   readonly throwOnOperations?: unknown;
-  readonly throwOnEmptyMigration?: unknown;
-  readonly onEmptyMigration?: (context: unknown) => void;
 }
 
 function fakePlanner(script: FakePlannerScript): Record<string, unknown> {
@@ -163,11 +161,7 @@ function fakePlanner(script: FakePlannerScript): Record<string, unknown> {
             },
           }
         : { kind: 'failure', conflicts: script.conflicts },
-    emptyMigration: (context: unknown) => {
-      script.onEmptyMigration?.(context);
-      if (script.throwOnEmptyMigration !== undefined) throw script.throwOnEmptyMigration;
-      return { operations: [], renderTypeScript: () => '// empty migration\n' };
-    },
+    emptyMigration: () => ({ renderTypeScript: () => '// empty migration\n' }),
   };
 }
 

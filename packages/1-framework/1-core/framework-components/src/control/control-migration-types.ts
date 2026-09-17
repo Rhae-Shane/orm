@@ -266,8 +266,6 @@ export interface MigrationPlannerConflict {
   readonly summary: string;
   /** Optional explanation of why this conflict occurred. */
   readonly why?: string;
-  /** Structured details for machine consumers, such as the conflict's error `code`. */
-  readonly meta?: Readonly<Record<string, unknown>>;
 }
 
 /**
@@ -423,24 +421,6 @@ export interface SchemaOwnership {
 }
 
 /**
- * One side of a {@link StorageEntityRename}: a storage entity named within a
- * namespace. `namespaceId` is omitted when the operator did not qualify the
- * name; the family resolves it against the contract.
- */
-export interface StorageEntityRenameCoordinate {
-  readonly namespaceId?: string;
-  readonly name: string;
-}
-
-/**
- * An operator-stated rename of the storage a model maps to, between the previous state and the next contract. The planner cannot infer a rename from a diff — the storage under the old name is gone and one under the new name appeared — so the operator states it and the planner applies it to the previous state before diffing.
- */
-export interface StorageEntityRename {
-  readonly from: StorageEntityRenameCoordinate;
-  readonly to: StorageEntityRenameCoordinate;
-}
-
-/**
  * Migration planner interface for planning schema changes.
  * This is the minimal interface that CLI commands use.
  *
@@ -508,33 +488,21 @@ export interface MigrationPlanner<
      * `@internal/migration-tools`.
      */
     readonly snapshotsImportPath: string;
-    /**
-     * Operator-stated renames, in the order given. Each becomes one rename operation at the head of the plan; one that matches neither side is a planning failure. Absent or empty means no renames.
-     *
-     * When renames are present, the planner applies them to `fromContract`, re-derives the previous schema from that renamed contract, and ignores `schema`. Pass renames only where `schema` is itself derived from `fromContract` (offline `migration plan`), never with a live introspected schema, whose drift and unowned objects would be lost. A planner that cannot rename returns a failure result.
-     */
-    readonly renames?: readonly StorageEntityRename[];
   }): MigrationPlannerResult;
 
   /**
    * Produce an empty migration with the target's authoring conventions.
    *
    * Used by `migration new` to scaffold a fresh `migration.ts`. The
-   * returned plan carries no operations unless `context.renames` states
-   * renames; its `renderTypeScript()` yields a stub the user can edit.
-   *
-   * With renames, the plan carries the same rename operations `plan` would
-   * plan for them between `context.renames.fromContract` and
-   * `context.renames.toContract`, and nothing else. A rename that `plan`
-   * would refuse, and any rename on a planner that cannot rename, throws a
-   * structured error.
+   * returned plan has no operations; its `renderTypeScript()` yields a
+   * stub the user can edit.
    *
    * `spaceId` is stamped onto the produced plan; reconciliation flows
    * (`db init`, `db update`) and authoring flows (`migration new`) all
    * pass it explicitly.
    */
   emptyMigration(
-    context: MigrationScaffoldContext<TFamilyId, TTargetId>,
+    context: MigrationScaffoldContext,
     spaceId: string,
   ): MigrationPlanWithAuthoringSurface;
 }
@@ -662,29 +630,13 @@ export interface TargetMigrationsCapability<
 // ============================================================================
 
 /**
- * Operator-stated renames for a scaffold, with the two contracts a planner resolves them against. `fromContract` is `null` when the migration has no previous contract.
- */
-export interface MigrationScaffoldRenames<
-  TFamilyId extends string = string,
-  TTargetId extends string = string,
-> {
-  readonly intents: readonly StorageEntityRename[];
-  readonly fromContract: Contract | null;
-  readonly toContract: Contract;
-  readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<TFamilyId, TTargetId>>;
-}
-
-/**
  * Context for rendering migration source files.
  *
  * Kept minimal: only the paths a target might need to compute relative imports
  * (e.g. the contract `.d.ts` import for typed-contract builders). Passed to
  * `MigrationPlanner.emptyMigration(context)`.
  */
-export interface MigrationScaffoldContext<
-  TFamilyId extends string = string,
-  TTargetId extends string = string,
-> {
+export interface MigrationScaffoldContext {
   /** Absolute path to the migration package directory. Used by targets to compute relative imports. */
   readonly packageDir: string;
   /** Absolute path to the contract.json file, if one exists. Used by targets that emit typed-contract imports. */
@@ -709,8 +661,4 @@ export interface MigrationScaffoldContext<
    * through to their renderer's `RenderMigrationMeta.snapshotsImportPath`.
    */
   readonly snapshotsImportPath: string;
-  /**
-   * Operator-stated renames the scaffold starts with, so a hand-authored migration that only renames needs no editing. Absent scaffolds an empty body.
-   */
-  readonly renames?: MigrationScaffoldRenames<TFamilyId, TTargetId>;
 }

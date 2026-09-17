@@ -55,12 +55,9 @@ export type {
   MigrationRunnerResult,
   MigrationRunnerSuccessValue,
   MigrationScaffoldContext,
-  MigrationScaffoldRenames,
   OpFactoryCall,
   SchemaEntityCoordinate,
   SchemaOwnership,
-  StorageEntityRename,
-  StorageEntityRenameCoordinate,
   TargetMigrationsCapability,
 } from '../control/control-migration-types';
 export type {
