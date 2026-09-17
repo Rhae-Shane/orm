@@ -377,6 +377,33 @@ export async function runMigrationNew(
   return runOnEngine(ctx, ['migration', 'new', ...extraArgs], options);
 }
 
+/**
+ * Authors a migration by hand: `migration new` scaffolds `migration.ts`, the given source replaces the body of its `operations` array, and `migration.ts` is run to write `ops.json` and `migration.json`. Returns the directory name and the self-emit result, which carries the error when building the operations fails.
+ */
+export async function authorMigration(
+  ctx: JourneyContext,
+  name: string,
+  operationsSource: string,
+): Promise<{ readonly dirName: string; readonly emit: CommandResult }> {
+  const scaffold = await runMigrationNew(ctx, ['--name', name]);
+  if (scaffold.exitCode !== 0) {
+    throw new Error(`authorMigration: migration new failed: ${scaffold.stderr}`);
+  }
+  const dirName = latestMigrationDirName(ctx);
+  const migrationTsPath = join(appMigrationsDir(ctx), dirName, 'migration.ts');
+  const scaffolded = readFileSync(migrationTsPath, 'utf-8');
+  const authored = scaffolded.replace(
+    /return \[[\s\S]*?\];/,
+    () => `return [\n      ${operationsSource},\n    ];`,
+  );
+  if (authored === scaffolded) {
+    throw new Error('authorMigration: the scaffold has no operations array to fill');
+  }
+  writeFileSync(migrationTsPath, authored, 'utf-8');
+  const emit = await selfEmitMigration(ctx, ['--dir', `migrations/app/${dirName}`]);
+  return { dirName, emit };
+}
+
 export async function runMigrate(
   ctx: JourneyContext,
   extraArgs: readonly string[] = [],

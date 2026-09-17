@@ -1,24 +1,20 @@
 /**
  * Renaming a table keeps its rows (Postgres).
  *
- * A model whose table name changes used to plan as `dropTable` plus `createTable`. With `--rename <from>=<to>` the operator states the rename and the migration carries a `renameTable` operation instead, plus a rename of each constraint and index named after the old table.
+ * A model whose table name changes plans as `dropTable` plus `createTable`. A user who wants the rows makes the rename its own schema change, creates its migration with `migration new`, and writes `...this.renameTable({ table, to })`, which renames the table and each constraint and index named after the old table.
  *
- * Both journeys create `userProfile` with rows, a unique constraint, a foreign key, an index, row-level security and a policy, then drop the model's `@@map` so it names `UserProfile`. After `migrate`, the rows, the policy and RLS are kept, every constraint and index carries the new table name, `db verify --schema-only` is clean, a plan with no schema change is empty, and a later migration that removes the unique constraint, the foreign key and the index applies.
+ * Journey R1 creates `userProfile` with rows, a unique constraint, a foreign key, an index, row-level security and a policy, then drops the model's `@@map` so it names `UserProfile`. Planning the change is refused by the case-change guard, which points at the `renameTable` call; a call naming a table the end contract lacks fails when `migration.ts` builds its operations. After `migrate` the rows, the policy and RLS are kept, every constraint and index carries the new table name, `db verify --schema-only` is clean, a plan with no schema change is empty, and a later migration that removes the unique constraint, the foreign key and the index applies.
  *
- * Journey R1 (`migration plan`) also shows that planning without the flag is refused by the case-change guard and that a stale intent fails planning.
- *
- * Journey R2 (`migration new`) authors the rename by hand: the flag pre-fills the scaffolded `migration.ts` with the same operations `migration plan` would plan.
- *
- * Journey R5 renames the table in the same migration that points its foreign key at another table under an explicit name. The foreign key is renamed after the new table, then dropped and created against the new table; the rows stay and `db verify --schema-only` is clean.
+ * Journey R5 changes a table's name and its foreign key's target in one schema change. A hand-written migration that only renames fails at `migrate`, which verifies the database against the migration's end contract. Made as two changes, a rename-only migration and then a planned foreign key change, it keeps the rows and verifies clean.
  */
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { withTempDir } from '../utils/cli-test-helpers';
 import {
+  authorMigration,
   engineError,
-  getLatestMigrationDir,
   getMigrationDirs,
   type JourneyContext,
   latestMigrationDirName,
@@ -27,9 +23,7 @@ import {
   runContractEmit,
   runDbVerify,
   runMigrate,
-  runMigrationNew,
   runMigrationPlan,
-  selfEmitMigration,
   setupJourney,
   sql,
   swapPslContract,
@@ -57,6 +51,24 @@ model UserProfile {
 }
 `;
 
+const FOREIGN_KEY_RENAMED_PSL = `// use prisma-8
+
+model Account {
+  id       Int           @id
+  profiles UserProfile[]
+}
+
+model Member {
+  id Int @id
+}
+
+model UserProfile {
+  id        Int     @id
+  accountId Int
+  account   Account @relation(fields: [accountId], references: [id])
+}
+`;
+
 const FOREIGN_KEY_TO_PSL = `// use prisma-8
 
 model Account {
@@ -75,9 +87,7 @@ model UserProfile {
 }
 `;
 
-interface PlanDocument {
-  readonly operations: readonly { id: string; label: string; operationClass: string }[];
-}
+const RENAME_CALL = "...this.renameTable({ table: 'userProfile', to: 'UserProfile' })";
 
 const RENAME_LABELS = [
   'Rename table "userProfile" to "UserProfile"',
@@ -199,12 +209,18 @@ async function expectLaterChangesApply(
   ).toBe(0);
 }
 
+function operationsOf(ctx: JourneyContext, dirName: string) {
+  return JSON.parse(
+    readFileSync(join(ctx.testDir, 'migrations', 'app', dirName, 'ops.json'), 'utf-8'),
+  ) as readonly { readonly label: string; readonly operationClass: string }[];
+}
+
 withTempDir(({ createTempDir }) => {
-  describe('Journey R1: rename a table with migration plan --rename', () => {
+  describe('Journey R1: rename a table with migration new and this.renameTable', () => {
     const db = useDevDatabase();
 
     it(
-      'guard refuses the bare plan; stale intent fails; stated intent renames the table and its named objects, keeps rows and policies, and later changes apply',
+      'guard points at renameTable; a call naming a missing table fails; the call renames the table and its named objects, keeps rows and policies, and later changes apply',
       async () => {
         const ctx = setupJourney({
           connectionString: db.connectionString,
@@ -222,44 +238,32 @@ withTempDir(({ createTempDir }) => {
         );
         expect(
           bareError?.nextActions?.map((action) => action.label).join('\n'),
-          'R1.05: guard points at the flag',
-        ).toContain('prisma migration plan --rename "userProfile=UserProfile"');
+          'R1.05: guard points at migration new and renameTable',
+        ).toContain(
+          'create its migration with prisma migration new, and add ...this.renameTable({ table: "userProfile", to: "UserProfile" })',
+        );
         expect(getMigrationDirs(ctx), 'R1.05: nothing written').toHaveLength(1);
 
-        const stale = await runMigrationPlan(ctx, [
-          '--name',
+        const stale = await authorMigration(
+          ctx,
           'stale',
-          '--from',
-          origin,
-          '--rename',
-          'userProfile=Nope',
-          '--json',
-        ]);
-        expect(stale.exitCode, 'R1.06: stale intent is refused').not.toBe(0);
-        const staleError = engineError(stale);
-        expect(staleError?.code, 'R1.06: planning failure').toBe('MIGRATION.PLANNING_FAILED');
-        expect(staleError?.why, 'R1.06: names the unmatched intent').toContain(
-          'MIGRATION.TABLE_RENAME_UNMATCHED',
+          "...this.renameTable({ table: 'userProfile', to: 'Nope' })",
         );
-        expect(getMigrationDirs(ctx), 'R1.06: nothing written').toHaveLength(1);
+        expect(stale.emit.exitCode, 'R1.06: a call naming a missing table fails').not.toBe(0);
+        expect(stale.emit.stderr, 'R1.06: names the unmatched rename').toContain(
+          'renameTable "userProfile" to "Nope" does not match the migration\'s contracts: table "public.Nope" does not exist in the end contract.',
+        );
+        rmSync(join(ctx.testDir, 'migrations', 'app', stale.dirName), { recursive: true });
 
-        const plan = await planMigrationAndSelfEmit(ctx, [
-          '--name',
-          'rename-user-profile',
-          '--from',
-          origin,
-          '--rename',
-          'userProfile=UserProfile',
-          '--json',
-        ]);
-        expect(plan.exitCode, `R1.07: plan with intent: ${plan.stderr}`).toBe(0);
-        const document = parseJsonOutput<PlanDocument>(plan);
+        const rename = await authorMigration(ctx, 'rename-user-profile', RENAME_CALL);
+        expect(rename.emit.exitCode, `R1.07: self-emit: ${rename.emit.stderr}`).toBe(0);
+        const ops = operationsOf(ctx, rename.dirName);
         expect(
-          document.operations.map((op) => op.label),
+          ops.map((op) => op.label),
           'R1.07: the rename, then a rename of each object named after the old table',
         ).toEqual(RENAME_LABELS);
         expect(
-          document.operations.every((op) => op.operationClass === 'widening'),
+          ops.every((op) => op.operationClass === 'widening'),
           'R1.07: every operation is a widening rename',
         ).toBe(true);
 
@@ -272,58 +276,11 @@ withTempDir(({ createTempDir }) => {
     );
   });
 
-  describe('Journey R2: rename a table with migration new --rename', () => {
+  describe('Journey R5: rename a table, then point its foreign key at another table', () => {
     const db = useDevDatabase();
 
     it(
-      'the scaffold carries the same renames migration plan plans; migrate keeps rows and policies, and later changes apply',
-      async () => {
-        const ctx = setupJourney({
-          connectionString: db.connectionString,
-          createTempDir,
-          contractMode: 'psl',
-        });
-        await seedTableWithObjects(ctx, db.connectionString, 'R2');
-
-        const scaffold = await runMigrationNew(ctx, [
-          '--name',
-          'rename-user-profile',
-          '--rename',
-          'userProfile=UserProfile',
-        ]);
-        expect(scaffold.exitCode, `R2.05: migration new: ${scaffold.stderr}`).toBe(0);
-        const latest = getLatestMigrationDir(ctx);
-        expect(latest, 'R2.05: scaffold dir').toBeDefined();
-        const packageDir = join(ctx.testDir, 'migrations', 'app', latest!);
-        const migrationTs = readFileSync(join(packageDir, 'migration.ts'), 'utf-8');
-        expect(migrationTs, 'R2.05: table rename call').toMatch(/this\.renameTable\(/);
-        expect(migrationTs, 'R2.05: constraint rename calls').toMatch(/this\.renameConstraint\(/);
-        expect(migrationTs, 'R2.05: index rename calls').toMatch(/this\.renameIndex\(/);
-
-        const emitted = await selfEmitMigration(ctx, ['--dir', `migrations/app/${latest}`]);
-        expect(emitted.exitCode, `R2.06: self-emit: ${emitted.stderr}`).toBe(0);
-        const ops = JSON.parse(readFileSync(join(packageDir, 'ops.json'), 'utf-8')) as {
-          readonly label: string;
-        }[];
-        expect(
-          ops.map((op) => op.label),
-          'R2.06: the same renames migration plan plans',
-        ).toEqual(RENAME_LABELS);
-
-        const apply = await runMigrate(ctx);
-        expect(apply.exitCode, `R2.07: migrate: ${apply.stderr}`).toBe(0);
-        await expectRenameApplied(ctx, db.connectionString, 'R2.08');
-        await expectLaterChangesApply(ctx, db.connectionString, 'R2.09');
-      },
-      timeouts.spinUpPpgDev,
-    );
-  });
-
-  describe('Journey R5: rename a table and point its foreign key at another table', () => {
-    const db = useDevDatabase();
-
-    it(
-      'renames the foreign key after the new table, replaces it, keeps the rows, and verifies clean',
+      'a rename migration that omits the foreign key change fails at migrate; a rename-only change, then a planned foreign key change, keeps the rows and verifies clean',
       async () => {
         const ctx = setupJourney({
           connectionString: db.connectionString,
@@ -345,31 +302,66 @@ withTempDir(({ createTempDir }) => {
         );
 
         writeFileSync(join(ctx.testDir, 'contract.prisma'), FOREIGN_KEY_TO_PSL);
-        const emitRenamed = await runContractEmit(ctx);
-        expect(emitRenamed.exitCode, `R5.04: emit UserProfile: ${emitRenamed.stderr}`).toBe(0);
-        const plan = await planMigrationAndSelfEmit(ctx, [
-          '--name',
-          'rename-and-retarget',
-          '--from',
-          latestMigrationDirName(ctx),
-          '--rename',
-          'userProfile=UserProfile',
-          '--json',
-        ]);
-        expect(plan.exitCode, `R5.05: plan: ${plan.stderr}`).toBe(0);
+        const emitBoth = await runContractEmit(ctx);
+        expect(emitBoth.exitCode, `R5.04: emit both changes: ${emitBoth.stderr}`).toBe(0);
+        const incomplete = await authorMigration(ctx, 'rename-and-retarget', RENAME_CALL);
+        expect(incomplete.emit.exitCode, `R5.05: self-emit: ${incomplete.emit.stderr}`).toBe(0);
+        const refused = await runMigrate(ctx, ['--json']);
+        expect(refused.exitCode, 'R5.06: migrate refuses the incomplete migration').not.toBe(0);
         expect(
-          parseJsonOutput<PlanDocument>(plan)
-            .operations.map((op) => op.label)
-            .slice(0, 3),
-          'R5.05: the table rename, then its keys renamed after the new table',
+          engineError(refused),
+          'R5.06: the database does not match the end contract',
+        ).toMatchObject({
+          code: 'MIGRATION.RUNNER_FAILED',
+          summary: expect.stringContaining('Database schema does not satisfy contract'),
+        });
+        const untouched = await sql(
+          db.connectionString,
+          `SELECT to_regclass('"public"."userProfile"')::text AS old, to_regclass('"public"."UserProfile"')::text AS new`,
+        );
+        expect(untouched.rows[0], 'R5.06: the failed migration left the table as it was').toEqual({
+          old: '"userProfile"',
+          new: null,
+        });
+        rmSync(join(ctx.testDir, 'migrations', 'app', incomplete.dirName), { recursive: true });
+        expect(
+          existsSync(join(ctx.testDir, 'migrations', 'app', incomplete.dirName)),
+          'R5.06: the incomplete migration is removed',
+        ).toBe(false);
+
+        writeFileSync(join(ctx.testDir, 'contract.prisma'), FOREIGN_KEY_RENAMED_PSL);
+        const emitRenamed = await runContractEmit(ctx);
+        expect(emitRenamed.exitCode, `R5.07: emit the rename alone: ${emitRenamed.stderr}`).toBe(0);
+        const rename = await authorMigration(ctx, 'rename-user-profile', RENAME_CALL);
+        expect(rename.emit.exitCode, `R5.07: self-emit: ${rename.emit.stderr}`).toBe(0);
+        expect(
+          operationsOf(ctx, rename.dirName).map((op) => op.label),
+          'R5.07: the rename',
         ).toEqual([
           'Rename table "userProfile" to "UserProfile"',
           'Rename primary key "userProfile_pkey" to "UserProfile_pkey" on "UserProfile"',
           'Rename foreign key "userProfile_accountId_fkey" to "UserProfile_accountId_fkey" on "UserProfile"',
+          'Rename index "userProfile_accountId_idx_cbfb3085" to "UserProfile_accountId_idx_cbfb3085" on "UserProfile"',
         ]);
+        const applyRename = await runMigrate(ctx);
+        expect(applyRename.exitCode, `R5.08: migrate the rename: ${applyRename.stderr}`).toBe(0);
 
-        const apply = await runMigrate(ctx);
-        expect(apply.exitCode, `R5.06: migrate: ${apply.stderr}`).toBe(0);
+        writeFileSync(join(ctx.testDir, 'contract.prisma'), FOREIGN_KEY_TO_PSL);
+        const emitRetarget = await runContractEmit(ctx);
+        expect(
+          emitRetarget.exitCode,
+          `R5.09: emit the foreign key change: ${emitRetarget.stderr}`,
+        ).toBe(0);
+        const retarget = await planMigrationAndSelfEmit(ctx, [
+          '--name',
+          'retarget-foreign-key',
+          '--from',
+          latestMigrationDirName(ctx),
+          '--json',
+        ]);
+        expect(retarget.exitCode, `R5.09: plan the foreign key change: ${retarget.stderr}`).toBe(0);
+        const applyRetarget = await runMigrate(ctx);
+        expect(applyRetarget.exitCode, `R5.10: migrate: ${applyRetarget.stderr}`).toBe(0);
         const live = await sql(
           db.connectionString,
           `SELECT
@@ -378,12 +370,12 @@ withTempDir(({ createTempDir }) => {
               FROM pg_constraint
              WHERE conrelid = '"public"."UserProfile"'::regclass AND contype = 'f') AS foreign_keys`,
         );
-        expect(live.rows[0], 'R5.07: rows kept, one foreign key to Member').toEqual({
+        expect(live.rows[0], 'R5.11: rows kept, one foreign key to Member').toEqual({
           ids: [1],
           foreign_keys: ['profile_member_fk->"Member"'],
         });
         const verify = await runDbVerify(ctx, ['--schema-only']);
-        expect(verify.exitCode, `R5.08: db verify --schema-only: ${verify.stderr}`).toBe(0);
+        expect(verify.exitCode, `R5.12: db verify --schema-only: ${verify.stderr}`).toBe(0);
       },
       timeouts.spinUpPpgDev,
     );

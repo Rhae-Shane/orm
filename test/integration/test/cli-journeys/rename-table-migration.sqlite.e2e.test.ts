@@ -1,17 +1,18 @@
 /**
  * Renaming a table keeps its rows (SQLite).
  *
- * The SQLite twin of `rename-table-migration.e2e.test.ts`, driven through a file database and the SQLite facade config. Journey R3: create `userProfile` with rows, a unique constraint, a foreign key and an index, then drop the `@@map` so the model names `UserProfile`. `migration plan --rename` plans the rename plus a drop and a create of each index named after the old table; `migrate` keeps the rows; `db verify --schema-only` is clean; a plan with no schema change is empty; and a later migration that removes the unique constraint, the foreign key and the index applies.
+ * The SQLite twin of `rename-table-migration.e2e.test.ts`, driven through a file database and the SQLite facade config. Journey R3: create `userProfile` with rows, a unique constraint, a foreign key and an index, then drop the `@@map` so the model names `UserProfile`. Planning the change is refused by the case guard, which points at the `renameTable` call; a call naming a table the end contract lacks fails when `migration.ts` builds its operations. A migration created with `migration new` and `...this.renameTable({ table: 'userProfile', to: 'UserProfile' })` renames the table and drops and recreates each index named after the old table; `migrate` keeps the rows; `db verify --schema-only` is clean; a plan with no schema change is empty; and a later migration that removes the unique constraint, the foreign key and the index applies.
  *
  * Journey R4 follows the by-hand path of a project managed with `db update`: the case guard refuses and gives the two-statement rename, the statements are run by hand, and `db update` then drops each index named after the old table before creating it under the new name, keeping the rows.
  */
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { withTempDir, writeProjectManifest } from '../utils/cli-test-helpers';
 import {
+  authorMigration,
   engineError,
   getMigrationDirs,
   type JourneyContext,
@@ -78,10 +79,6 @@ model UserProfile {
 }
 `;
 
-interface PlanDocument {
-  readonly operations: readonly { id: string; label: string; operationClass: string }[];
-}
-
 function setupSqliteJourney(createTempDir: () => string): JourneyContext & { dbPath: string } {
   const testDir = createTempDir();
   const dbPath = join(testDir, 'journey.db');
@@ -103,9 +100,9 @@ function withDatabase<T>(dbPath: string, run: (db: DatabaseSync) => T): T {
 }
 
 withTempDir(({ createTempDir }) => {
-  describe('Journey R3 (SQLite): rename a table with migration plan --rename', () => {
+  describe('Journey R3 (SQLite): rename a table with migration new and this.renameTable', () => {
     it(
-      'stale intent fails; stated intent renames the table and recreates its named indexes, keeps the rows, and later changes apply',
+      'guard points at renameTable; a call naming a missing table fails; the call renames the table and recreates its named indexes, keeps the rows, and later changes apply',
       async () => {
         const ctx = setupSqliteJourney(createTempDir);
 
@@ -133,35 +130,38 @@ withTempDir(({ createTempDir }) => {
         expect(engineError(bare)?.why, 'R3.05: guard names the case change').toContain(
           'MIGRATION.TABLE_NAME_CASE_CHANGED',
         );
-
-        const stale = await runMigrationPlan(ctx, [
-          '--name',
-          'stale',
-          '--from',
-          origin,
-          '--rename',
-          'userProfile=Nope',
-          '--json',
-        ]);
-        expect(stale.exitCode, 'R3.06: stale intent is refused').not.toBe(0);
-        expect(engineError(stale)?.why, 'R3.06: names the unmatched intent').toContain(
-          'MIGRATION.TABLE_RENAME_UNMATCHED',
-        );
-        expect(getMigrationDirs(ctx), 'R3.06: nothing written').toHaveLength(1);
-
-        const plan = await planMigrationAndSelfEmit(ctx, [
-          '--name',
-          'rename-user-profile',
-          '--from',
-          origin,
-          '--rename',
-          'userProfile=UserProfile',
-          '--json',
-        ]);
-        expect(plan.exitCode, `R3.07: plan with intent: ${plan.stderr}`).toBe(0);
-        const document = parseJsonOutput<PlanDocument>(plan);
         expect(
-          document.operations.map((op) => op.label),
+          engineError(bare)
+            ?.nextActions?.map((action) => action.label)
+            .join('\n'),
+          'R3.05: guard points at migration new and renameTable',
+        ).toContain(
+          'create its migration with prisma migration new, and add ...this.renameTable({ table: "userProfile", to: "UserProfile" })',
+        );
+
+        const stale = await authorMigration(
+          ctx,
+          'stale',
+          "...this.renameTable({ table: 'userProfile', to: 'Nope' })",
+        );
+        expect(stale.emit.exitCode, 'R3.06: a call naming a missing table fails').not.toBe(0);
+        expect(stale.emit.stderr, 'R3.06: names the unmatched rename').toContain(
+          'renameTable "userProfile" to "Nope" does not match the migration\'s contracts: table "Nope" does not exist in the end contract.',
+        );
+        rmSync(join(ctx.testDir, 'migrations', 'app', stale.dirName), { recursive: true });
+        expect(getMigrationDirs(ctx), 'R3.06: only the initial migration remains').toHaveLength(1);
+
+        const rename = await authorMigration(
+          ctx,
+          'rename-user-profile',
+          "...this.renameTable({ table: 'userProfile', to: 'UserProfile' })",
+        );
+        expect(rename.emit.exitCode, `R3.07: self-emit: ${rename.emit.stderr}`).toBe(0);
+        const ops = JSON.parse(
+          readFileSync(join(ctx.testDir, 'migrations', 'app', rename.dirName, 'ops.json'), 'utf-8'),
+        ) as readonly { readonly label: string }[];
+        expect(
+          ops.map((op) => op.label),
           'R3.07: the rename, then each index named after the old table dropped and recreated',
         ).toEqual([
           'Rename table userProfile to UserProfile',
