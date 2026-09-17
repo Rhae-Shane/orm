@@ -153,6 +153,7 @@ export class SqlColumnIR extends SqlSchemaIRNode implements DiffableNode {
       new SqlColumnDefaultIR({
         ...ifDefined('resolved', this.resolvedDefault),
         ...ifDefined('raw', this.default),
+        ...ifDefined('authored', this.authoredDefault),
         ...ifDefined('nativeTypeContext', this.resolvedNativeType),
         // Contract-derived and introspected columns both set `this.many`
         // directly (with `nativeType` as the bare element type; array-ness
