@@ -660,13 +660,6 @@ export interface TargetMigrationsCapability<
 // ============================================================================
 
 /**
- * Context for rendering migration source files.
- *
- * Kept minimal: only the paths a target might need to compute relative imports
- * (e.g. the contract `.d.ts` import for typed-contract builders). Passed to
- * `MigrationPlanner.emptyMigration(context)`.
- */
-/**
  * Operator-stated renames for a scaffold, with the two contracts a planner resolves them against. `fromContract` is `null` when the migration has no previous contract.
  */
 export interface MigrationScaffoldRenames<
@@ -679,6 +672,13 @@ export interface MigrationScaffoldRenames<
   readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<TFamilyId, TTargetId>>;
 }
 
+/**
+ * Context for rendering migration source files.
+ *
+ * Kept minimal: only the paths a target might need to compute relative imports
+ * (e.g. the contract `.d.ts` import for typed-contract builders). Passed to
+ * `MigrationPlanner.emptyMigration(context)`.
+ */
 export interface MigrationScaffoldContext<
   TFamilyId extends string = string,
   TTargetId extends string = string,

@@ -332,11 +332,6 @@ export class RenameTableCall extends SqliteOpFactoryCallNode {
     };
   }
 
-  /**
-   * SQLite compares table names case-insensitively, so a rename that only
-   * changes case (`userProfile` to `UserProfile`) is refused as "already
-   * exists" when done in one statement. It goes through a temporary name.
-   */
   private caseOnly(): boolean {
     return this.oldTableName.toLowerCase() === this.tableName.toLowerCase();
   }
@@ -345,6 +340,11 @@ export class RenameTableCall extends SqliteOpFactoryCallNode {
     return `_prisma_rename_${this.tableName}`;
   }
 
+  /**
+   * SQLite compares table names case-insensitively, so a rename that only
+   * changes case (`userProfile` to `UserProfile`) is refused as "already
+   * exists" when done in one statement. It goes through a temporary name.
+   */
   private executeSteps(): Op['execute'] {
     const from = quoteIdentifier(this.oldTableName);
     const to = quoteIdentifier(this.tableName);
