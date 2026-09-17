@@ -1,7 +1,7 @@
 /**
  * Renaming a table keeps its rows (SQLite).
  *
- * The SQLite twin of `rename-table-migration.e2e.test.ts`: a file database driven through the SQLite facade config. Create `userProfile` with rows, drop the `@@map` so the model names `UserProfile`, and confirm that `migration plan --rename-table` plans exactly one rename, applies, keeps the rows, and verifies clean.
+ * The SQLite twin of `rename-table-migration.e2e.test.ts`, driven through a file database and the SQLite facade config. Create `userProfile` with rows, a unique constraint, a foreign key and an index, then drop the `@@map` so the model names `UserProfile`. `migration plan --rename-table` plans the rename plus a drop and a create of each index named after the old table; `migrate` keeps the rows; `db verify --schema-only` is clean; a plan with no schema change is empty; and a later migration that removes the unique constraint, the foreign key and the index applies.
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -26,19 +26,52 @@ import {
 
 const FROM_PSL = `// use prisma-8
 
-model UserProfile {
-  id    Int    @id
-  email String
+model Account {
+  id       Int           @id
+  profiles UserProfile[]
+}
 
+model UserProfile {
+  id        Int     @id
+  email     String  @unique
+  handle    String
+  accountId Int
+  account   Account @relation(fields: [accountId], references: [id])
+
+  @@index([handle])
   @@map("userProfile")
 }
 `;
 
 const TO_PSL = `// use prisma-8
 
+model Account {
+  id       Int           @id
+  profiles UserProfile[]
+}
+
 model UserProfile {
-  id    Int    @id
-  email String
+  id        Int     @id
+  email     String  @unique
+  handle    String
+  accountId Int
+  account   Account @relation(fields: [accountId], references: [id])
+
+  @@index([handle])
+}
+`;
+
+const DROPPED_PSL = `// use prisma-8
+
+model Account {
+  id Int @id
+}
+
+model UserProfile {
+  id        Int    @id
+  email     String
+  handle    String
+  accountId Int
 }
 `;
 
@@ -69,7 +102,7 @@ function withDatabase<T>(dbPath: string, run: (db: DatabaseSync) => T): T {
 withTempDir(({ createTempDir }) => {
   describe('Journey R3 (SQLite): rename a table with migration plan --rename-table', () => {
     it(
-      'stale intent fails; stated intent plans one rename, keeps the rows, verifies clean',
+      'stale intent fails; stated intent renames the table and recreates its named indexes, keeps the rows, and later changes apply',
       async () => {
         const ctx = setupSqliteJourney(createTempDir);
 
@@ -82,7 +115,9 @@ withTempDir(({ createTempDir }) => {
         const origin = latestMigrationDirName(ctx);
         withDatabase(ctx.dbPath, (db) => {
           db.exec(
-            `INSERT INTO "userProfile" (id, email) VALUES (1, 'alice@example.com'), (2, 'bob@example.com')`,
+            `INSERT INTO "Account" (id) VALUES (1);
+             INSERT INTO "userProfile" (id, email, handle, "accountId")
+             VALUES (1, 'alice@example.com', 'alice', 1), (2, 'bob@example.com', 'bob', 1)`,
           );
         });
 
@@ -123,19 +158,26 @@ withTempDir(({ createTempDir }) => {
         expect(plan.exitCode, `R3.07: plan with intent: ${plan.stderr}`).toBe(0);
         const document = parseJsonOutput<PlanDocument>(plan);
         expect(
-          document.operations.map((op) => ({ id: op.id, operationClass: op.operationClass })),
-          'R3.07: exactly one rename op',
-        ).toEqual([{ id: 'renameTable.userProfile', operationClass: 'widening' }]);
-        const opsJson = readFileSync(
-          join(ctx.testDir, 'migrations', 'app', getMigrationDirs(ctx).at(-1)!, 'ops.json'),
-          'utf-8',
-        );
-        expect(opsJson, 'R3.07: rendered SQL').toContain('RENAME TO \\"UserProfile\\"');
+          document.operations.map((op) => op.label),
+          'R3.07: the rename, then each index named after the old table dropped and recreated',
+        ).toEqual([
+          'Rename table userProfile to UserProfile',
+          'Drop index userProfile_accountId_idx_cbfb3085 on UserProfile',
+          'Drop index userProfile_handle_idx_b5b249e4 on UserProfile',
+          'Create index UserProfile_accountId_idx_cbfb3085 on UserProfile',
+          'Create index UserProfile_handle_idx_b5b249e4 on UserProfile',
+        ]);
 
         const apply = await runMigrate(ctx);
         expect(apply.exitCode, `R3.08: migrate: ${apply.stderr}`).toBe(0);
         const state = withDatabase(ctx.dbPath, (db) => ({
           rows: db.prepare(`SELECT id, email FROM "UserProfile" ORDER BY id`).all(),
+          objects: db
+            .prepare(
+              `SELECT type, name FROM sqlite_master WHERE tbl_name = 'UserProfile' ORDER BY type, name`,
+            )
+            .all()
+            .map((row) => `${row['type']} ${row['name']}`),
           tables: db
             .prepare(
               `SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE '%serProfile'`,
@@ -148,9 +190,59 @@ withTempDir(({ createTempDir }) => {
           { id: 2, email: 'bob@example.com' },
         ]);
         expect(state.tables, 'R3.09: old name is gone').toEqual(['UserProfile']);
+        expect(state.objects, 'R3.09: every index follows the new name').toEqual([
+          'index UserProfile_accountId_idx_cbfb3085',
+          'index UserProfile_handle_idx_b5b249e4',
+          'index sqlite_autoindex_UserProfile_1',
+          'table UserProfile',
+        ]);
 
         const verify = await runDbVerify(ctx, ['--schema-only']);
         expect(verify.exitCode, `R3.10: db verify --schema-only: ${verify.stderr}`).toBe(0);
+
+        const fresh = await runMigrationPlan(ctx, [
+          '--from',
+          latestMigrationDirName(ctx),
+          '--json',
+        ]);
+        expect(fresh.exitCode, `R3.11: plan with no schema change: ${fresh.stderr}`).toBe(0);
+        expect(parseJsonOutput<{ noOp: boolean }>(fresh).noOp, 'R3.11: plan is empty').toBe(true);
+        expect(getMigrationDirs(ctx), 'R3.11: nothing written').toHaveLength(2);
+
+        writeFileSync(join(ctx.testDir, 'contract.prisma'), DROPPED_PSL, 'utf-8');
+        const emitDropped = await runContractEmit(ctx);
+        expect(emitDropped.exitCode, `R3.12: emit without objects: ${emitDropped.stderr}`).toBe(0);
+        const dropPlan = await planMigrationAndSelfEmit(ctx, [
+          '--name',
+          'drop-objects',
+          '--from',
+          latestMigrationDirName(ctx),
+          '--json',
+        ]);
+        expect(dropPlan.exitCode, `R3.12: plan the removal: ${dropPlan.stderr}`).toBe(0);
+        const applyDrop = await runMigrate(ctx);
+        expect(applyDrop.exitCode, `R3.13: migrate the removal: ${applyDrop.stderr}`).toBe(0);
+        const remaining = withDatabase(ctx.dbPath, (db) => ({
+          rows: db.prepare(`SELECT id, email FROM "UserProfile" ORDER BY id`).all(),
+          objects: db
+            .prepare(
+              `SELECT type, name FROM sqlite_master WHERE tbl_name = 'UserProfile' ORDER BY type, name`,
+            )
+            .all()
+            .map((row) => `${row['type']} ${row['name']}`),
+        }));
+        expect(remaining, 'R3.13: unique, foreign key and indexes removed, rows kept').toEqual({
+          rows: [
+            { id: 1, email: 'alice@example.com' },
+            { id: 2, email: 'bob@example.com' },
+          ],
+          objects: ['table UserProfile'],
+        });
+        const verifyDropped = await runDbVerify(ctx, ['--schema-only']);
+        expect(
+          verifyDropped.exitCode,
+          `R3.14: db verify --schema-only after the removal: ${verifyDropped.stderr}`,
+        ).toBe(0);
       },
       timeouts.spinUpPpgDev,
     );

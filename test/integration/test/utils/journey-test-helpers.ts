@@ -220,6 +220,18 @@ export const pslContractFixtures = {
   'contract-rls-wire': join(JOURNEY_FIXTURES_DIR, 'contract-rls-wire.prisma'),
   'contract-rename-table-from': join(JOURNEY_FIXTURES_DIR, 'contract-rename-table-from.prisma'),
   'contract-rename-table-to': join(JOURNEY_FIXTURES_DIR, 'contract-rename-table-to.prisma'),
+  'contract-rename-table-objects-from': join(
+    JOURNEY_FIXTURES_DIR,
+    'contract-rename-table-objects-from.prisma',
+  ),
+  'contract-rename-table-objects-to': join(
+    JOURNEY_FIXTURES_DIR,
+    'contract-rename-table-objects-to.prisma',
+  ),
+  'contract-rename-table-objects-dropped': join(
+    JOURNEY_FIXTURES_DIR,
+    'contract-rename-table-objects-dropped.prisma',
+  ),
 } as const;
 
 export type PslContractVariant = keyof typeof pslContractFixtures;
