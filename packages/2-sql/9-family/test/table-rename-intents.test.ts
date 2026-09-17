@@ -123,13 +123,13 @@ describe('applyTableRenameIntents', () => {
     const renamed = result.value.contract;
     expect(tablesOf(renamed, UNBOUND_NAMESPACE_ID)).toEqual(['UserProfile', 'post']);
     const renamedTable =
-      renamed.storage.namespaces[UNBOUND_NAMESPACE_ID]?.entries.table?.UserProfile;
+      renamed.storage.namespaces[UNBOUND_NAMESPACE_ID]?.entries.table?.['UserProfile'];
     expect(renamedTable).toBeInstanceOf(StorageTable);
     expect(Object.keys(renamedTable?.columns ?? {})).toEqual(['id', 'parentId']);
     expect(
       renamedTable?.foreignKeys.map((fk) => [fk.source.tableName, fk.target.tableName, fk.name]),
     ).toEqual([['UserProfile', 'UserProfile', 'userProfile_parent_fkey']]);
-    const post = renamed.storage.namespaces[UNBOUND_NAMESPACE_ID]?.entries.table?.post;
+    const post = renamed.storage.namespaces[UNBOUND_NAMESPACE_ID]?.entries.table?.['post'];
     expect(post?.foreignKeys.map((fk) => [fk.source.tableName, fk.target.tableName])).toEqual([
       ['post', 'UserProfile'],
     ]);
@@ -160,7 +160,7 @@ describe('applyTableRenameIntents', () => {
       Object.getPrototypeOf(fromContract.storage.namespaces[UNBOUND_NAMESPACE_ID]),
     );
     expect(namespace?.id).toBe(UNBOUND_NAMESPACE_ID);
-    expect(renamed.storage.namespaces.audit).toBe(fromContract.storage.namespaces.audit);
+    expect(renamed.storage.namespaces['audit']).toBe(fromContract.storage.namespaces['audit']);
     expect(renamed.storage.storageHash).toBe(fromContract.storage.storageHash);
     expect(renamed.storage.types).toEqual(fromContract.storage.types);
     expect(renamed.profileHash).toBe(fromContract.profileHash);
@@ -219,7 +219,10 @@ describe('applyTableRenameIntents', () => {
 
     const result = applyTableRenameIntents({ fromContract, toContract: fromContract, intents: [] });
 
-    expect(result).toEqual({ ok: true, value: { contract: fromContract, renames: [] } });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.contract).toBe(fromContract);
+    expect(result.value.renames).toEqual([]);
   });
 
   describe('unmatched intents', () => {

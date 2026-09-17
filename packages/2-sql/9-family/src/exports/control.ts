@@ -60,6 +60,16 @@ export {
   TABLE_NAME_CASE_CHANGED_CODE,
 } from '../core/migrations/table-name-case-guard';
 export type {
+  AppliedTableRenames,
+  ApplyTableRenameIntentsInput,
+  ResolvedTableRename,
+  TableRenameIntent,
+} from '../core/migrations/table-rename-intents';
+export {
+  applyTableRenameIntents,
+  TABLE_RENAME_UNMATCHED_CODE,
+} from '../core/migrations/table-rename-intents';
+export type {
   CodecControlHooks,
   CreateSqlMigrationPlanOptions,
   ExpandNativeTypeInput,

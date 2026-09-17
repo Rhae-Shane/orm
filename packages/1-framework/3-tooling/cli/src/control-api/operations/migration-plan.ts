@@ -11,6 +11,7 @@ import {
   type MigrationPlanOperation,
   type OperationPreview,
   type SchemaOwnership,
+  type StorageEntityRename,
 } from '@internal/framework-components/control';
 import {
   snapshotsImportPathFrom,
@@ -68,6 +69,13 @@ export interface MigrationPlanOptions {
   readonly name?: string;
   readonly from?: string;
   readonly to?: string;
+  /**
+   * Operator-stated renames (`--rename-table`), applied by the planner to the
+   * origin contract before it diffs; each becomes the first operations of
+   * the planned migration. Only the delta leg receives them: an auto-baseline
+   * leg plans the origin from nothing and has no previous state to rename.
+   */
+  readonly renames?: readonly StorageEntityRename[];
   /** Renders the declarations of the destination snapshot from its `contract.json`. */
   readonly client: Pick<ControlClient, 'renderContractDts'>;
 }
@@ -90,6 +98,7 @@ async function runPlannerLeg(
   ownership: SchemaOwnership,
   snapshotsImportPath: string,
   resolveImportSpecifier: ImportSpecifierResolver,
+  renames: readonly StorageEntityRename[] = [],
 ): Promise<Result<PlannerSuccess, CliStructuredError>> {
   const fromSchema = migrations.contractToSchema(fromContract, frameworkComponents);
   const plannerResult = planner.plan({
@@ -99,6 +108,7 @@ async function runPlannerLeg(
     fromContract,
     frameworkComponents,
     spaceId,
+    ...(renames.length === 0 ? {} : { renames }),
     // Offline `migration plan` is the aggregate-of-(possibly one) degenerate
     // case: the same ownership consultation the live aggregate flow uses. A
     // from→to extra (a table removed from the contract) is not declared by any
@@ -578,6 +588,7 @@ async function executeMigrationPlanCommandInner(
         aggregate,
         snapshotsImportPathFrom(deltaPackageDir, migrationsDir),
         resolveImportSpecifier,
+        options.renames,
       );
       if (!deltaLeg.ok) {
         return notOk(deltaLeg.failure);
@@ -649,6 +660,7 @@ async function executeMigrationPlanCommandInner(
       aggregate,
       snapshotsImportPathFrom(packageDir, migrationsDir),
       resolveImportSpecifier,
+      options.renames,
     );
     if (!deltaLeg.ok) {
       return notOk(deltaLeg.failure);

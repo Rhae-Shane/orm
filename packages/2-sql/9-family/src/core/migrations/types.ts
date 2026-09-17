@@ -18,6 +18,7 @@ import type {
   OpFactoryCall,
   SchemaDiffIssue,
   SchemaOwnership,
+  StorageEntityRename,
 } from '@internal/framework-components/control';
 import type { AggregateMigrationEdgeRef } from '@internal/migration-tools/aggregate';
 import type {
@@ -281,7 +282,8 @@ export type SqlPlannerConflictKind =
   | 'missingButNonAdditive'
   | 'unsupportedOperation'
   | 'controlPolicySuppressedCall'
-  | 'tableNameCaseChanged';
+  | 'tableNameCaseChanged'
+  | 'tableRenameUnmatched';
 
 export interface SqlPlannerConflictLocation {
   readonly namespaceId?: string;
@@ -373,6 +375,12 @@ export interface SqlMigrationPlannerPlanOptions {
    * aggregate. See {@link SchemaOwnership}.
    */
   readonly ownership?: SchemaOwnership;
+  /**
+   * Operator-stated table renames, applied to `fromContract` before the diff
+   * so the differ sees each table under its new name; one `renameTable` op
+   * per intent is prepended to the plan. See {@link StorageEntityRename}.
+   */
+  readonly renames?: readonly StorageEntityRename[];
 }
 
 export interface SqlMigrationPlanner<TTargetDetails> {

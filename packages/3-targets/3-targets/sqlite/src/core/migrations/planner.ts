@@ -6,6 +6,7 @@ import type {
   SqlPlannerFailureResult,
 } from '@internal/family-sql/control';
 import {
+  applyTableRenameIntents,
   detectTableNameCaseChanges,
   extractCodecControlHooks,
   planFieldEventOperations,
@@ -18,6 +19,7 @@ import type {
   MigrationScaffoldContext,
   SchemaDiffIssue,
   SchemaOwnership,
+  StorageEntityRename,
 } from '@internal/framework-components/control';
 import { issueOutcome } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
@@ -26,8 +28,14 @@ import {
   type SqlSchemaIR,
   SqlTableIR,
 } from '@internal/sql-schema-ir/types';
-import { buildSqlitePlanDiff } from './diff-database-schema';
-import { coalesceSubtreeIssues, issueNode, planIssues } from './issue-planner';
+import { buildSqlitePlanDiff, sqliteContractToSchema } from './diff-database-schema';
+import {
+  coalesceSubtreeIssues,
+  conflictForDisallowedCall,
+  issueNode,
+  planIssues,
+} from './issue-planner';
+import { RenameTableCall } from './op-factory-call';
 import {
   type SqliteMigrationDestinationInfo,
   TypeScriptRenderableSqliteMigration,
@@ -103,6 +111,8 @@ export class SqliteMigrationPlanner
      * {@link SqlMigrationPlannerPlanOptions.snapshotsImportPath}.
      */
     readonly snapshotsImportPath: string;
+    /** See {@link SqlMigrationPlannerPlanOptions.renames}. */
+    readonly renames?: readonly StorageEntityRename[];
   }): SqlitePlanResult {
     return this.planSql(options as SqlMigrationPlannerPlanOptions);
   }
@@ -111,8 +121,11 @@ export class SqliteMigrationPlanner
     context: MigrationScaffoldContext,
     spaceId: string,
   ): TypeScriptRenderableSqliteMigration {
+    const renameCalls = (context.renames ?? []).map(
+      (rename) => new RenameTableCall(rename.from.name, rename.to.name),
+    );
     return new TypeScriptRenderableSqliteMigration(
-      [],
+      renameCalls,
       {
         from: context.fromHash,
         to: context.toHash,
@@ -128,7 +141,45 @@ export class SqliteMigrationPlanner
     const policyResult = this.ensureAdditivePolicy(options.policy);
     if (policyResult) return policyResult;
 
-    const { expected, actual, issues } = this.collectSchemaIssues(options);
+    // Operator-stated renames are applied to the previous contract before
+    // the diff, and the "from" tree is re-derived from that renamed contract,
+    // so the differ sees each renamed table under its new name. The renames
+    // themselves become the first operations of the plan; an intent that
+    // matches neither side, or a rename the policy's classes do not admit,
+    // fails the plan rather than degrading to a drop and a create.
+    const intents = options.renames ?? [];
+    const applied =
+      intents.length === 0
+        ? undefined
+        : applyTableRenameIntents({
+            fromContract: options.fromContract,
+            toContract: options.contract,
+            intents,
+          });
+    if (applied !== undefined && !applied.ok) {
+      return plannerFailure(applied.failure);
+    }
+    const fromContract = applied === undefined ? options.fromContract : applied.value.contract;
+    const previousSchema =
+      applied === undefined ? options.schema : sqliteContractToSchema(applied.value.contract);
+    const renameTableCalls = (applied?.value.renames ?? []).map(
+      (rename) => new RenameTableCall(rename.from, rename.to),
+    );
+    const disallowedRenames = renameTableCalls.filter(
+      (call) => !options.policy.allowedOperationClasses.includes(call.operationClass),
+    );
+    if (disallowedRenames.length > 0) {
+      return plannerFailure(
+        disallowedRenames.map((call) =>
+          conflictForDisallowedCall(call, options.policy.allowedOperationClasses),
+        ),
+      );
+    }
+
+    const { expected, actual, issues } = this.collectSchemaIssues({
+      ...options,
+      schema: previousSchema,
+    });
     const caseChangeConflicts = detectTableNameCaseChanges({
       issues,
       tableOf: (issue) => {
@@ -162,14 +213,15 @@ export class SqliteMigrationPlanner
     // Hook fires only at the application emitter — extension-space planning
     // (M2 R2) never reaches this helper.
     const fieldEventOps = planFieldEventOperations({
-      priorContract: options.fromContract,
+      priorContract: fromContract,
       newContract: options.contract,
       codecHooks,
     });
     // Codec-emitted calls already conform to `OpFactoryCall` — render +
     // toOp + importRequirements ride directly through the same emit path
-    // as structural ops, no `RawSqlCall` wrap.
-    const calls = [...result.value.calls, ...fieldEventOps];
+    // as structural ops, no `RawSqlCall` wrap. The table renames run first:
+    // every later operation addresses the renamed table by its new name.
+    const calls = [...renameTableCalls, ...result.value.calls, ...fieldEventOps];
 
     const destination: SqliteMigrationDestinationInfo = {
       storageHash: options.contract.storage.storageHash,

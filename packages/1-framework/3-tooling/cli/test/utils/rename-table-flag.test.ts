@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { parseRenameTableFlags } from '../../src/utils/rename-table-flag';
 
+function parsedValue(values: readonly string[]) {
+  const result = parseRenameTableFlags(values);
+  expect(result.ok).toBe(true);
+  return result.ok ? result.value : undefined;
+}
+
 function failureOf(values: readonly string[]) {
   const result = parseRenameTableFlags(values);
   expect(result.ok).toBe(false);
@@ -9,22 +15,16 @@ function failureOf(values: readonly string[]) {
 
 describe('parseRenameTableFlags', () => {
   it('parses an unqualified pair', () => {
-    expect(parseRenameTableFlags(['userProfile=UserProfile'])).toEqual({
-      ok: true,
-      value: [{ from: { name: 'userProfile' }, to: { name: 'UserProfile' } }],
-    });
+    expect(parsedValue(['userProfile=UserProfile'])).toEqual([
+      { from: { name: 'userProfile' }, to: { name: 'UserProfile' } },
+    ]);
   });
 
   it('parses a namespace qualifier on either side', () => {
-    expect(
-      parseRenameTableFlags(['auth.userProfile=UserProfile', 'orderLine=sales.OrderLine']),
-    ).toEqual({
-      ok: true,
-      value: [
-        { from: { namespaceId: 'auth', name: 'userProfile' }, to: { name: 'UserProfile' } },
-        { from: { name: 'orderLine' }, to: { namespaceId: 'sales', name: 'OrderLine' } },
-      ],
-    });
+    expect(parsedValue(['auth.userProfile=UserProfile', 'orderLine=sales.OrderLine'])).toEqual([
+      { from: { namespaceId: 'auth', name: 'userProfile' }, to: { name: 'UserProfile' } },
+      { from: { name: 'orderLine' }, to: { namespaceId: 'sales', name: 'OrderLine' } },
+    ]);
   });
 
   it('keeps repeated values in the order given', () => {
@@ -38,7 +38,7 @@ describe('parseRenameTableFlags', () => {
   });
 
   it('returns no intents for no values', () => {
-    expect(parseRenameTableFlags([])).toEqual({ ok: true, value: [] });
+    expect(parsedValue([])).toEqual([]);
   });
 
   it.each([

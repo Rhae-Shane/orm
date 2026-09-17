@@ -12,6 +12,7 @@ import type {
   StorageEntityRename,
 } from '@internal/framework-components/control';
 import { APP_SPACE_ID } from '@internal/framework-components/control';
+import { keepInternalSpecifiers } from '@internal/framework-components/emission';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, StorageTable } from '@internal/sql-contract/types';
 import { applicationDomainOf } from '@repo/test-utils';
@@ -29,6 +30,8 @@ const stubLowerer: ExecuteRequestLowerer = {
 
 const ALL_CLASSES = ['additive', 'widening', 'destructive'] as const;
 const ADDITIVE_ONLY = ['additive'] as const;
+const FROM_HASH = 'a'.repeat(64);
+const TO_HASH = 'b'.repeat(64);
 
 interface TableSpec {
   readonly extraColumn?: string;
@@ -118,8 +121,8 @@ const rename = (from: string, to: string): StorageEntityRename => ({
 
 describe('Postgres planner rename-table intents', () => {
   it('plans exactly one rename op when the tables are otherwise identical', async () => {
-    const from = contractOf({ userProfile: {} }, 'from');
-    const to = contractOf({ UserProfile: {} }, 'to');
+    const from = contractOf({ userProfile: {} }, FROM_HASH);
+    const to = contractOf({ UserProfile: {} }, TO_HASH);
 
     const result = plan({ from, to, renames: [rename('userProfile', 'UserProfile')] });
 
@@ -139,22 +142,22 @@ describe('Postgres planner rename-table intents', () => {
 
   it('renders the rename as a facade call in the migration file', () => {
     const result = plan({
-      from: contractOf({ userProfile: {} }, 'from'),
-      to: contractOf({ UserProfile: {} }, 'to'),
+      from: contractOf({ userProfile: {} }, FROM_HASH),
+      to: contractOf({ UserProfile: {} }, TO_HASH),
       renames: [rename('userProfile', 'UserProfile')],
     });
 
     expect(result.kind).toBe('success');
     if (result.kind !== 'success') return;
-    expect(result.plan.renderTypeScript()).toContain(
+    expect(result.plan.renderTypeScript(keepInternalSpecifiers)).toContain(
       'this.renameTable({ table: "userProfile", to: "UserProfile" })',
     );
   });
 
   it('plans the rename first, then the added column on the new name', async () => {
     const result = plan({
-      from: contractOf({ userProfile: {} }, 'from'),
-      to: contractOf({ UserProfile: { extraColumn: 'nickname' } }, 'to'),
+      from: contractOf({ userProfile: {} }, FROM_HASH),
+      to: contractOf({ UserProfile: { extraColumn: 'nickname' } }, TO_HASH),
       renames: [rename('userProfile', 'UserProfile')],
     });
 
@@ -168,8 +171,8 @@ describe('Postgres planner rename-table intents', () => {
 
   it('qualifies the statement with the schema when the intent names a bound namespace', async () => {
     const result = plan({
-      from: contractOf({ userProfile: {} }, 'from', 'auth'),
-      to: contractOf({ UserProfile: {} }, 'to', 'auth'),
+      from: contractOf({ userProfile: {} }, FROM_HASH, 'auth'),
+      to: contractOf({ UserProfile: {} }, TO_HASH, 'auth'),
       renames: [
         { from: { namespaceId: 'auth', name: 'userProfile' }, to: { name: 'UserProfile' } },
       ],
@@ -185,8 +188,8 @@ describe('Postgres planner rename-table intents', () => {
 
   it('applies several intents, one rename op each, in the order given', async () => {
     const result = plan({
-      from: contractOf({ userProfile: {}, orderLine: {} }, 'from'),
-      to: contractOf({ UserProfile: {}, OrderLine: {} }, 'to'),
+      from: contractOf({ userProfile: {}, orderLine: {} }, FROM_HASH),
+      to: contractOf({ UserProfile: {}, OrderLine: {} }, TO_HASH),
       renames: [rename('userProfile', 'UserProfile'), rename('orderLine', 'OrderLine')],
     });
 
@@ -198,8 +201,8 @@ describe('Postgres planner rename-table intents', () => {
 
   it('fails when the intent names a previous table that does not exist', () => {
     const result = plan({
-      from: contractOf({ userProfile: {} }, 'from'),
-      to: contractOf({ UserProfile: {} }, 'to'),
+      from: contractOf({ userProfile: {} }, FROM_HASH),
+      to: contractOf({ UserProfile: {} }, TO_HASH),
       renames: [rename('ghost', 'UserProfile')],
     });
 
@@ -220,8 +223,8 @@ describe('Postgres planner rename-table intents', () => {
 
   it('fails when the new name already exists in the previous state', () => {
     const result = plan({
-      from: contractOf({ userProfile: {}, UserProfile: {} }, 'from'),
-      to: contractOf({ UserProfile: {} }, 'to'),
+      from: contractOf({ userProfile: {}, UserProfile: {} }, FROM_HASH),
+      to: contractOf({ UserProfile: {} }, TO_HASH),
       renames: [rename('userProfile', 'UserProfile')],
     });
 
@@ -233,8 +236,8 @@ describe('Postgres planner rename-table intents', () => {
 
   it('fails when the new name is absent from the next contract', () => {
     const result = plan({
-      from: contractOf({ userProfile: {} }, 'from'),
-      to: contractOf({ Account: {} }, 'to'),
+      from: contractOf({ userProfile: {} }, FROM_HASH),
+      to: contractOf({ Account: {} }, TO_HASH),
       renames: [rename('userProfile', 'UserProfile')],
     });
 
@@ -247,7 +250,7 @@ describe('Postgres planner rename-table intents', () => {
   it('fails when intents are given without a prior contract to apply them to', () => {
     const result = plan({
       from: null,
-      to: contractOf({ UserProfile: {} }, 'to'),
+      to: contractOf({ UserProfile: {} }, TO_HASH),
       renames: [rename('userProfile', 'UserProfile')],
     });
 
@@ -258,8 +261,8 @@ describe('Postgres planner rename-table intents', () => {
 
   it('still fires the case-change guard when the pair is not covered by an intent', () => {
     const result = plan({
-      from: contractOf({ userProfile: {} }, 'from'),
-      to: contractOf({ UserProfile: {} }, 'to'),
+      from: contractOf({ userProfile: {} }, FROM_HASH),
+      to: contractOf({ UserProfile: {} }, TO_HASH),
     });
 
     expect(result.kind).toBe('failure');
@@ -269,8 +272,8 @@ describe('Postgres planner rename-table intents', () => {
 
   it('refuses the rename under an additive-only policy like any other widening op', () => {
     const result = plan({
-      from: contractOf({ userProfile: {} }, 'from'),
-      to: contractOf({ UserProfile: {} }, 'to'),
+      from: contractOf({ userProfile: {} }, FROM_HASH),
+      to: contractOf({ UserProfile: {} }, TO_HASH),
       renames: [rename('userProfile', 'UserProfile')],
       policy: ADDITIVE_ONLY,
     });

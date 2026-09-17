@@ -7,6 +7,7 @@ import type {
   SuppressionRecord,
 } from '@internal/family-sql/control';
 import {
+  applyTableRenameIntents,
   controlPolicyForCall,
   detectTableNameCaseChanges,
   extractCodecControlHooks,
@@ -24,6 +25,7 @@ import type {
   MigrationScaffoldContext,
   SchemaDiffIssue,
   SchemaOwnership,
+  StorageEntityRename,
 } from '@internal/framework-components/control';
 import { issueOutcome } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
@@ -61,9 +63,11 @@ import {
   RenameCheckConstraintCall,
   RenameIndexCall,
   RenamePostgresRlsPolicyCall,
+  RenameTableCall,
 } from './op-factory-call';
 import { TypeScriptRenderablePostgresMigration } from './planner-produced-postgres-migration';
 import { postgresPlannerStrategies } from './planner-strategies';
+import { postgresContractToSchema } from './postgres-contract-to-schema';
 import { resolveDdlSchemaForNamespaceStorage } from './resolve-ddl-schema';
 import { verifyPostgresNamespacePresence } from './verify-postgres-namespaces';
 
@@ -161,6 +165,8 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
      * {@link SqlMigrationPlannerPlanOptions.snapshotsImportPath}.
      */
     readonly snapshotsImportPath: string;
+    /** See {@link SqlMigrationPlannerPlanOptions.renames}. */
+    readonly renames?: readonly StorageEntityRename[];
   }): PostgresPlanResult {
     return this.planSql(options as SqlMigrationPlannerPlanOptions);
   }
@@ -169,8 +175,19 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
     context: MigrationScaffoldContext,
     spaceId: string,
   ): MigrationPlanWithAuthoringSurface {
+    // A scaffold has no contract to resolve a namespace against, so a
+    // qualified intent names the DDL schema directly and an unqualified one
+    // stays unbound, like every other unqualified authored statement.
+    const renameCalls = (context.renames ?? []).map(
+      (rename) =>
+        new RenameTableCall(
+          rename.from.namespaceId ?? UNBOUND_NAMESPACE_ID,
+          rename.from.name,
+          rename.to.name,
+        ),
+    );
     return new TypeScriptRenderablePostgresMigration(
-      [],
+      renameCalls,
       {
         from: context.fromHash,
         to: context.toHash,
@@ -191,15 +208,60 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
       return policyResult;
     }
 
+    // Operator-stated renames are applied to the previous contract before
+    // the diff, and the "from" tree is re-derived from that renamed contract,
+    // so the differ sees each renamed table under its new name and plans its
+    // column, index and constraint changes normally. The renames themselves
+    // become the first operations of the plan. An intent that matches
+    // neither side, or a rename the policy's classes do not admit, fails the
+    // plan here rather than degrading to a drop and a create.
+    const intents = options.renames ?? [];
+    const applied =
+      intents.length === 0
+        ? undefined
+        : applyTableRenameIntents({
+            fromContract: options.fromContract,
+            toContract: options.contract,
+            intents,
+          });
+    if (applied !== undefined && !applied.ok) {
+      return plannerFailure(applied.failure);
+    }
+    const fromContract = applied === undefined ? options.fromContract : applied.value.contract;
+    const previousSchema =
+      applied === undefined
+        ? options.schema
+        : postgresContractToSchema(applied.value.contract, options.frameworkComponents);
+    const renameTableCalls = (applied?.value.renames ?? []).map(
+      (rename) =>
+        new RenameTableCall(
+          rename.namespaceId === UNBOUND_NAMESPACE_ID
+            ? UNBOUND_NAMESPACE_ID
+            : resolveDdlSchemaForNamespaceStorage(options.contract.storage, rename.namespaceId),
+          rename.from,
+          rename.to,
+        ),
+    );
+    const disallowedRenames = renameTableCalls.filter(
+      (call) => !options.policy.allowedOperationClasses.includes(call.operationClass),
+    );
+    if (disallowedRenames.length > 0) {
+      return plannerFailure(
+        disallowedRenames.map((call) =>
+          conflictForDisallowedCall(call, options.policy.allowedOperationClasses),
+        ),
+      );
+    }
+
     // The one combined tree diff drives the whole plan: relational findings
     // become structural DDL via `planIssues`, policy findings become RLS ops
     // via `planPostgresSchemaDiff`. Verify runs its own full-tree node diff
     // (`diffSchema`) over the same schema and rejects on a
     // surviving failure.
-    PostgresDatabaseSchemaNode.assert(options.schema);
+    PostgresDatabaseSchemaNode.assert(previousSchema);
     const { issues: rawIssues } = buildPostgresPlanDiff({
       contract: options.contract,
-      actualSchema: options.schema,
+      actualSchema: previousSchema,
       frameworkComponents: options.frameworkComponents,
     });
     const policyDiffIssues = rawIssues.filter((issue) => isPolicyDiffIssue(issue));
@@ -246,7 +308,7 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
     // sibling-space scoping, matching the retired coordinate walk exactly.
     const namespaceIssues = verifyPostgresNamespacePresence({
       contract: options.contract,
-      schema: options.schema,
+      schema: previousSchema,
     });
     const schemaIssues = [...namespaceIssues, ...gated];
 
@@ -271,7 +333,7 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
     // per-schema namespace node — never the whole tree root, and never a flat
     // merge of every namespace (which would collide same-named tables across
     // schemas). Probing more than one namespace at once is future work.
-    const relationalSchema = relationalNamespaceNode(options.schema, schemaName);
+    const relationalSchema = relationalNamespaceNode(previousSchema, schemaName);
 
     // Input-side control-policy partition. `external` / `observed` subjects
     // — and non-creation issues for `tolerated` subjects — are dropped from
@@ -312,7 +374,7 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
       // from/to comparisons (unsafe type change, nullable tightening) are
       // inapplicable there — reconciliation falls through to
       // `mapNodeIssueToCall`'s direct destructive handlers.
-      fromContract: options.fromContract,
+      fromContract,
       schemaName,
       codecHooks,
       storageTypes,
@@ -328,6 +390,14 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
     if (!result.ok || schemaDiff.conflicts.length > 0) {
       return plannerFailure([...(result.ok ? [] : result.failure), ...schemaDiff.conflicts]);
     }
+
+    const renameTablePartition = partitionCallsByControlPolicy({
+      calls: renameTableCalls,
+      contract: options.contract,
+      resolveControlPolicySubject: (call) =>
+        resolvePostgresCallControlPolicySubject(call, options.contract),
+      resolveFactoryName: (call) => call.factoryName,
+    });
 
     const indexRenamePartition = partitionCallsByControlPolicy({
       calls: [...indexRenames.calls, ...checkRenames.calls],
@@ -351,7 +421,7 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
     // byte-stable. The hook fires only at the application emitter —
     // extension-space planning never reaches this helper.
     const fieldEventOps = planFieldEventOperations({
-      priorContract: options.fromContract,
+      priorContract: fromContract,
       newContract: options.contract,
       codecHooks,
     });
@@ -368,7 +438,10 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
         resolvePostgresCallControlPolicySubject(call, options.contract),
       resolveFactoryName: (call) => call.factoryName,
     });
+    // The table renames run first: every later operation addresses the
+    // renamed table by its new name.
     const calls = [
+      ...renameTablePartition.kept,
       ...result.value.calls,
       ...indexRenamePartition.kept,
       ...schemaDiffPartition.kept,
@@ -381,6 +454,7 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
     const seenWarnings = new Set<string>();
     const warnings: SqlPlannerConflict[] = [
       ...issuePartition.suppressions,
+      ...renameTablePartition.suppressions,
       ...indexRenamePartition.suppressions,
       ...schemaDiff.suppressions,
       ...schemaDiffPartition.suppressions,

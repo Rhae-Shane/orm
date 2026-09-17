@@ -427,6 +427,28 @@ export interface SchemaOwnership {
  * @template TFamilyId - The family ID (e.g., 'sql', 'document')
  * @template TTargetId - The target ID (e.g., 'postgres', 'mysql')
  */
+/**
+ * One side of a {@link StorageEntityRename}: a storage entity named within a
+ * namespace. `namespaceId` is omitted when the operator did not qualify the
+ * name; the family resolves it against the contract.
+ */
+export interface StorageEntityRenameCoordinate {
+  readonly namespaceId?: string;
+  readonly name: string;
+}
+
+/**
+ * An operator-stated rename of one storage entity (a SQL table, a document
+ * collection) between the previous state and the next contract. The planner
+ * cannot infer a rename from a diff — the entity under the old name is gone
+ * and one under the new name appeared — so the operator states it and the
+ * planner applies it to the previous state before diffing.
+ */
+export interface StorageEntityRename {
+  readonly from: StorageEntityRenameCoordinate;
+  readonly to: StorageEntityRenameCoordinate;
+}
+
 export interface MigrationPlanner<
   TFamilyId extends string = string,
   TTargetId extends string = string,
@@ -488,14 +510,22 @@ export interface MigrationPlanner<
      * `@internal/migration-tools`.
      */
     readonly snapshotsImportPath: string;
+    /**
+     * Operator-stated renames to apply to the previous state before the
+     * diff, in the order given. Each becomes one rename operation at the
+     * head of the plan; one that matches neither side is a planning
+     * failure. Absent or empty means no renames.
+     */
+    readonly renames?: readonly StorageEntityRename[];
   }): MigrationPlannerResult;
 
   /**
    * Produce an empty migration with the target's authoring conventions.
    *
    * Used by `migration new` to scaffold a fresh `migration.ts`. The
-   * returned plan has no operations; its `renderTypeScript()` yields a
-   * stub the user can edit.
+   * returned plan carries only the operations `context.renames` asks for
+   * (none by default); its `renderTypeScript()` yields a stub the user can
+   * edit.
    *
    * `spaceId` is stamped onto the produced plan; reconciliation flows
    * (`db init`, `db update`) and authoring flows (`migration new`) all
@@ -661,4 +691,10 @@ export interface MigrationScaffoldContext {
    * through to their renderer's `RenderMigrationMeta.snapshotsImportPath`.
    */
   readonly snapshotsImportPath: string;
+  /**
+   * Operator-stated renames the scaffold starts with: one rename operation
+   * per entry, in the order given, so a hand-authored migration that only
+   * renames needs no editing. Absent or empty scaffolds an empty body.
+   */
+  readonly renames?: readonly StorageEntityRename[];
 }

@@ -161,7 +161,7 @@ function fakePlanner(script: FakePlannerScript): Record<string, unknown> {
             },
           }
         : { kind: 'failure', conflicts: script.conflicts },
-    emptyMigration: () => ({ renderTypeScript: () => '// empty migration\n' }),
+    emptyMigration: () => ({ operations: [], renderTypeScript: () => '// empty migration\n' }),
   };
 }
 

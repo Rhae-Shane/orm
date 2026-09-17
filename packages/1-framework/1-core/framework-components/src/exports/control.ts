@@ -58,6 +58,8 @@ export type {
   OpFactoryCall,
   SchemaEntityCoordinate,
   SchemaOwnership,
+  StorageEntityRename,
+  StorageEntityRenameCoordinate,
   TargetMigrationsCapability,
 } from '../control/control-migration-types';
 export type {

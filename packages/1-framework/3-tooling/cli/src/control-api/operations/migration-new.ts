@@ -5,7 +5,11 @@
 import { readFile } from 'node:fs/promises';
 import type { PrismaNextConfig } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
-import { APP_SPACE_ID, createControlStack } from '@internal/framework-components/control';
+import {
+  APP_SPACE_ID,
+  createControlStack,
+  type StorageEntityRename,
+} from '@internal/framework-components/control';
 import { loadContractSpaceAggregate } from '@internal/migration-tools/aggregate';
 import {
   contractSnapshotDir,
@@ -17,6 +21,7 @@ import { formatMigrationDirName, writeMigrationPackage } from '@internal/migrati
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
 import { findLatestMigration } from '@internal/migration-tools/migration-graph';
 import { writeMigrationTs } from '@internal/migration-tools/migration-ts';
+import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { join, relative } from 'pathe';
 import {
@@ -44,6 +49,12 @@ export interface MigrationNewOptions {
   readonly configPath?: string;
   readonly name?: string;
   readonly from?: string;
+  /**
+   * Operator-stated renames (`--rename-table`): the scaffold starts with one
+   * rename call per entry and its manifest is attested over those ops, so a
+   * migration that only renames is complete as written.
+   */
+  readonly renames?: readonly StorageEntityRename[];
   /** Renders the declarations of the destination snapshot from its `contract.json`. */
   readonly client: Pick<ControlClient, 'renderContractDts'>;
 }
@@ -165,21 +176,6 @@ export async function executeMigrationNewCommand(
   const dirName = formatMigrationDirName(timestamp, slug);
   const packageDir = join(appMigrationsDir, dirName);
 
-  // `migration new` scaffolds an empty `migration.ts` for the user to
-  // fill, so we attest over `ops: []`. Re-running self-emit after the
-  // user adds operations will produce a different `migrationHash` (over
-  // the real ops). This is intentional — there is no on-disk draft.
-  const baseMetadata: Omit<MigrationMetadata, 'migrationHash'> = {
-    from: fromHash,
-    to: toStorageHash,
-    providedInvariants: [],
-    createdAt: timestamp.toISOString(),
-  };
-  const metadata: MigrationMetadata = {
-    ...baseMetadata,
-    migrationHash: computeMigrationHash(baseMetadata, []),
-  };
-
   const migrations = getTargetMigrations(config.target);
   if (!migrations) {
     return notOk(
@@ -210,24 +206,42 @@ export async function executeMigrationNewCommand(
       return notOk(declarations.failure);
     }
 
-    await writeMigrationPackage(packageDir, metadata, []);
-    await writeContractSnapshot(migrationsDir, toStorageHash, {
-      contractJson: parsedContract,
-      contractDts: declarations.value,
-    });
-
     const planner = migrations.createPlanner(controlAdapter);
-    const emptyPlan = planner.emptyMigration(
+    const scaffold = planner.emptyMigration(
       {
         packageDir,
         contractJsonPath: join(contractSnapshotDir(migrationsDir, toStorageHash), 'contract.json'),
         fromHash,
         toHash: toStorageHash,
         snapshotsImportPath: snapshotsImportPathFrom(packageDir, migrationsDir),
+        ...ifDefined('renames', options.renames),
       },
       APP_SPACE_ID,
     );
-    await writeMigrationTs(packageDir, emptyPlan.renderTypeScript(resolveSpecifier));
+
+    // The scaffold carries only the operations the operator stated on the
+    // command line (none by default), and the manifest is attested over
+    // exactly those. Re-running self-emit after the user adds operations
+    // produces a different `migrationHash` (over the real ops). This is
+    // intentional — there is no on-disk draft.
+    const scaffoldOps = await Promise.all(scaffold.operations);
+    const baseMetadata: Omit<MigrationMetadata, 'migrationHash'> = {
+      from: fromHash,
+      to: toStorageHash,
+      providedInvariants: [],
+      createdAt: timestamp.toISOString(),
+    };
+    const metadata: MigrationMetadata = {
+      ...baseMetadata,
+      migrationHash: computeMigrationHash(baseMetadata, scaffoldOps),
+    };
+
+    await writeMigrationPackage(packageDir, metadata, scaffoldOps);
+    await writeContractSnapshot(migrationsDir, toStorageHash, {
+      contractJson: parsedContract,
+      contractDts: declarations.value,
+    });
+    await writeMigrationTs(packageDir, scaffold.renderTypeScript(resolveSpecifier));
 
     return ok({
       ok: true as const,
