@@ -38,6 +38,7 @@ import {
   RenameCheckConstraintCall,
   RenameIndexCall,
   RenamePostgresRlsPolicyCall,
+  RenameTableCall,
   SetDefaultCall,
   SetNotNullCall,
 } from './op-factory-call';
@@ -326,6 +327,18 @@ export abstract class PostgresMigration<
       options.constraint,
       options.kind ?? 'unique',
     ).toOp(this.controlAdapterFor('dropConstraint'));
+  }
+
+  protected renameTable(options: {
+    readonly schema?: string;
+    readonly table: string;
+    readonly to: string;
+  }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
+    return new RenameTableCall(
+      options.schema ?? UNBOUND_NAMESPACE_ID,
+      options.table,
+      options.to,
+    ).toOp(this.controlAdapterFor('renameTable'));
   }
 
   protected dropTable(options: {

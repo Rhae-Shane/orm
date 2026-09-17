@@ -20,6 +20,7 @@ import {
   DropIndexCall,
   DropTableCall,
   RecreateTableCall,
+  RenameTableCall,
 } from './op-factory-call';
 import type { SqliteColumnSpec, SqliteIndexSpec, SqliteTableSpec } from './operations/shared';
 import type { SqlitePlanTargetDetails } from './planner-target-details';
@@ -123,6 +124,12 @@ export abstract class SqliteMigration<
 
   protected dropTable(options: { readonly table: string }): Promise<Op> {
     return new DropTableCall(options.table).toOp(this.controlAdapterFor('dropTable'));
+  }
+
+  protected renameTable(options: { readonly table: string; readonly to: string }): Promise<Op> {
+    return new RenameTableCall(options.table, options.to).toOp(
+      this.controlAdapterFor('renameTable'),
+    );
   }
 
   protected addColumn(options: {

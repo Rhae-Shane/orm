@@ -1,5 +1,6 @@
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import { tableExistsAst } from '../../../contract-free/checks';
+import { quoteIdentifier } from '../../sql-utils';
 import { qualifyTableName } from '../planner-sql-checks';
 import { type Op, step, targetDetails } from './shared';
 
@@ -20,5 +21,37 @@ export async function dropTable(
     precheck: [step(`ensure table "${tableName}" exists`, present.sql, present.params)],
     execute: [step(`drop table "${tableName}"`, `DROP TABLE ${qualified}`)],
     postcheck: [step(`verify table "${tableName}" does not exist`, absent.sql, absent.params)],
+  };
+}
+
+export async function renameTable(
+  schemaName: string,
+  fromName: string,
+  toName: string,
+  lowerer: ExecuteRequestLowerer,
+): Promise<Op> {
+  const qualified = qualifyTableName(schemaName, fromName);
+  const from = await lowerer.lowerToExecuteRequest(
+    tableExistsAst(schemaName, fromName).tablePresent(),
+  );
+  const toChecks = tableExistsAst(schemaName, toName);
+  const toAbsent = await lowerer.lowerToExecuteRequest(toChecks.tableAbsent());
+  const toPresent = await lowerer.lowerToExecuteRequest(toChecks.tablePresent());
+  return {
+    id: `renameTable.${fromName}`,
+    label: `Rename table "${fromName}" to "${toName}"`,
+    operationClass: 'widening',
+    target: targetDetails('table', toName, schemaName),
+    precheck: [
+      step(`ensure table "${fromName}" exists`, from.sql, from.params),
+      step(`ensure table "${toName}" does not exist`, toAbsent.sql, toAbsent.params),
+    ],
+    execute: [
+      step(
+        `rename table "${fromName}" to "${toName}"`,
+        `ALTER TABLE ${qualified} RENAME TO ${quoteIdentifier(toName)}`,
+      ),
+    ],
+    postcheck: [step(`verify table "${toName}" exists`, toPresent.sql, toPresent.params)],
   };
 }

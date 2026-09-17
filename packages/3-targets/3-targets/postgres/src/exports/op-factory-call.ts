@@ -29,6 +29,7 @@ export {
   RenameCheckConstraintCall,
   RenameIndexCall,
   RenamePostgresRlsPolicyCall,
+  RenameTableCall,
   SetDefaultCall,
   SetNotNullCall,
 } from '../core/migrations/op-factory-call';

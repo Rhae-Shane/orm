@@ -161,6 +161,7 @@ function classifyCall(call: PostgresOpFactoryCall): CallCategory {
     case 'renameCheckConstraint':
       return 'unique'; // after uniques, before indexes
     case 'createTable':
+    case 'renameTable':
       return 'table';
     case 'enableRowLevelSecurity':
     case 'disableRowLevelSecurity':

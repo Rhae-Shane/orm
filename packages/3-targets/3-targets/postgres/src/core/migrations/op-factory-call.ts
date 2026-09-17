@@ -93,7 +93,7 @@ import {
 } from './operations/rls';
 import type { ForeignKeySpec } from './operations/shared';
 import { step, targetDetails } from './operations/shared';
-import { dropTable } from './operations/tables';
+import { dropTable, renameTable } from './operations/tables';
 import { buildAddNotNullColumnWithTemporaryDefaultOperation } from './planner-recipes';
 import type { PostgresPlanTargetDetails } from './planner-target-details';
 
@@ -356,6 +356,54 @@ export class DropTableCall extends PostgresOpFactoryCallNode {
     }
     opts.push(`table: ${jsonToTsSource(this.tableName)}`);
     return `this.dropTable({ ${opts.join(', ')} })`;
+  }
+
+  override importRequirements(): readonly ImportRequirement[] {
+    return [];
+  }
+}
+
+export class RenameTableCall extends PostgresOpFactoryCallNode {
+  readonly factoryName = 'renameTable' as const;
+  // `widening` for the same reason as `RenameCheckConstraintCall`: a rename is
+  // neither additive creation nor destructive, and the class vocabulary has no
+  // neutral middle class, so this is the class that plans under every
+  // allowance set except additive-only init.
+  readonly operationClass = 'widening' as const;
+  readonly schemaName: string;
+  readonly oldTableName: string;
+  /** The new name: the table's contract-side identity after the rename. */
+  readonly tableName: string;
+  readonly label: string;
+
+  constructor(schemaName: string, oldTableName: string, tableName: string) {
+    super();
+    this.schemaName = schemaName;
+    this.oldTableName = oldTableName;
+    this.tableName = tableName;
+    this.label = `Rename table "${oldTableName}" to "${tableName}"`;
+    this.freeze();
+  }
+
+  async toOp(lowerer?: ExecuteRequestLowerer): Promise<Op> {
+    if (lowerer === undefined) {
+      throw postgresError(
+        'MIGRATION.POSTGRES_CONTROL_STACK_MISSING',
+        `RenameTableCall.toOp: a lowerer is required on the Postgres planner path (table "${this.oldTableName}"). Pass the control adapter to createPostgresMigrationPlanner.`,
+        { meta: { factory: 'RenameTableCall' } },
+      );
+    }
+    return renameTable(this.schemaName, this.oldTableName, this.tableName, lowerer);
+  }
+
+  renderTypeScript(): string {
+    const opts: string[] = [];
+    if (this.schemaName !== UNBOUND_NAMESPACE_ID) {
+      opts.push(`schema: ${jsonToTsSource(this.schemaName)}`);
+    }
+    opts.push(`table: ${jsonToTsSource(this.oldTableName)}`);
+    opts.push(`to: ${jsonToTsSource(this.tableName)}`);
+    return `this.renameTable({ ${opts.join(', ')} })`;
   }
 
   override importRequirements(): readonly ImportRequirement[] {
@@ -1959,6 +2007,7 @@ export class RenamePostgresRlsPolicyCall extends PostgresOpFactoryCallNode {
 export type PostgresOpFactoryCall =
   | CreateTableCall
   | DropTableCall
+  | RenameTableCall
   | AddColumnCall
   | DropColumnCall
   | AlterColumnTypeCall

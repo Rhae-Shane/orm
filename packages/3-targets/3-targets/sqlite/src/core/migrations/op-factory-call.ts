@@ -262,6 +262,68 @@ export class DropTableCall extends SqliteOpFactoryCallNode {
   }
 }
 
+export class RenameTableCall extends SqliteOpFactoryCallNode {
+  readonly factoryName = 'renameTable' as const;
+  // `widening`: a rename is neither additive creation nor destructive, and the
+  // class vocabulary has no neutral middle class, so this is the class that
+  // plans under every allowance set except additive-only init.
+  readonly operationClass = 'widening' as const;
+  readonly oldTableName: string;
+  /** The new name: the table's contract-side identity after the rename. */
+  readonly tableName: string;
+  readonly label: string;
+
+  constructor(oldTableName: string, tableName: string) {
+    super();
+    this.oldTableName = oldTableName;
+    this.tableName = tableName;
+    this.label = `Rename table ${oldTableName} to ${tableName}`;
+    this.freeze();
+  }
+
+  async toOp(lowerer?: ExecuteRequestLowerer): Promise<Op> {
+    if (lowerer === undefined) {
+      throw sqliteError(
+        'MIGRATION.SQLITE_CONTROL_STACK_MISSING',
+        `RenameTableCall.toOp: a lowerer is required on the SQLite planner path (table "${this.oldTableName}"). Pass the control adapter to createSqliteMigrationPlanner.`,
+        { meta: { factory: this.factoryName, tableName: this.oldTableName } },
+      );
+    }
+    const from = await lowerer.lowerToExecuteRequest(
+      tableExistsAst(this.oldTableName).tablePresent(),
+    );
+    const toChecks = tableExistsAst(this.tableName);
+    const toAbsent = await lowerer.lowerToExecuteRequest(toChecks.tableAbsent());
+    const toPresent = await lowerer.lowerToExecuteRequest(toChecks.tablePresent());
+    return {
+      id: `renameTable.${this.oldTableName}`,
+      label: this.label,
+      summary: `Renames table ${this.oldTableName} to ${this.tableName}, keeping its rows`,
+      operationClass: 'widening',
+      target: { id: 'sqlite', details: buildTargetDetails('table', this.tableName) },
+      precheck: [
+        step(`ensure table "${this.oldTableName}" exists`, from.sql, from.params),
+        step(`ensure table "${this.tableName}" does not exist`, toAbsent.sql, toAbsent.params),
+      ],
+      execute: [
+        step(
+          `rename table "${this.oldTableName}" to "${this.tableName}"`,
+          `ALTER TABLE ${quoteIdentifier(this.oldTableName)} RENAME TO ${quoteIdentifier(this.tableName)}`,
+        ),
+      ],
+      postcheck: [step(`verify table "${this.tableName}" exists`, toPresent.sql, toPresent.params)],
+    };
+  }
+
+  renderTypeScript(): string {
+    return `this.renameTable({ table: ${jsonToTsSource(this.oldTableName)}, to: ${jsonToTsSource(this.tableName)} })`;
+  }
+
+  override importRequirements(): readonly ImportRequirement[] {
+    return [];
+  }
+}
+
 export class RecreateTableCall extends SqliteOpFactoryCallNode {
   readonly factoryName = 'recreateTable' as const;
   readonly operationClass: MigrationOperationClass;
@@ -688,6 +750,7 @@ export type SqliteOpFactoryCall =
   | CreateTableCall
   | DropTableCall
   | RecreateTableCall
+  | RenameTableCall
   | AddColumnCall
   | DropColumnCall
   | CreateIndexCall
