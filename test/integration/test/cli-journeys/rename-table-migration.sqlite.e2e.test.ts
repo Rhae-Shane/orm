@@ -1,7 +1,9 @@
 /**
  * Renaming a table keeps its rows (SQLite).
  *
- * The SQLite twin of `rename-table-migration.e2e.test.ts`, driven through a file database and the SQLite facade config. Create `userProfile` with rows, a unique constraint, a foreign key and an index, then drop the `@@map` so the model names `UserProfile`. `migration plan --rename` plans the rename plus a drop and a create of each index named after the old table; `migrate` keeps the rows; `db verify --schema-only` is clean; a plan with no schema change is empty; and a later migration that removes the unique constraint, the foreign key and the index applies.
+ * The SQLite twin of `rename-table-migration.e2e.test.ts`, driven through a file database and the SQLite facade config. Journey R3: create `userProfile` with rows, a unique constraint, a foreign key and an index, then drop the `@@map` so the model names `UserProfile`. `migration plan --rename` plans the rename plus a drop and a create of each index named after the old table; `migrate` keeps the rows; `db verify --schema-only` is clean; a plan with no schema change is empty; and a later migration that removes the unique constraint, the foreign key and the index applies.
+ *
+ * Journey R4 follows the by-hand path of a project managed with `db update`: the case guard refuses and gives the two-statement rename, the statements are run by hand, and `db update` then drops each index named after the old table before creating it under the new name, keeping the rows.
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -17,6 +19,7 @@ import {
   parseJsonOutput,
   planMigrationAndSelfEmit,
   runContractEmit,
+  runDbUpdate,
   runDbVerify,
   runMigrate,
   runMigrationPlan,
@@ -243,6 +246,77 @@ withTempDir(({ createTempDir }) => {
           verifyDropped.exitCode,
           `R3.14: db verify --schema-only after the removal: ${verifyDropped.stderr}`,
         ).toBe(0);
+      },
+      timeouts.spinUpPpgDev,
+    );
+  });
+
+  describe('Journey R4 (SQLite): rename a table by hand in a project managed with db update', () => {
+    it(
+      'the guard gives the two-statement rename; after running it, db update recreates the indexes and verify is clean',
+      async () => {
+        const ctx = setupSqliteJourney(createTempDir);
+
+        const emit = await runContractEmit(ctx);
+        expect(emit.exitCode, `R4.01: emit userProfile: ${emit.stderr}`).toBe(0);
+        const create = await runDbUpdate(ctx, ['--json']);
+        expect(create.exitCode, `R4.02: db update creates userProfile: ${create.stderr}`).toBe(0);
+        withDatabase(ctx.dbPath, (db) => {
+          db.exec(
+            `INSERT INTO "Account" (id) VALUES (1);
+             INSERT INTO "userProfile" (id, email, handle, "accountId")
+             VALUES (1, 'alice@example.com', 'alice', 1), (2, 'bob@example.com', 'bob', 1)`,
+          );
+        });
+
+        writeFileSync(join(ctx.testDir, 'contract.prisma'), TO_PSL, 'utf-8');
+        const emitRenamed = await runContractEmit(ctx);
+        expect(emitRenamed.exitCode, `R4.03: emit UserProfile: ${emitRenamed.stderr}`).toBe(0);
+
+        const refused = await runDbUpdate(ctx, ['--json']);
+        expect(refused.exitCode, 'R4.04: db update is refused by the guard').not.toBe(0);
+        const refusal = engineError(refused);
+        expect(refusal?.why, 'R4.04: guard names the case change').toContain(
+          'MIGRATION.TABLE_NAME_CASE_CHANGED',
+        );
+        expect(
+          refusal?.nextActions?.map((action) => action.label).join('\n'),
+          'R4.04: guard gives the SQLite by-hand statements',
+        ).toContain(
+          'rename it by hand with ALTER TABLE "userProfile" RENAME TO "_prisma_rename_UserProfile"; ALTER TABLE "_prisma_rename_UserProfile" RENAME TO "UserProfile", then run db update again.',
+        );
+
+        withDatabase(ctx.dbPath, (db) => {
+          db.exec('ALTER TABLE "userProfile" RENAME TO "_prisma_rename_UserProfile"');
+          db.exec('ALTER TABLE "_prisma_rename_UserProfile" RENAME TO "UserProfile"');
+        });
+
+        const update = await runDbUpdate(ctx, ['--json', '--confirm', 'journey.db']);
+        expect(update.exitCode, `R4.05: db update after the rename: ${update.stdout}`).toBe(0);
+        const state = withDatabase(ctx.dbPath, (db) => ({
+          rows: db.prepare(`SELECT id, email FROM "UserProfile" ORDER BY id`).all(),
+          objects: db
+            .prepare(
+              `SELECT type, name FROM sqlite_master WHERE tbl_name = 'UserProfile' ORDER BY type, name`,
+            )
+            .all()
+            .map((row) => `${row['type']} ${row['name']}`),
+        }));
+        expect(state, 'R4.06: rows kept, indexes under the new name').toEqual({
+          rows: [
+            { id: 1, email: 'alice@example.com' },
+            { id: 2, email: 'bob@example.com' },
+          ],
+          objects: [
+            'index UserProfile_accountId_idx_cbfb3085',
+            'index UserProfile_handle_idx_b5b249e4',
+            'index sqlite_autoindex_UserProfile_1',
+            'table UserProfile',
+          ],
+        });
+
+        const verify = await runDbVerify(ctx, ['--schema-only']);
+        expect(verify.exitCode, `R4.07: db verify --schema-only: ${verify.stderr}`).toBe(0);
       },
       timeouts.spinUpPpgDev,
     );
