@@ -10,7 +10,7 @@ changes:
         - '\\.defaultSql\\('
   - id: psl-raw-sql-default-is-a-tagged-literal
     summary: |
-      In PSL, a raw SQL column default is written as a tagged literal, `@default(sql`...`)` or
+      In PSL, a raw SQL column default is written as a tagged literal, ``@default(sql`...`)`` or
       `@default(sql"...")`, and Postgres has a named `@default(gen_random_uuid())`.
       `@default(dbgenerated("..."))` still works in this release; the new forms are the ones to write.
     detection:
@@ -34,4 +34,13 @@ Import the helpers from the module the code already imports `defineContract`, `f
 
 ## `psl-raw-sql-default-is-a-tagged-literal`
 
-Where a schema writes `@default(dbgenerated("<expression>"))`, the form to write is `` @default(sql`<expression>`) ``, or `@default(sql"<expression>")` when the expression contains backticks; a Postgres `dbgenerated("gen_random_uuid()")` is `@default(gen_random_uuid())`. `prisma contract infer` prints these forms. `dbgenerated("...")` still emits the same contract in this release, so this rewrite can happen at any time before it is removed.
+Rewrite every `@default(dbgenerated("<expression>"))` by its expression:
+
+| Default | Replacement |
+| --- | --- |
+| `@default(dbgenerated("now()"))` | `@default(now())` |
+| `@default(dbgenerated("autoincrement()"))` | `@default(autoincrement())` |
+| `@default(dbgenerated("gen_random_uuid()"))` on Postgres | `@default(gen_random_uuid())` |
+| `@default(dbgenerated("<anything else>"))` | `` @default(sql`<anything else>`) ``, or `@default(sql"<anything else>")` when the expression contains backticks |
+
+The first two rows are required, not a matter of style: `` sql`now()` `` and `` sql`autoincrement()` `` are refused with `PSL_INVALID_DEFAULT_SQL`, because Prisma reads those two expressions as its own default functions. Every other expression, including `NOW()`, is used as written. `prisma contract infer` prints these forms. `dbgenerated("...")` still emits the same contract in this release, so this rewrite can happen at any time before it is removed.
