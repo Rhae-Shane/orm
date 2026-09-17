@@ -250,7 +250,6 @@ describe('sqlAttributeSpecs.field.default', () => {
       'funcCall',
       'funcCall',
       'funcCall',
-      'funcCall',
       'taggedLiteral',
     ]);
     const uuid = value.alternatives.find(
@@ -299,16 +298,7 @@ describe('sqlAttributeSpecs.field.default', () => {
       value.alternatives
         .filter((alt) => alt.kind === 'funcCall')
         .map((alt) => (alt as FuncCallMetadata<FieldAttributeCtx>).name),
-    ).toEqual([
-      'autoincrement',
-      'now',
-      'gen_random_uuid',
-      'uuid',
-      'cuid',
-      'ulid',
-      'nanoid',
-      'dbgenerated',
-    ]);
+    ).toEqual(['autoincrement', 'now', 'uuid', 'cuid', 'ulid', 'nanoid', 'dbgenerated']);
     expect(value.alternatives.at(-1)).toMatchObject({
       kind: 'taggedLiteral',
       label: 'sql`...`',

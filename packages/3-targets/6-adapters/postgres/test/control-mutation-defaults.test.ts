@@ -40,7 +40,6 @@ describe('createPostgresDefaultFunctionRegistry', () => {
       expect.arrayContaining([
         'autoincrement',
         'now',
-        'gen_random_uuid',
         'uuid',
         'cuid',
         'ulid',
@@ -66,22 +65,8 @@ describe('createPostgresDefaultFunctionRegistry', () => {
     });
   });
 
-  it('registers gen_random_uuid immediately after now', () => {
-    const keys = [...registry.keys()];
-    expect(keys.indexOf('gen_random_uuid')).toBe(keys.indexOf('now') + 1);
-  });
-
-  it('lowers gen_random_uuid() to a storage default', () => {
-    const handler = registry.get('gen_random_uuid')!;
-    expect(handler.usageSignatures).toEqual(['gen_random_uuid()']);
-    const result = handler.lower({ call: makeCall('gen_random_uuid'), context: stubContext });
-    expect(result).toEqual({
-      ok: true,
-      value: {
-        kind: 'storage',
-        defaultValue: { kind: 'function', expression: 'gen_random_uuid()' },
-      },
-    });
+  it('registers no named gen_random_uuid function; raw database functions use sql`...`', () => {
+    expect(registry.has('gen_random_uuid')).toBe(false);
   });
 
   it('lowers autoincrement() to a storage default', () => {

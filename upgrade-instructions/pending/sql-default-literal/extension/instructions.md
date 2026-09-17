@@ -27,10 +27,11 @@ Rewrite every `.defaultSql('<expression>')` call by its expression:
 | --- | --- | --- |
 | `.defaultSql('now()')` | `.default(now())` | `now` from `@internal/sql-contract-ts/contract-builder` |
 | `.defaultSql('autoincrement()')` | `.default(autoincrement())` | `autoincrement` from `@internal/sql-contract-ts/contract-builder` |
-| `.defaultSql('gen_random_uuid()')` | `.default(genRandomUuid())` | `genRandomUuid` from `@internal/postgres/contract-builder` |
 | `.defaultSql('<anything else>')` | `` .default(sql`<anything else>`) `` | `sql` from `@internal/sql-contract-ts/contract-builder` |
 
-`sql` takes no interpolation. Every form lowers to the same `{ kind: 'function', expression }` default, so emitted contracts do not change. In PSL, rewrite `@default(dbgenerated("<expression>"))` by its expression: `dbgenerated("now()")` becomes `@default(now())`, `dbgenerated("autoincrement()")` becomes `@default(autoincrement())`, `dbgenerated("gen_random_uuid()")` becomes `@default(gen_random_uuid())` on Postgres, and anything else becomes `` @default(sql`<expression>`) `` (or `@default(sql"<expression>")` when the expression contains backticks). `` sql`now()` `` and `` sql`autoincrement()` `` are refused, in PSL and in the TypeScript `sql` tag, so those two must use the named form. `dbgenerated` still works in this release.
+There is no named helper for other database functions: `.defaultSql('gen_random_uuid()')` becomes `` .default(sql`gen_random_uuid()`) ``.
+
+`sql` takes no interpolation. Every form lowers to the same `{ kind: 'function', expression }` default, so emitted contracts do not change. In PSL, rewrite `@default(dbgenerated("<expression>"))` by its expression: `dbgenerated("now()")` becomes `@default(now())`, `dbgenerated("autoincrement()")` becomes `@default(autoincrement())`, and anything else, including `dbgenerated("gen_random_uuid()")`, becomes `` @default(sql`<expression>`) `` (or `@default(sql"<expression>")` when the expression contains backticks). `` sql`now()` `` and `` sql`autoincrement()` `` are refused, in PSL and in the TypeScript `sql` tag, so those two must use the named form. `dbgenerated` still works in this release.
 
 ## `control-mutation-defaults-require-literal-tag-registry`
 

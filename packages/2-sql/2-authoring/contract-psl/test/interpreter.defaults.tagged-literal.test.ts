@@ -39,6 +39,11 @@ describe('interpretPslDocumentToSqlContract tagged literal defaults', () => {
     return result.ok ? [] : result.failure.diagnostics;
   };
 
+  const lineThreeSpan = (startColumn: number, length: number) => ({
+    start: { offset: 24 + startColumn, line: 3, column: startColumn },
+    end: { offset: 24 + startColumn + length, line: 3, column: startColumn + length },
+  });
+
   it.each([
     ['backtick string', 'v String @default(sql`md5(random()::text)`)'],
     ['double-quoted string', 'v String @default(sql"md5(random()::text)")'],
@@ -73,16 +78,16 @@ describe('interpretPslDocumentToSqlContract tagged literal defaults', () => {
     });
   });
 
-  it('lowers gen_random_uuid() as a named storage function', () => {
-    expect(columnDefault('v String @default(gen_random_uuid())', 'v')).toEqual({
-      kind: 'function',
-      expression: 'gen_random_uuid()',
-    });
-  });
-
-  const lineThreeSpan = (startColumn: number, length: number) => ({
-    start: { offset: 24 + startColumn, line: 3, column: startColumn },
-    end: { offset: 24 + startColumn + length, line: 3, column: startColumn + length },
+  it('refuses gen_random_uuid() as a named default function; it is written sql`gen_random_uuid()`', () => {
+    expect(diagnostics('v String @default(gen_random_uuid())')).toEqual([
+      {
+        code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+        message:
+          'Expected one of: string | number | boolean | autoincrement() | now() | uuid() | cuid() | ulid() | nanoid() | dbgenerated() | sql`...`',
+        sourceId: 'schema.prisma',
+        span: lineThreeSpan(21, 'gen_random_uuid()'.length),
+      },
+    ]);
   });
 
   it('rejects an unregistered tag at the literal and lists the known tags', () => {

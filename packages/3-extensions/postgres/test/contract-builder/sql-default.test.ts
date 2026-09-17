@@ -4,27 +4,23 @@ import {
   autoincrement,
   defineContract,
   field,
-  genRandomUuid,
   model,
   now,
   sql,
 } from '../../src/exports/contract-builder';
 
-describe('postgres contract builder default helpers', () => {
-  it('genRandomUuid() is the storage default PSL writes as @default(gen_random_uuid())', () => {
-    expect(genRandomUuid()).toEqual({ kind: 'function', expression: 'gen_random_uuid()' });
-  });
-
-  it('re-exports the family helpers beside it', () => {
+describe('postgres contract builder defaults', () => {
+  it('re-exports the family default helpers', () => {
     expect(now()).toEqual({ kind: 'function', expression: 'now()' });
     expect(autoincrement()).toEqual({ kind: 'function', expression: 'autoincrement()' });
-    expect(sql`'{}'::jsonb`).toEqual({ kind: 'function', expression: "'{}'::jsonb" });
   });
 
-  it('lowers genRandomUuid() through defineContract', () => {
+  it('lowers .default(sql`gen_random_uuid()`) through defineContract', () => {
     const contract = defineContract({
       models: {
-        T: model('T', { fields: { id: field.column(textColumn).default(genRandomUuid()).id() } }),
+        T: model('T', {
+          fields: { id: field.column(textColumn).default(sql`gen_random_uuid()`).id() },
+        }),
       },
     });
     expect(

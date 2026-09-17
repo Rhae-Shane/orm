@@ -50,13 +50,6 @@
                   "kind": "scalar"
                 }
               },
-              "ident": {
-                "nullable": false,
-                "type": {
-                  "codecId": "pg/text@1",
-                  "kind": "scalar"
-                }
-              },
               "tags": {
                 "many": true,
                 "nullable": false,
@@ -83,9 +76,6 @@
                 },
                 "id": {
                   "column": "id"
-                },
-                "ident": {
-                  "column": "ident"
                 },
                 "tags": {
                   "column": "tags"
@@ -158,15 +148,6 @@
                   "nativeType": "text",
                   "nullable": false
                 },
-                "ident": {
-                  "codecId": "pg/text@1",
-                  "default": {
-                    "expression": "gen_random_uuid()",
-                    "kind": "function"
-                  },
-                  "nativeType": "text",
-                  "nullable": false
-                },
                 "tags": {
                   "codecId": "pg/text@1",
                   "default": {
@@ -190,7 +171,7 @@
         "id": "public"
       }
     },
-    "storageHash": "8f7c205fba3f96a6c7a1f484c67ed18296164755d5aa24adafa7d0ec9f61119f"
+    "storageHash": "77dae0dd66764eacc0bca2461727922fbce9c8cb6c39428560033a88e78dcf6f"
   },
   "capabilities": {
     "postgres": {

@@ -26,7 +26,6 @@ export {
   rel,
   sql,
 } from '@internal/sql-contract-ts/contract-builder';
-export { genRandomUuid } from '../contract/default-functions';
 export { defineContract } from '../contract/define-contract';
 export { enumType } from '../contract/enum-type';
 export { type NativeEnumHandle, nativeEnum, pg } from '../contract/native-enum';

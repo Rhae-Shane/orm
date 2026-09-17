@@ -1069,7 +1069,6 @@ describe('providePslCompletionItems', () => {
       'false',
       'autoincrement',
       'now',
-      'gen_random_uuid',
       'uuid',
       'cuid',
       'ulid',

@@ -6,7 +6,6 @@ model T {
   expires   DateTime @default(sql"(now() + '00:03:00'::interval)")
   createdAt DateTime @default(pg.sql`(now() + interval '1 hour')`)
   tags      String[] @default(sql`'{}'::text[]`)
-  ident     String   @default(gen_random_uuid())
   escaped   String   @default(sql`E'\n'`)
 
   @@map("t")
