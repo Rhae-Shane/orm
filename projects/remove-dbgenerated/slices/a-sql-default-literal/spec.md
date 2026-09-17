@@ -40,6 +40,7 @@ These supersede the sections below where they differ.
 - A PSL tagged literal has no interpolation rule; the backtick fence has two escapes, `` \` `` and `\\`.
 - A quoted fence is any PSL string literal, double or single quotes.
 - An unterminated backtick fence ends before the next line whose first non-whitespace character is `}`.
+- After SevInf's review: no separate token kind or fence concept. A tagged literal is a qualified name followed by an ordinary string literal, which accepts backticks (two escapes) as a third quote style; whitespace between tag and string is allowed; a backtick string outside a tagged literal is `PSL_BACKTICK_STRING_REQUIRES_TAG`; `PSL_TAGGED_LITERAL_FENCE_EXPECTED` and `PSL_UNTERMINATED_TEMPLATE_LITERAL` are deleted in favour of `PSL_UNTERMINATED_STRING`. `oneOf` is unchanged from main: tag membership and canonicalization are checked at lowering. The language server completes registered tags.
 - The TypeScript `sql` tag reads raw template text through the same escape resolver as PSL.
 - Both targets' planners render the authored default and compare through the resolver in planning and verification alike.
 - `PSL_INVALID_DEFAULT_SQL` and `PSL_LIST_AUTOINCREMENT_UNSUPPORTED` are contributed codes declared in the SQL layer, not framework codes.

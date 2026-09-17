@@ -28,7 +28,7 @@ Items the project deliberately leaves open. Each names the decision, why it is d
 
 ## 4. Language server, formatter, and highlighting for tagged literals
 
-**Owner:** Serhii. Brief delivered by slice C at `projects/remove-dbgenerated/editor-tooling-brief.md`. Known gaps as of slice A: no semantic token for a tagged literal's tag identifier, and no completion item for registered tags inside `@default(`.
+**Owner:** Serhii. Brief delivered by slice C at `projects/remove-dbgenerated/editor-tooling-brief.md`. Known gaps as of slice A: no semantic token for a tagged literal's tag identifier, and no SQL highlighting inside backtick strings. Tag completion is implemented in slice A.
 
 ## 5. Deleting `.defaultSql()`
 

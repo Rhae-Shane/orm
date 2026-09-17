@@ -76,9 +76,9 @@ When a Postgres default is a named function, infer prints the named function. Wh
 
 A Prisma 7 `@default(dbgenerated("x"))` lowers directly to `{ kind: 'function', expression: 'x' }` without going through the default-function registry. A Prisma 7 `@default(dbgenerated())` with no argument lowers to no column default at all, on every field, with no diagnostic. The contract then says the column has no default and the migration and runtime systems act on that. The current diagnostic for the empty form on required fields is deleted.
 
-### D14. Editor tooling is a hand-off
+### D14. Editor tooling is mostly a hand-off
 
-The language server, the PSL formatter, and syntax highlighting are not extended by this project beyond what keeps them from breaking on the new token. Slice C produces a written brief for Serhii covering what the editor tools must do with tagged literals.
+Slice A implements completion of registered tags inside `@default(`, because the attribute specification already carries the tags. Hover, SQL highlighting inside backtick strings, and anything further go to Serhii in a written brief from slice C.
 
 ## Non-goals
 
