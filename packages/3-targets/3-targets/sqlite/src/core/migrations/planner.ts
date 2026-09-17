@@ -236,7 +236,20 @@ export class SqliteMigrationPlanner
     // toOp + importRequirements ride directly through the same emit path
     // as structural ops, no `RawSqlCall` wrap. The table renames run first:
     // every later operation addresses the renamed table by its new name.
-    const calls = [...renameTableCalls, ...result.value.calls, ...fieldEventOps];
+    // SQLite cannot rename an index and compares index names without case, so
+    // an index whose table-derived name changes only in case must be dropped
+    // before its replacement is created: index drops on a renamed table run
+    // right after the renames.
+    const renamedTables = new Set((applied?.value.renames ?? []).map((rename) => rename.to));
+    const indexDropsOnRenamedTables = result.value.calls.filter(
+      (call) => call.factoryName === 'dropIndex' && renamedTables.has(call.tableName),
+    );
+    const calls = [
+      ...renameTableCalls,
+      ...indexDropsOnRenamedTables,
+      ...result.value.calls.filter((call) => !indexDropsOnRenamedTables.includes(call)),
+      ...fieldEventOps,
+    ];
 
     const destination: SqliteMigrationDestinationInfo = {
       storageHash: options.contract.storage.storageHash,

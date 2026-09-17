@@ -33,6 +33,7 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import { namingOf, parseWireName } from '@internal/sql-schema-ir/naming';
 import type { SqlSchemaIR } from '@internal/sql-schema-ir/types';
 import { SqlCheckConstraintIR, SqlIndexIR } from '@internal/sql-schema-ir/types';
+import { assertDefined } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { PostgresRlsPolicy } from '../postgres-rls-policy';
@@ -60,7 +61,7 @@ import type { PostgresOpFactoryCall } from './op-factory-call';
 import {
   CreatePostgresRlsPolicyCall,
   DropPostgresRlsPolicyCall,
-  RenameCheckConstraintCall,
+  RenameConstraintCall,
   RenameIndexCall,
   RenamePostgresRlsPolicyCall,
   RenameTableCall,
@@ -70,6 +71,7 @@ import { postgresPlannerStrategies } from './planner-strategies';
 import { postgresContractToSchema } from './postgres-contract-to-schema';
 import { renameRlsReferences } from './rename-rls-references';
 import { resolveDdlSchemaForNamespaceStorage } from './resolve-ddl-schema';
+import { constraintRenamesForTableRename } from './table-rename-constraint-renames';
 import { verifyPostgresNamespacePresence } from './verify-postgres-namespaces';
 
 type PlannerFrameworkComponents = SqlMigrationPlannerPlanOptions extends {
@@ -235,15 +237,34 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
       applied === undefined
         ? options.schema
         : postgresContractToSchema(applied.value.contract, options.frameworkComponents);
-    const renameTableCalls = (applied?.value.renames ?? []).map(
-      (rename) =>
-        new RenameTableCall(
+    const renameTableCalls = (applied?.value.renames ?? []).flatMap(
+      (rename): PostgresOpFactoryCall[] => {
+        const schemaName =
           rename.namespaceId === UNBOUND_NAMESPACE_ID
             ? UNBOUND_NAMESPACE_ID
-            : resolveDdlSchemaForNamespaceStorage(options.contract.storage, rename.namespaceId),
-          rename.from,
-          rename.to,
-        ),
+            : resolveDdlSchemaForNamespaceStorage(options.contract.storage, rename.namespaceId);
+        const previous =
+          options.fromContract?.storage.namespaces[rename.namespaceId]?.entries.table?.[
+            rename.from
+          ];
+        const next =
+          options.contract.storage.namespaces[rename.namespaceId]?.entries.table?.[rename.to];
+        assertDefined(
+          previous,
+          `a resolved rename names table "${rename.from}" of the previous contract`,
+        );
+        assertDefined(next, `a resolved rename names table "${rename.to}" of the next contract`);
+        return [
+          new RenameTableCall(schemaName, rename.from, rename.to),
+          ...constraintRenamesForTableRename({
+            schemaName,
+            from: rename.from,
+            to: rename.to,
+            previous,
+            next,
+          }),
+        ];
+      },
     );
     const disallowedRenames = renameTableCalls.filter(
       (call) => !options.policy.allowedOperationClasses.includes(call.operationClass),
@@ -631,11 +652,11 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
     options: PlannerOptionsWithComponents,
     issues: readonly SchemaDiffIssue<SqlSchemaDiffNode>[],
   ): {
-    readonly calls: readonly RenameCheckConstraintCall[];
+    readonly calls: readonly RenameConstraintCall[];
     readonly consumed: ReadonlySet<SchemaDiffIssue<SqlSchemaDiffNode>>;
   } {
     const consumed = new Set<SchemaDiffIssue<SqlSchemaDiffNode>>();
-    const calls: RenameCheckConstraintCall[] = [];
+    const calls: RenameConstraintCall[] = [];
     if (!options.policy.allowedOperationClasses.includes('widening')) {
       return { calls, consumed };
     }
@@ -697,9 +718,10 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
       consumed.add(missingFinding.issue);
       consumed.add(candidate.issue);
       calls.push(
-        new RenameCheckConstraintCall(
+        new RenameConstraintCall(
           emissionSchema(missingFinding.ddlSchema),
           missingFinding.tableName,
+          'checkConstraint',
           candidate.node.name,
           missingFinding.node.name,
         ),

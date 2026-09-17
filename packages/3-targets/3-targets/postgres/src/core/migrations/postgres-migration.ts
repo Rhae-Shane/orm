@@ -35,13 +35,14 @@ import {
   DropPostgresRlsPolicyCall,
   DropTableCall,
   EnableRowLevelSecurityCall,
-  RenameCheckConstraintCall,
+  RenameConstraintCall,
   RenameIndexCall,
   RenamePostgresRlsPolicyCall,
   RenameTableCall,
   SetDefaultCall,
   SetNotNullCall,
 } from './op-factory-call';
+import type { RenamableConstraintKind } from './operations/constraints';
 import { type DataTransformOptions, dataTransform } from './operations/data-transform';
 import { installExtension } from './operations/dependencies';
 import type { CreateIndexExtras } from './operations/indexes';
@@ -297,12 +298,23 @@ export abstract class PostgresMigration<
     readonly from: string;
     readonly to: string;
   }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
-    return new RenameCheckConstraintCall(
+    return this.renameConstraint({ ...options, kind: 'checkConstraint' });
+  }
+
+  protected renameConstraint(options: {
+    readonly schema?: string;
+    readonly table: string;
+    readonly kind: RenamableConstraintKind;
+    readonly from: string;
+    readonly to: string;
+  }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
+    return new RenameConstraintCall(
       options.schema ?? UNBOUND_NAMESPACE_ID,
       options.table,
+      options.kind,
       options.from,
       options.to,
-    ).toOp(this.controlAdapterFor('renameCheckConstraint'));
+    ).toOp(this.controlAdapterFor('renameConstraint'));
   }
 
   protected dropCheckConstraint(options: {

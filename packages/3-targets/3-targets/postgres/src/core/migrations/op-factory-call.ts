@@ -73,7 +73,9 @@ import {
   addUnique,
   dropCheckConstraint,
   dropConstraint,
-  renameCheckConstraint,
+  type RenamableConstraintKind,
+  renameConstraint,
+  renameConstraintLabel,
 } from './operations/constraints';
 import { createExtension } from './operations/dependencies';
 import {
@@ -365,7 +367,7 @@ export class DropTableCall extends PostgresOpFactoryCallNode {
 
 export class RenameTableCall extends PostgresOpFactoryCallNode {
   readonly factoryName = 'renameTable' as const;
-  // `widening` for the same reason as `RenameCheckConstraintCall`: a rename is
+  // `widening` for the same reason as `RenameConstraintCall`: a rename is
   // neither additive creation nor destructive, and the class vocabulary has no
   // neutral middle class, so this is the class that plans under every
   // allowance set except additive-only init.
@@ -1095,8 +1097,8 @@ export class DropConstraintCall extends PostgresOpFactoryCallNode {
   }
 }
 
-export class RenameCheckConstraintCall extends PostgresOpFactoryCallNode {
-  readonly factoryName = 'renameCheckConstraint' as const;
+export class RenameConstraintCall extends PostgresOpFactoryCallNode {
+  readonly factoryName = 'renameConstraint' as const;
   // `widening` is chosen so the rename plans under every allowance set except
   // additive-only init — a rename is neither additive-creation nor
   // destructive, and the class vocabulary has no neutral middle class. It is
@@ -1104,6 +1106,7 @@ export class RenameCheckConstraintCall extends PostgresOpFactoryCallNode {
   readonly operationClass = 'widening' as const;
   readonly schemaName: string;
   readonly tableName: string;
+  readonly kind: RenamableConstraintKind;
   readonly oldConstraintName: string;
   readonly newConstraintName: string;
   readonly label: string;
@@ -1111,15 +1114,17 @@ export class RenameCheckConstraintCall extends PostgresOpFactoryCallNode {
   constructor(
     schemaName: string,
     tableName: string,
+    kind: RenamableConstraintKind,
     oldConstraintName: string,
     newConstraintName: string,
   ) {
     super();
     this.schemaName = schemaName;
     this.tableName = tableName;
+    this.kind = kind;
     this.oldConstraintName = oldConstraintName;
     this.newConstraintName = newConstraintName;
-    this.label = `Rename check constraint "${oldConstraintName}" to "${newConstraintName}" on "${tableName}"`;
+    this.label = renameConstraintLabel(kind, oldConstraintName, newConstraintName, tableName);
     this.freeze();
   }
 
@@ -1127,13 +1132,14 @@ export class RenameCheckConstraintCall extends PostgresOpFactoryCallNode {
     if (lowerer === undefined) {
       throw postgresError(
         'MIGRATION.POSTGRES_CONTROL_STACK_MISSING',
-        `RenameCheckConstraintCall.toOp: a lowerer is required on the Postgres planner path (constraint "${this.oldConstraintName}" on table "${this.tableName}"). Pass the control adapter to createPostgresMigrationPlanner.`,
-        { meta: { factory: 'RenameCheckConstraintCall' } },
+        `RenameConstraintCall.toOp: a lowerer is required on the Postgres planner path (constraint "${this.oldConstraintName}" on table "${this.tableName}"). Pass the control adapter to createPostgresMigrationPlanner.`,
+        { meta: { factory: 'RenameConstraintCall' } },
       );
     }
-    return renameCheckConstraint(
+    return renameConstraint(
       this.schemaName,
       this.tableName,
+      this.kind,
       this.oldConstraintName,
       this.newConstraintName,
       lowerer,
@@ -1146,9 +1152,10 @@ export class RenameCheckConstraintCall extends PostgresOpFactoryCallNode {
       opts.push(`schema: ${jsonToTsSource(this.schemaName)}`);
     }
     opts.push(`table: ${jsonToTsSource(this.tableName)}`);
+    opts.push(`kind: ${jsonToTsSource(this.kind)}`);
     opts.push(`from: ${jsonToTsSource(this.oldConstraintName)}`);
     opts.push(`to: ${jsonToTsSource(this.newConstraintName)}`);
-    return `this.renameCheckConstraint({ ${opts.join(', ')} })`;
+    return `this.renameConstraint({ ${opts.join(', ')} })`;
   }
 
   override importRequirements(): readonly ImportRequirement[] {
@@ -2021,7 +2028,7 @@ export type PostgresOpFactoryCall =
   | AddForeignKeyCall
   | AddUniqueCall
   | AddCheckConstraintCall
-  | RenameCheckConstraintCall
+  | RenameConstraintCall
   | DropCheckConstraintCall
   | CreateIndexCall
   | RenameIndexCall
