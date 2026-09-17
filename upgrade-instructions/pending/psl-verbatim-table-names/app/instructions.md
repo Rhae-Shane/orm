@@ -37,8 +37,10 @@ If you plan a migration (`prisma migration plan`, `prisma db update`, `prisma mi
 ```text
 ✘ [MIGRATION.PLANNING_FAILED] Migration planning failed
   why: MIGRATION.TABLE_NAME_CASE_CHANGED: table "UserProfile" would be created and table "userProfile" dropped. Prisma 8 changed the default table name: a model with no @@map now names its table verbatim, so model UserProfile points at "UserProfile" instead of "userProfile".
-→ To keep table "userProfile" and its rows, add @@map("userProfile") to model UserProfile (or run the add-model-map codemod over the schema) and plan again. To rename the table and keep its rows instead: in a project with migration history, state the rename when planning: prisma migration plan --rename "userProfile=UserProfile" (either side may be <schema>.<name>), and the plan renames the table and the objects named after it instead of dropping and recreating the table; in a project that uses db update, rename it by hand: ALTER TABLE "userProfile" RENAME TO "UserProfile" (schema-qualified where applicable), after which the plan is empty.
+→ To keep table "userProfile" and its rows, add @@map("userProfile") to model UserProfile (or run the add-model-map codemod over the schema) and plan again. To rename the table and keep its rows instead: in a project with migration history, state the rename when planning: prisma migration plan --rename "userProfile=UserProfile" (either side may be <schema>.<name>), and the plan renames the table and the objects named after it instead of dropping and recreating the table; in a project that uses db update, rename it by hand with ALTER TABLE "userProfile" RENAME TO "UserProfile", then run db update again.
 ```
+
+That is the Postgres output. On SQLite the last clause gives the two statements SQLite needs for a rename that only changes case: `in a project that uses db update, rename it by hand with ALTER TABLE "userProfile" RENAME TO "_prisma_rename_UserProfile"; ALTER TABLE "_prisma_rename_UserProfile" RENAME TO "UserProfile", then run db update again.`
 
 The conflict fires for each pair where the table to drop equals the table to create with its first letter lowered, in the same namespace, whatever the columns. It does not fire on an empty database or on tables the contract's control policy marks `external` or `observed`. Mongo has no such check. A migration planned without the codemod drops the `userProfile` collection, and an application running the unmapped model reads and writes an empty `UserProfile` collection while the documents stay in `userProfile`, so run the codemod before planning or deploying.
 
@@ -68,15 +70,14 @@ ALTER TABLE "UserProfile" RENAME CONSTRAINT "userProfile_<columns>_fkey" TO "Use
 
 `<columns>` is the constraint's column names joined with `_`, such as `email` or `tenantId_email`. Add one statement per unique constraint and per foreign key. Inside a named schema, write the table as `"auth"."UserProfile"`.
 
-**SQLite, managed with `db update`.** SQLite compares table and index names without case, so rename the table through a temporary name, and drop each index whose name starts with the old table name so that `db update` can create it under the new name:
+**SQLite, managed with `db update`.** SQLite refuses in one statement a rename that only changes case, so rename the table through a temporary name, then run `prisma db update`:
 
 ```sql
-ALTER TABLE "userProfile" RENAME TO "userProfile_tmp";
-ALTER TABLE "userProfile_tmp" RENAME TO "UserProfile";
-DROP INDEX "userProfile_handle_idx_b5b249e4";
+ALTER TABLE "userProfile" RENAME TO "_prisma_rename_UserProfile";
+ALTER TABLE "_prisma_rename_UserProfile" RENAME TO "UserProfile";
 ```
 
-`SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'UserProfile'` lists the indexes; drop the ones that start with `userProfile_`, and leave the `sqlite_autoindex_` ones, which SQLite renames itself. Then run `prisma db update`, which creates the indexes under the new name, and `db verify --schema-only` is clean. The rows stay.
+The rows stay, and SQLite renames its automatic indexes itself. `db update` drops each index named after the old table and creates it under the new name. Dropping an index needs your consent: `db update` asks for it, or, without a terminal, takes the database name it prints with `--confirm`. After that `db verify --schema-only` is clean.
 
 **MongoDB.** `--rename` is refused with `MIGRATION.RENAME_UNSUPPORTED`. Rename the collection by hand before you plan:
 

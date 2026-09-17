@@ -69,6 +69,7 @@ import {
   RenamePostgresRlsPolicyCall,
   RenameTableCall,
 } from './op-factory-call';
+import { renameTableStatement } from './operations/tables';
 import { TypeScriptRenderablePostgresMigration } from './planner-produced-postgres-migration';
 import { postgresPlannerStrategies } from './planner-strategies';
 import { postgresContractToSchema } from './postgres-contract-to-schema';
@@ -91,6 +92,12 @@ interface PlannedTableRenames {
   readonly fromContract: Contract<SqlStorage> | null;
   readonly previousSchema: SqlMigrationPlannerPlanOptions['schema'];
   readonly calls: readonly PostgresOpFactoryCall[];
+}
+
+function emissionSchemaForNamespace(contract: Contract<SqlStorage>, namespaceId: string): string {
+  return namespaceId === UNBOUND_NAMESPACE_ID
+    ? UNBOUND_NAMESPACE_ID
+    : resolveDdlSchemaForNamespaceStorage(contract.storage, namespaceId);
 }
 
 const SCAFFOLD_POLICY: MigrationOperationPolicy = {
@@ -276,10 +283,7 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
       return notOk(applied.failure);
     }
     const calls = applied.value.renames.flatMap((rename): PostgresOpFactoryCall[] => {
-      const schemaName =
-        rename.namespaceId === UNBOUND_NAMESPACE_ID
-          ? UNBOUND_NAMESPACE_ID
-          : resolveDdlSchemaForNamespaceStorage(options.contract.storage, rename.namespaceId);
+      const schemaName = emissionSchemaForNamespace(options.contract, rename.namespaceId);
       const previous =
         options.fromContract?.storage.namespaces[rename.namespaceId]?.entries.table?.[rename.from];
       const next =
@@ -449,6 +453,13 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
       },
       namespaceIdOf: (issue) =>
         resolveNamespaceIdForDdlSchema(options.contract, issueSchemaName(issue) ?? schemaName),
+      renameByHandStatements: (rename) => [
+        renameTableStatement(
+          emissionSchemaForNamespace(options.contract, rename.namespaceId),
+          rename.from,
+          rename.to,
+        ),
+      ],
     });
     if (caseChangeConflicts.length > 0) {
       return plannerFailure(caseChangeConflicts);

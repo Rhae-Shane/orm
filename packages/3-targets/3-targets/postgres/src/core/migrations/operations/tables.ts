@@ -24,13 +24,16 @@ export async function dropTable(
   };
 }
 
+export function renameTableStatement(schemaName: string, fromName: string, toName: string): string {
+  return `ALTER TABLE ${qualifyTableName(schemaName, fromName)} RENAME TO ${quoteIdentifier(toName)}`;
+}
+
 export async function renameTable(
   schemaName: string,
   fromName: string,
   toName: string,
   lowerer: ExecuteRequestLowerer,
 ): Promise<Op> {
-  const qualified = qualifyTableName(schemaName, fromName);
   const fromChecks = tableExistsAst(schemaName, fromName);
   const toChecks = tableExistsAst(schemaName, toName);
   const fromPresent = await lowerer.lowerToExecuteRequest(fromChecks.tablePresent());
@@ -49,7 +52,7 @@ export async function renameTable(
     execute: [
       step(
         `rename table "${fromName}" to "${toName}"`,
-        `ALTER TABLE ${qualified} RENAME TO ${quoteIdentifier(toName)}`,
+        renameTableStatement(schemaName, fromName, toName),
       ),
     ],
     // Both postchecks: the runner skips an operation whose postcheck already

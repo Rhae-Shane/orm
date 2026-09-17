@@ -36,19 +36,24 @@ import { blindCast } from '@internal/utils/casts';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { buildSqlitePlanDiff, sqliteContractToSchema } from './diff-database-schema';
 import {
+  indexNameCaseChange,
+  pairIndexReplacements,
+  renamedTableIndex,
+} from './index-replacements';
+import {
   coalesceSubtreeIssues,
   conflictForDisallowedCall,
   issueNode,
   planIssues,
 } from './issue-planner';
 import { RenameTableCall, type SqliteOpFactoryCall } from './op-factory-call';
+import { renameTableSteps } from './operations/tables';
 import {
   type SqliteMigrationDestinationInfo,
   TypeScriptRenderableSqliteMigration,
 } from './planner-produced-sqlite-migration';
 import { sqlitePlannerStrategies } from './planner-strategies';
 import type { SqlitePlanTargetDetails } from './planner-target-details';
-import { pairRenamedTableIndexes } from './renamed-table-indexes';
 
 interface PlannedTableRenames {
   readonly fromContract: Contract<SqlStorage> | null;
@@ -194,7 +199,8 @@ export class SqliteMigrationPlanner
     });
     return [
       ...planned.value.calls,
-      ...pairRenamedTableIndexes(issues, renamedTableNames(planned.value.calls)).calls,
+      ...pairIndexReplacements(issues, renamedTableIndex(renamedTableNames(planned.value.calls)))
+        .calls,
     ];
   }
 
@@ -262,8 +268,13 @@ export class SqliteMigrationPlanner
       ...options,
       schema: previousSchema,
     });
-    const renamedIndexes = pairRenamedTableIndexes(diffIssues, renamedTableNames(renameTableCalls));
-    const disallowedIndexCalls = renamedIndexes.calls.filter(
+    const onRenamedTable = renamedTableIndex(renamedTableNames(renameTableCalls));
+    const replacedIndexes = pairIndexReplacements(
+      diffIssues,
+      (old, replacement) =>
+        onRenamedTable(old, replacement) || indexNameCaseChange(old, replacement),
+    );
+    const disallowedIndexCalls = replacedIndexes.calls.filter(
       (call) => !options.policy.allowedOperationClasses.includes(call.operationClass),
     );
     if (disallowedIndexCalls.length > 0) {
@@ -273,7 +284,7 @@ export class SqliteMigrationPlanner
         ),
       );
     }
-    const issues = diffIssues.filter((issue) => !renamedIndexes.consumed.has(issue));
+    const issues = diffIssues.filter((issue) => !replacedIndexes.consumed.has(issue));
     const caseChangeConflicts = detectTableNameCaseChanges({
       issues,
       tableOf: (issue) => {
@@ -281,6 +292,8 @@ export class SqliteMigrationPlanner
         return node instanceof SqlTableIR ? node : undefined;
       },
       namespaceIdOf: () => UNBOUND_NAMESPACE_ID,
+      renameByHandStatements: (rename) =>
+        renameTableSteps(rename.from, rename.to).map((renameStep) => renameStep.sql),
     });
     if (caseChangeConflicts.length > 0) {
       return plannerFailure(caseChangeConflicts);
@@ -317,7 +330,7 @@ export class SqliteMigrationPlanner
     // every later operation addresses the renamed table by its new name.
     const calls = [
       ...renameTableCalls,
-      ...renamedIndexes.calls,
+      ...replacedIndexes.calls,
       ...result.value.calls,
       ...fieldEventOps,
     ];

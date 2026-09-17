@@ -77,6 +77,38 @@ export async function createTable(
   };
 }
 
+export function renameTableViaName(toName: string): string {
+  return `_prisma_rename_${toName}`;
+}
+
+export function renameChangesOnlyCase(fromName: string, toName: string): boolean {
+  return fromName.toLowerCase() === toName.toLowerCase();
+}
+
+/**
+ * SQLite compares table names case-insensitively, so a rename that only
+ * changes case (`userProfile` to `UserProfile`) is refused as "already
+ * exists" when done in one statement. It goes through a temporary name.
+ */
+export function renameTableSteps(fromName: string, toName: string): Op['execute'] {
+  const from = quoteIdentifier(fromName);
+  const to = quoteIdentifier(toName);
+  if (!renameChangesOnlyCase(fromName, toName)) {
+    return [
+      step(`rename table "${fromName}" to "${toName}"`, `ALTER TABLE ${from} RENAME TO ${to}`),
+    ];
+  }
+  const viaName = renameTableViaName(toName);
+  const via = quoteIdentifier(viaName);
+  return [
+    step(
+      `rename table "${fromName}" to "${viaName}" (SQLite table names are case-insensitive)`,
+      `ALTER TABLE ${from} RENAME TO ${via}`,
+    ),
+    step(`rename table "${viaName}" to "${toName}"`, `ALTER TABLE ${via} RENAME TO ${to}`),
+  ];
+}
+
 export async function dropTable(tableName: string, lowerer: ExecuteRequestLowerer): Promise<Op> {
   const { present, absent } = await tableExistsSteps(lowerer, tableName);
   return {

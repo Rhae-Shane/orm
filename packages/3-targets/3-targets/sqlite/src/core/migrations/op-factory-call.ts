@@ -30,7 +30,12 @@ import { quoteIdentifier } from '../sql-utils';
 import { addColumnExecuteSql, dropColumnExecuteSql } from './operations/columns';
 import type { SqliteColumnSpec, SqliteIndexSpec, SqliteTableSpec } from './operations/shared';
 import { step } from './operations/shared';
-import { recreateTable } from './operations/tables';
+import {
+  recreateTable,
+  renameChangesOnlyCase,
+  renameTableSteps,
+  renameTableViaName,
+} from './operations/tables';
 import { buildCreateIndexSql, buildDropIndexSql } from './planner-ddl-builders';
 import type { SqlitePlanTargetDetails } from './planner-target-details';
 import { buildTargetDetails } from './planner-target-details';
@@ -293,8 +298,9 @@ export class RenameTableCall extends SqliteOpFactoryCallNode {
     const toChecks = tableExistsAst(this.tableName);
     const fromPresent = await lowerer.lowerToExecuteRequest(fromChecks.tablePresent());
     const toAbsent = await lowerer.lowerToExecuteRequest(toChecks.tableAbsent());
-    const viaAbsent = this.caseOnly()
-      ? await lowerer.lowerToExecuteRequest(tableExistsAst(this.viaName()).tableAbsent())
+    const viaName = renameTableViaName(this.tableName);
+    const viaAbsent = renameChangesOnlyCase(this.oldTableName, this.tableName)
+      ? await lowerer.lowerToExecuteRequest(tableExistsAst(viaName).tableAbsent())
       : undefined;
     const toPresent = await lowerer.lowerToExecuteRequest(toChecks.tablePresent());
     const fromAbsent = await lowerer.lowerToExecuteRequest(fromChecks.tableAbsent());
@@ -311,13 +317,13 @@ export class RenameTableCall extends SqliteOpFactoryCallNode {
           ? []
           : [
               step(
-                `ensure table "${this.viaName()}" does not exist (a rename that only changes case passes through this temporary name, because SQLite compares table names without case)`,
+                `ensure table "${viaName}" does not exist (a rename that only changes case passes through this temporary name, because SQLite compares table names without case)`,
                 viaAbsent.sql,
                 viaAbsent.params,
               ),
             ]),
       ],
-      execute: this.executeSteps(),
+      execute: renameTableSteps(this.oldTableName, this.tableName),
       // Both postchecks: the runner skips an operation whose postcheck
       // already holds, and "the new table exists" alone would skip a rename
       // that never happened when both tables exist.
@@ -330,44 +336,6 @@ export class RenameTableCall extends SqliteOpFactoryCallNode {
         ),
       ],
     };
-  }
-
-  private caseOnly(): boolean {
-    return this.oldTableName.toLowerCase() === this.tableName.toLowerCase();
-  }
-
-  private viaName(): string {
-    return `_prisma_rename_${this.tableName}`;
-  }
-
-  /**
-   * SQLite compares table names case-insensitively, so a rename that only
-   * changes case (`userProfile` to `UserProfile`) is refused as "already
-   * exists" when done in one statement. It goes through a temporary name.
-   */
-  private executeSteps(): Op['execute'] {
-    const from = quoteIdentifier(this.oldTableName);
-    const to = quoteIdentifier(this.tableName);
-    if (!this.caseOnly()) {
-      return [
-        step(
-          `rename table "${this.oldTableName}" to "${this.tableName}"`,
-          `ALTER TABLE ${from} RENAME TO ${to}`,
-        ),
-      ];
-    }
-    const viaName = this.viaName();
-    const via = quoteIdentifier(viaName);
-    return [
-      step(
-        `rename table "${this.oldTableName}" to "${viaName}" (SQLite table names are case-insensitive)`,
-        `ALTER TABLE ${from} RENAME TO ${via}`,
-      ),
-      step(
-        `rename table "${viaName}" to "${this.tableName}"`,
-        `ALTER TABLE ${via} RENAME TO ${to}`,
-      ),
-    ];
   }
 
   renderTypeScript(): string {

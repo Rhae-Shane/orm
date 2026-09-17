@@ -141,8 +141,15 @@ describe('SQLite planner table-name case guard', () => {
       'in a project with migration history, state the rename when planning: prisma migration plan --rename "userProfile=UserProfile" (either side may be <schema>.<name>), and the plan renames the table and the objects named after it instead of dropping and recreating the table;',
     );
     expect(result.conflicts[0]?.why).not.toContain('one renameTable operation');
+  });
+
+  it('gives a by-hand rename through a temporary name, because SQLite refuses a case-only rename in one statement', () => {
+    const result = planFromLive(['userProfile'], 'UserProfile')();
+
+    expect(result.kind).toBe('failure');
+    if (result.kind !== 'failure') return;
     expect(result.conflicts[0]?.why).toContain(
-      'in a project that uses db update, rename it by hand: ALTER TABLE "userProfile" RENAME TO "UserProfile"',
+      'in a project that uses db update, rename it by hand with ALTER TABLE "userProfile" RENAME TO "_prisma_rename_UserProfile"; ALTER TABLE "_prisma_rename_UserProfile" RENAME TO "UserProfile", then run db update again.',
     );
   });
 

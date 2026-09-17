@@ -172,7 +172,7 @@ describe('Postgres planner table-name case guard', () => {
     );
     expect(result.conflicts[0]?.why).not.toContain('one renameTable operation');
     expect(result.conflicts[0]?.why).toContain(
-      'in a project that uses db update, rename it by hand: ALTER TABLE "userProfile" RENAME TO "UserProfile"',
+      'in a project that uses db update, rename it by hand with ALTER TABLE "userProfile" RENAME TO "UserProfile", then run db update again.',
     );
   });
 
@@ -197,6 +197,9 @@ describe('Postgres planner table-name case guard', () => {
       entityKind: 'table',
       entityName: 'UserProfile',
     });
+    expect(result.conflicts[0]?.why).toContain(
+      'rename it by hand with ALTER TABLE "auth"."userProfile" RENAME TO "UserProfile", then run db update again.',
+    );
   });
 
   it('plans nothing once the model maps back to userProfile', async () => {
