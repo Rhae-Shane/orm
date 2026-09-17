@@ -181,7 +181,7 @@ withTempDir(({ createTempDir }) => {
           'MIGRATION.TABLE_NAME_CASE_CHANGED',
         );
         expect(
-          `${bareError?.why}\n${bareError?.summary}\n${JSON.stringify(bareError?.nextActions)}`,
+          bareError?.nextActions?.map((action) => action.label).join('\n'),
           'R1.05: guard points at the flag',
         ).toContain('prisma migration plan --rename "userProfile=UserProfile"');
         expect(getMigrationDirs(ctx), 'R1.05: nothing written').toHaveLength(1);
