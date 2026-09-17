@@ -82,7 +82,7 @@ async function expectRowsSurvived(connectionString: string, label: string): Prom
     { id: 2, email: 'bob@example.com' },
   ]);
   const old = await sql(connectionString, `SELECT to_regclass('"public"."userProfile"') AS old`);
-  expect(old.rows[0]?.old, `${label}: old name is gone`).toBeNull();
+  expect(old.rows[0]?.['old'], `${label}: old name is gone`).toBeNull();
 }
 
 withTempDir(({ createTempDir }) => {

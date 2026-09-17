@@ -157,7 +157,7 @@ withTempDir(({ createTempDir }) => {
               `SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE '%serProfile'`,
             )
             .all()
-            .map((row) => row.name),
+            .map((row) => row['name']),
         }));
         expect(state.rows, 'R3.09: rows present under the new name').toEqual([
           { id: 1, email: 'alice@example.com' },
