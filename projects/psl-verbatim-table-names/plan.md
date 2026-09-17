@@ -29,6 +29,8 @@ Slice 2 and slice 3 are independent of each other and run in parallel after slic
 
 ## Follow-ups filed outside this project
 
+- Extension packages keep migrations directly under `migrations/` (per `.agents/rules/contract-space-package-layout.mdc` and every shipped extension), but `migration plan` reads and writes history under `migrations/app/`. Inside such a package `migration plan` cannot see the history, so `--from` fails and a stated rename cannot be planned. Found while writing the slice 2 extension upgrade note; it predates this project and affects every `migration plan` run in an extension package.
+
 - Whether `contract infer` should keep names verbatim like Prisma 7 instead of re-casing to PascalCase.
 - Mongo has no planner guard; the operator chose not to address it in this project.
 
