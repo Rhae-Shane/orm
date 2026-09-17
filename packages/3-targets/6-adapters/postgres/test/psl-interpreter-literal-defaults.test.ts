@@ -47,7 +47,7 @@ function columnDefaults(source: string) {
   });
   if (!result.ok) return { columns: {}, diagnostics: result.failure.diagnostics };
   const namespace = result.value.storage.namespaces['public'] as PostgresSchema;
-  const table = namespace.table['n'];
+  const table = namespace.table['N'];
   const columns = Object.fromEntries(
     Object.entries(table?.columns ?? {}).flatMap(([name, column]) =>
       column.default === undefined ? [] : [[name, column.default]],

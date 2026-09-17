@@ -63,7 +63,7 @@ describe('interpretPslDocumentToSqlContract default lowering', () => {
       controlMutationDefaults: builtinControlMutationDefaults,
     });
     if (!result.ok) return { columns: {}, diagnostics: result.failure.diagnostics };
-    const table = unboundTables(sqlStorageFromSuccessfulSqlInterpretation(result.value))['n'];
+    const table = unboundTables(sqlStorageFromSuccessfulSqlInterpretation(result.value))['N'];
     const columns = Object.fromEntries(
       Object.entries(table?.columns ?? {}).flatMap(([name, column]) =>
         column.default === undefined ? [] : [[name, column.default]],
