@@ -19,9 +19,9 @@ export function postgresRenderDefault(def: ColumnDefault, column: StorageColumn)
 
 /**
  * The Postgres schema tree a contract describes, as the planner's "from" side:
- * the target descriptor's `migrations.contractToSchema` hook and the planner's
- * own re-derivation after applying rename intents both go through here so the
- * two trees are built with the same expander, default renderer and resolver.
+ * the target descriptor's `migrations.contractToSchema` hook and the trees
+ * `renameTable` compares to find its companion renames both go through here,
+ * so they are built with the same expander, default renderer and resolver.
  */
 export function postgresContractToSchema(
   contract: Contract | null,

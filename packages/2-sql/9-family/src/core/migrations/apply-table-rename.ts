@@ -199,7 +199,7 @@ function renameTablesInNamespace(
   if (untouched) return namespace;
   if (!isMaterializedSqlNamespace(namespace)) {
     throw new InternalError(
-      `applyTableRenameIntents: namespace "${namespace.id}" is not a materialized SQL namespace`,
+      `applyTableRename: namespace "${namespace.id}" is not a materialized SQL namespace`,
     );
   }
   const renamedTables: SqlNamespaceEntries = {
@@ -229,7 +229,7 @@ function renameTablesInContract(
   for (const [id, namespace] of Object.entries(namespaces)) {
     if (!isMaterializedSqlNamespace(namespace)) {
       throw new InternalError(
-        `applyTableRenameIntents: namespace "${id}" is not a materialized SQL namespace`,
+        `applyTableRename: namespace "${id}" is not a materialized SQL namespace`,
       );
     }
     materialized[id] = namespace;

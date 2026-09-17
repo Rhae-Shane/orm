@@ -195,8 +195,7 @@ export class SqliteMigrationPlanner
     });
     // Codec-emitted calls already conform to `OpFactoryCall` — render +
     // toOp + importRequirements ride directly through the same emit path
-    // as structural ops, no `RawSqlCall` wrap. The table renames run first:
-    // every later operation addresses the renamed table by its new name.
+    // as structural ops, no `RawSqlCall` wrap.
     const calls = [...replacedIndexes.calls, ...result.value.calls, ...fieldEventOps];
 
     const destination: SqliteMigrationDestinationInfo = {
