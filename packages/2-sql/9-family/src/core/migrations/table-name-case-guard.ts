@@ -19,6 +19,13 @@ export interface TableRenameByHand {
   readonly to: string;
 }
 
+/** A table rename to write as a migration call; `namespaceId` is `undefined` when the call does not need to name the namespace. */
+export interface TableRenameInMigration {
+  readonly namespaceId: string | undefined;
+  readonly from: string;
+  readonly to: string;
+}
+
 interface PlannedTable {
   readonly namespaceId: string;
   readonly tableName: string;
@@ -69,6 +76,7 @@ export function detectTableNameCaseChanges(input: {
   readonly tableOf: (issue: SchemaDiffIssue) => TableNameCaseGuardTable | undefined;
   readonly namespaceIdOf: (issue: SchemaDiffIssue) => string;
   readonly renameByHandStatements: (rename: TableRenameByHand) => readonly string[];
+  readonly renameTableCall: (rename: TableRenameInMigration) => string;
   readonly contract: Contract<SqlStorage>;
   readonly defaultNamespaceId: string;
 }): SqlPlannerConflict[] {
@@ -92,13 +100,17 @@ export function detectTableNameCaseChanges(input: {
         candidate.tableName === lowerFirst(create.tableName),
     );
     if (drop === undefined) continue;
-    const renameFlag = renameNeedsNamespace(drop, dropped, input.contract, input.defaultNamespaceId)
-      ? `${drop.namespaceId}.${drop.tableName}=${create.namespaceId}.${create.tableName}`
-      : `${drop.tableName}=${create.tableName}`;
+    const renameCall = input.renameTableCall({
+      namespaceId: renameNeedsNamespace(drop, dropped, input.contract, input.defaultNamespaceId)
+        ? drop.namespaceId
+        : undefined,
+      from: drop.tableName,
+      to: create.tableName,
+    });
     conflicts.push({
       kind: 'tableNameCaseChanged',
       summary: `${TABLE_NAME_CASE_CHANGED_CODE}: table "${create.tableName}" would be created and table "${drop.tableName}" dropped. Prisma 8 changed the default table name: a model with no @@map now names its table verbatim, so model ${create.tableName} points at "${create.tableName}" instead of "${drop.tableName}".`,
-      why: `To keep table "${drop.tableName}" and its rows, add @@map("${drop.tableName}") to model ${create.tableName} (or run the add-model-map codemod over the schema) and plan again. To rename the table and keep its rows instead: in a project with migration history, state the rename when planning: prisma migration plan --rename "${renameFlag}" (either side may be <schema>.<name>), and the plan renames the table and the objects named after it instead of dropping and recreating the table; in a project that uses db update, rename it by hand with ${input.renameByHandStatements({ namespaceId: create.namespaceId, from: drop.tableName, to: create.tableName }).join('; ')}, then run db update again.`,
+      why: `To keep table "${drop.tableName}" and its rows, add @@map("${drop.tableName}") to model ${create.tableName} (or run the add-model-map codemod over the schema) and plan again. To rename the table and keep its rows instead: in a project with migration history, make the rename its own schema change, create its migration with prisma migration new, and add ${renameCall} to the migration's operations, which renames the table and the objects named after it; in a project that uses db update, rename it by hand with ${input.renameByHandStatements({ namespaceId: create.namespaceId, from: drop.tableName, to: create.tableName }).join('; ')}, then run db update again.`,
       location: {
         namespaceId: create.namespaceId,
         entityKind: 'table',

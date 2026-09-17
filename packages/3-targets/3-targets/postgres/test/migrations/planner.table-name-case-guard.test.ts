@@ -11,8 +11,11 @@
  */
 
 import { type Contract, type ControlPolicy, coreHash, profileHash } from '@internal/contract/types';
-import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
-import { APP_SPACE_ID, type StorageEntityRename } from '@internal/framework-components/control';
+import type {
+  ExecuteRequestLowerer,
+  SqlControlAdapter,
+} from '@internal/family-sql/control-adapter';
+import { APP_SPACE_ID, type ControlStack } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, StorageTable } from '@internal/sql-contract/types';
 import { applicationDomainOf } from '@repo/test-utils';
@@ -20,6 +23,8 @@ import { describe, expect, it } from 'vitest';
 import { postgresResolveDefault } from '../../src/core/default-normalizer';
 import { contractToPostgresDatabaseSchemaNode } from '../../src/core/migrations/contract-to-postgres-database-schema-node';
 import { createPostgresMigrationPlanner } from '../../src/core/migrations/planner';
+import { PostgresMigration } from '../../src/core/migrations/postgres-migration';
+import { PostgresContractSerializer } from '../../src/core/postgres-contract-serializer';
 import { type PostgresContract, postgresCreateNamespace } from '../../src/core/postgres-schema';
 import { PostgresDatabaseSchemaNode } from '../../src/core/schema-ir/postgres-database-schema-node';
 import { PostgresNamespaceSchemaNode } from '../../src/core/schema-ir/postgres-namespace-schema-node';
@@ -171,9 +176,9 @@ describe('Postgres planner table-name case guard', () => {
     ]);
     expect(result.conflicts[0]?.summary).toContain('MIGRATION.TABLE_NAME_CASE_CHANGED');
     expect(result.conflicts[0]?.why).toContain(
-      'in a project with migration history, state the rename when planning: prisma migration plan --rename "userProfile=UserProfile" (either side may be <schema>.<name>), and the plan renames the table and the objects named after it instead of dropping and recreating the table;',
+      'in a project with migration history, make the rename its own schema change, create its migration with prisma migration new, and add ...this.renameTable({ table: "userProfile", to: "UserProfile" }) to the migration\'s operations, which renames the table and the objects named after it;',
     );
-    expect(result.conflicts[0]?.why).not.toContain('one renameTable operation');
+    expect(result.conflicts[0]?.why).not.toContain('--rename');
     expect(result.conflicts[0]?.why).toContain(
       'in a project that uses db update, rename it by hand with ALTER TABLE "userProfile" RENAME TO "UserProfile", then run db update again.',
     );
@@ -279,11 +284,7 @@ function namespacedContract(
   };
 }
 
-function planMigration(
-  from: PostgresContract,
-  to: PostgresContract,
-  renames: readonly StorageEntityRename[] = [],
-) {
+function planMigration(from: PostgresContract, to: PostgresContract) {
   return createPostgresMigrationPlanner(stubLowerer).plan({
     contract: to,
     schema: contractToPostgresDatabaseSchemaNode(from, {
@@ -296,77 +297,96 @@ function planMigration(
     frameworkComponents: [],
     spaceId: APP_SPACE_ID,
     snapshotsImportPath: '../../snapshots',
-    ...(renames.length === 0 ? {} : { renames }),
   });
 }
 
-function suggestedRenameFlag(why: string | undefined): string | undefined {
-  return /prisma migration plan --rename "([^"]+)"/.exec(why ?? '')?.[1];
+type ContractJson = { readonly storage: { readonly storageHash: string } };
+type RenameTableOptions = { readonly schema?: string; readonly table: string; readonly to: string };
+
+const stack = {
+  adapter: { create: () => stubLowerer as unknown as SqlControlAdapter<'postgres'> },
+  target: { kind: 'target', familyId: 'sql', targetId: 'postgres' },
+  extensions: [],
+} as unknown as ControlStack<'sql', 'postgres'>;
+
+function jsonOf(contract: PostgresContract): ContractJson {
+  return new PostgresContractSerializer().serializeContract(contract) as unknown as ContractJson;
 }
 
-function coordinate(side: string): StorageEntityRename['from'] {
-  const dot = side.indexOf('.');
-  return dot === -1
-    ? { name: side }
-    : { namespaceId: side.slice(0, dot), name: side.slice(dot + 1) };
+function suggestedRenameTable(why: string | undefined): {
+  readonly call: string;
+  readonly options: RenameTableOptions;
+} {
+  const call = /\.\.\.this\.renameTable\(\{[^}]*\}\)/.exec(why ?? '')?.[0];
+  if (call === undefined) throw new Error('the case guard suggested no renameTable call');
+  const fields = Object.fromEntries(
+    [...call.matchAll(/(\w+): "([^"]*)"/g)].map(([, key, value]) => [key, value]),
+  );
+  return { call, options: fields as unknown as RenameTableOptions };
 }
 
-function renameFromFlag(flag: string): StorageEntityRename {
-  const [from = '', to = ''] = flag.split('=');
-  return { from: coordinate(from), to: coordinate(to) };
+async function renameStatements(
+  from: PostgresContract,
+  to: PostgresContract,
+  options: RenameTableOptions,
+): Promise<readonly (readonly string[])[]> {
+  const startJson = jsonOf(from);
+  const endJson = jsonOf(to);
+  class RenameMigration extends PostgresMigration {
+    override readonly startContractJson = startJson;
+    override readonly endContractJson = endJson;
+    override get operations() {
+      return [...this.renameTable(options)];
+    }
+  }
+  const ops = await Promise.all(new RenameMigration(stack).operations);
+  return ops.map((op) => op.execute.map((step) => step.sql));
 }
 
-describe('the --rename the Postgres case guard suggests', () => {
-  async function planWithSuggestion(from: PostgresContract, to: PostgresContract) {
+describe('the renameTable call the Postgres case guard suggests', () => {
+  async function renameWithSuggestion(from: PostgresContract, to: PostgresContract) {
     const refused = planMigration(from, to);
     expect(refused.kind).toBe('failure');
     if (refused.kind !== 'failure') throw new Error('the case guard did not refuse');
-    const flag = suggestedRenameFlag(refused.conflicts[0]?.why);
-    if (flag === undefined) throw new Error('the case guard suggested no --rename');
-    const renamed = planMigration(from, to, [renameFromFlag(flag)]);
-    expect(
-      renamed.kind === 'failure' ? renamed.conflicts.map((conflict) => conflict.summary) : [],
-    ).toEqual([]);
-    if (renamed.kind !== 'success') throw new Error('planning with the suggestion failed');
-    const statements = (await Promise.all(renamed.plan.operations)).map((op) =>
-      op.execute.map((step) => step.sql),
-    );
-    return { flag, statements };
+    const { call, options } = suggestedRenameTable(refused.conflicts[0]?.why);
+    return { call, statements: await renameStatements(from, to, options) };
   }
 
-  it('names the namespace when another namespace declares the old table name, and planning with it renames the table', async () => {
-    const result = await planWithSuggestion(
+  it('names the schema when another schema declares the old table name, and the call renames the table', async () => {
+    const result = await renameWithSuggestion(
       namespacedContract({ public: 'userProfile', auth: 'userProfile' }, 'two-namespaces-from'),
       namespacedContract({ public: 'UserProfile', auth: 'userProfile' }, 'two-namespaces-to'),
     );
 
     expect(result).toEqual({
-      flag: 'public.userProfile=public.UserProfile',
+      call: '...this.renameTable({ schema: "public", table: "userProfile", to: "UserProfile" })',
       statements: [['ALTER TABLE "public"."userProfile" RENAME TO "UserProfile"']],
     });
   });
 
-  it('names the namespace when the table is not in the default namespace', async () => {
-    const result = await planWithSuggestion(
+  it('names the schema when the table is not in the default schema', async () => {
+    const result = await renameWithSuggestion(
       namespacedContract({ auth: 'userProfile' }, 'auth-from'),
       namespacedContract({ auth: 'UserProfile' }, 'auth-to'),
     );
 
-    expect(result).toEqual({
-      flag: 'auth.userProfile=auth.UserProfile',
-      statements: [['ALTER TABLE "auth"."userProfile" RENAME TO "UserProfile"']],
-    });
+    expect(result.call).toBe(
+      '...this.renameTable({ schema: "auth", table: "userProfile", to: "UserProfile" })',
+    );
+    expect(result.statements[0]).toEqual([
+      'ALTER TABLE "auth"."userProfile" RENAME TO "UserProfile"',
+    ]);
   });
 
-  it('stays unqualified for a table of the default namespace whose name no other namespace declares', async () => {
-    const result = await planWithSuggestion(
+  it('leaves the schema out for a table of the default schema whose name no other schema declares', async () => {
+    const result = await renameWithSuggestion(
       namespacedContract({ public: 'userProfile', auth: 'account' }, 'public-from'),
       namespacedContract({ public: 'UserProfile', auth: 'account' }, 'public-to'),
     );
 
-    expect(result).toEqual({
-      flag: 'userProfile=UserProfile',
-      statements: [['ALTER TABLE "public"."userProfile" RENAME TO "UserProfile"']],
-    });
+    expect(result.call).toBe('...this.renameTable({ table: "userProfile", to: "UserProfile" })');
+    expect(result.statements[0]).toEqual([
+      'ALTER TABLE "public"."userProfile" RENAME TO "UserProfile"',
+    ]);
   });
 });
