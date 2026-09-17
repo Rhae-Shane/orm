@@ -130,7 +130,11 @@ describe('Postgres scaffold rename-table intents', () => {
 
   it('refuses with MIGRATION.TABLE_RENAME_NO_PREVIOUS_CONTRACT when there is no previous contract', () => {
     expect(() => scaffold({ from: null, to: contractOf('UserProfile', {}, TO_HASH) })).toThrow(
-      expect.objectContaining({ code: 'MIGRATION.TABLE_RENAME_NO_PREVIOUS_CONTRACT' }),
+      expect.objectContaining({
+        code: 'MIGRATION.TABLE_RENAME_NO_PREVIOUS_CONTRACT',
+        message:
+          '--rename "userProfile=UserProfile" needs a previous contract to apply the rename to, and this plan starts from an empty database.',
+      }),
     );
   });
 
@@ -144,7 +148,8 @@ describe('Postgres scaffold rename-table intents', () => {
     ).toThrow(
       expect.objectContaining({
         code: 'MIGRATION.TABLE_RENAME_UNMATCHED',
-        message: expect.stringContaining('table "ghost" does not exist in the previous contract'),
+        message:
+          '--rename "ghost=UserProfile" does not match the contracts: table "ghost" does not exist in the previous contract.',
       }),
     );
   });

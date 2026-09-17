@@ -31,11 +31,21 @@ export function tableRenameScaffoldError(
   const noPreviousContract = conflicts.every(
     (conflict) => conflict.meta?.['code'] === TABLE_RENAME_NO_PREVIOUS_CONTRACT_CODE,
   );
+  const code = noPreviousContract
+    ? TABLE_RENAME_NO_PREVIOUS_CONTRACT_CODE
+    : TABLE_RENAME_UNMATCHED_CODE;
   return sqlFamilyError(
-    noPreviousContract ? TABLE_RENAME_NO_PREVIOUS_CONTRACT_CODE : TABLE_RENAME_UNMATCHED_CODE,
-    conflicts.map((conflict) => conflict.summary).join('\n'),
+    code,
+    conflicts.map(summaryWithoutCode).join('\n'),
     ifDefined('why', conflicts[0]?.why),
   );
+}
+
+function summaryWithoutCode(conflict: SqlPlannerConflict): string {
+  const prefix = `${String(conflict.meta?.['code'])}: `;
+  return conflict.summary.startsWith(prefix)
+    ? conflict.summary.slice(prefix.length)
+    : conflict.summary;
 }
 
 /** A `--rename <from>=<to>` intent as the CLI parsed it. */
