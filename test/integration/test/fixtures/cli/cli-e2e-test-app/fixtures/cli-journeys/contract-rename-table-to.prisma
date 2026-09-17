@@ -1,0 +1,6 @@
+// use prisma-8
+
+model UserProfile {
+  id    Int    @id
+  email String
+}

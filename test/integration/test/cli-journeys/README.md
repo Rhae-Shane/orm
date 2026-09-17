@@ -30,6 +30,8 @@ pnpm test:journeys
 | `db-update-workflows.e2e.test.ts` | **Direct update**: `db update` without migrations (additive-only, dry-run, noop). **Destructive update**: drops a column, tests `--no-interactive` rejection, `--json` error envelope, and `--json -y` auto-accept. **Re-init conflict**: `db init` on an already-initialized DB with a different contract fails; recovery via `db update` |
 | `contract-infer-workflow.e2e.test.ts` | **PSL inference workflow**: refresh `contract.prisma` from the live database with `contract infer`, emit from the inferred PSL, verify the schema, and confirm a second infer is stable |
 | `brownfield-adoption.e2e.test.ts` | **Adopt Prisma on existing DB**: infer a PSL contract from the live DB, emit matching artifacts, `db verify --schema-only`, sign, verify, and then evolve via `db update`. **Schema mismatch**: emit a contract that doesn't match the DB, observe sign / schema-only verify failures, fix contract, retry |
+| `rename-table-migration.e2e.test.ts` | **Rename a table and keep its rows**: seed `userProfile`, drop the model's `@@map`, confirm the bare plan is refused by the case-change guard and a stale `--rename-table` intent fails planning, then `migration plan --rename-table userProfile=UserProfile` plans exactly one `renameTable`, `migrate` applies it, the rows are present under `UserProfile`, and `db verify --schema-only` is clean. Second journey: the same rename through `migration new --rename-table`, whose scaffold carries the `renameTable` call and self-emits the SQL |
+| `rename-table-migration.sqlite.e2e.test.ts` | The SQLite twin of the rename journey, driven through a file database and the `@internal/sqlite/config` facade config |
 
 ### Graph features and refs
 
