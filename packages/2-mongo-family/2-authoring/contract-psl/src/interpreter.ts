@@ -267,7 +267,7 @@ interface MongoModelEntry {
 
 type DiscriminatorDeclaration = { readonly fieldName: string; readonly span: PslSpan };
 type BaseDeclaration = {
-  readonly baseName: string;
+  readonly base: ModelSymbol;
   readonly value: string;
   readonly collectionName: string;
   readonly span: PslSpan;
@@ -285,11 +285,11 @@ function collectPolymorphismDeclarations(
   sourceId: string,
   diagnostics: ContractSourceDiagnostic[],
 ): {
-  discriminatorDeclarations: Map<string, DiscriminatorDeclaration>;
-  baseDeclarations: Map<string, BaseDeclaration>;
+  discriminatorDeclarations: Map<ModelSymbol, DiscriminatorDeclaration>;
+  baseDeclarations: Map<ModelSymbol, BaseDeclaration>;
 } {
-  const discriminatorDeclarations = new Map<string, DiscriminatorDeclaration>();
-  const baseDeclarations = new Map<string, BaseDeclaration>();
+  const discriminatorDeclarations = new Map<ModelSymbol, DiscriminatorDeclaration>();
+  const baseDeclarations = new Map<ModelSymbol, BaseDeclaration>();
 
   for (const model of models) {
     const specContext = specContextFor(model);
@@ -315,7 +315,7 @@ function collectPolymorphismDeclarations(
             span: nodePslSpan(discNode.syntax, sourceFile),
           });
         } else {
-          discriminatorDeclarations.set(model.name, {
+          discriminatorDeclarations.set(model, {
             fieldName,
             span: nodePslSpan(discNode.syntax, sourceFile),
           });
@@ -335,8 +335,8 @@ function collectPolymorphismDeclarations(
       if (parsed) {
         const collectionName =
           modelMetadataByName.get(model.name)?.collectionName ?? defaultCollectionName(model.name);
-        baseDeclarations.set(model.name, {
-          baseName: parsed.base,
+        baseDeclarations.set(model, {
+          base: parsed.base.declaration,
           value: parsed.value,
           collectionName,
           span: nodePslSpan(baseNode.syntax, sourceFile),
@@ -352,10 +352,8 @@ function resolvePolymorphism(input: {
   models: Record<string, MongoModelEntry>;
   roots: Record<string, CrossReference>;
   collections: Record<string, Record<string, unknown>>;
-  allModels: readonly ModelSymbol[];
-  discriminatorDeclarations: Map<string, DiscriminatorDeclaration>;
-  baseDeclarations: Map<string, BaseDeclaration>;
-  modelNames: ReadonlySet<string>;
+  discriminatorDeclarations: Map<ModelSymbol, DiscriminatorDeclaration>;
+  baseDeclarations: Map<ModelSymbol, BaseDeclaration>;
   indexSpans: Map<MongoIndex, PslSpan>;
   modelIndexesByName: Map<string, readonly MongoIndex[]>;
   modelMetadataByName: ReadonlyMap<string, MongoModelMetadata>;
@@ -369,10 +367,8 @@ function resolvePolymorphism(input: {
   const {
     discriminatorDeclarations,
     baseDeclarations,
-    modelNames,
     modelMetadataByName,
     sourceId,
-    allModels: allModelViews,
     indexSpans,
     modelIndexesByName,
   } = input;
@@ -381,8 +377,9 @@ function resolvePolymorphism(input: {
   let collections = input.collections;
   const diagnostics: ContractSourceDiagnostic[] = [];
 
-  for (const [modelName, decl] of discriminatorDeclarations) {
-    if (baseDeclarations.has(modelName)) {
+  for (const [declaration, decl] of discriminatorDeclarations) {
+    const modelName = declaration.name;
+    if (baseDeclarations.has(declaration)) {
       diagnostics.push({
         code: 'PSL_DISCRIMINATOR_AND_BASE',
         message: `Model "${modelName}" cannot have both @@discriminator and @@base`,
@@ -410,9 +407,9 @@ function resolvePolymorphism(input: {
     }
 
     const variants: Record<string, { readonly value: string }> = {};
-    for (const [variantName, baseDecl] of baseDeclarations) {
-      if (baseDecl.baseName !== modelName) continue;
-      variants[variantName] = { value: baseDecl.value };
+    for (const [variant, baseDecl] of baseDeclarations) {
+      if (baseDecl.base !== declaration) continue;
+      variants[variant.name] = { value: baseDecl.value };
     }
 
     if (Object.keys(variants).length === 0) {
@@ -431,40 +428,30 @@ function resolvePolymorphism(input: {
     };
   }
 
-  for (const [variantName, baseDecl] of baseDeclarations) {
-    if (!modelNames.has(baseDecl.baseName)) {
-      diagnostics.push({
-        code: 'PSL_BASE_TARGET_NOT_FOUND',
-        message: `Model "${variantName}" @@base references non-existent model "${baseDecl.baseName}"`,
-        sourceId,
-        span: baseDecl.span,
-      });
-      continue;
-    }
-
-    if (!discriminatorDeclarations.has(baseDecl.baseName)) {
+  for (const [variant, baseDecl] of baseDeclarations) {
+    const variantName = variant.name;
+    const baseName = baseDecl.base.name;
+    if (!discriminatorDeclarations.has(baseDecl.base)) {
       diagnostics.push({
         code: 'PSL_ORPHANED_BASE',
-        message: `Model "${variantName}" declares @@base(${baseDecl.baseName}, ...) but "${baseDecl.baseName}" has no @@discriminator`,
+        message: `Model "${variantName}" declares @@base(${baseName}, ...) but "${baseName}" has no @@discriminator`,
         sourceId,
         span: baseDecl.span,
       });
       continue;
     }
 
-    if (discriminatorDeclarations.has(variantName)) {
+    if (discriminatorDeclarations.has(variant)) {
       continue;
     }
 
-    const baseModel = patched[baseDecl.baseName];
-    const variantModelView = allModelViews.find((m) => m.name === variantName);
-    if (!variantModelView) continue;
-    const hasExplicitMap = getAttribute(variantModelView.attributes, 'map') !== undefined;
+    const baseModel = patched[baseName];
+    const hasExplicitMap = getAttribute(variant.attributes, 'map') !== undefined;
 
     if (hasExplicitMap && baseModel && baseDecl.collectionName !== baseModel.storage.collection) {
       diagnostics.push({
         code: 'PSL_MONGO_VARIANT_SEPARATE_COLLECTION',
-        message: `Mongo variant "${variantName}" cannot use a different collection than its base "${baseDecl.baseName}". Mongo only supports single-collection polymorphism.`,
+        message: `Mongo variant "${variantName}" cannot use a different collection than its base "${baseName}". Mongo only supports single-collection polymorphism.`,
         sourceId,
         span: baseDecl.span,
       });
@@ -478,7 +465,7 @@ function resolvePolymorphism(input: {
         ...patched,
         [variantName]: {
           ...variantModel,
-          base: mongoCrossRef(baseDecl.baseName),
+          base: mongoCrossRef(baseName),
           storage: { collection: baseCollection },
         },
       };
@@ -488,7 +475,7 @@ function resolvePolymorphism(input: {
       modelMetadataByName.get(variantName)?.collectionName ?? defaultCollectionName(variantName);
     if (roots[variantCollectionName]?.model === variantName) {
       if (variantCollectionName === baseCollection && baseModel) {
-        roots = { ...roots, [variantCollectionName]: mongoCrossRef(baseDecl.baseName) };
+        roots = { ...roots, [variantCollectionName]: mongoCrossRef(baseName) };
       } else {
         roots = Object.fromEntries(
           Object.entries(roots).filter(([key]) => key !== variantCollectionName),
@@ -499,7 +486,7 @@ function resolvePolymorphism(input: {
     const variantOwnIndexes = modelIndexesByName.get(variantName) ?? [];
     const baseColl = collections[baseCollection];
 
-    const baseModelEntry = patched[baseDecl.baseName];
+    const baseModelEntry = patched[baseName];
     const discriminatorField = baseModelEntry?.discriminator?.field;
     const scopedVariantIndexes: MongoIndex[] = [];
     if (discriminatorField) {
@@ -1461,10 +1448,8 @@ export function interpretPslDocumentToMongoContract(
     models,
     roots,
     collections,
-    allModels,
     discriminatorDeclarations,
     baseDeclarations,
-    modelNames,
     indexSpans,
     modelIndexesByName,
     modelMetadataByName,
