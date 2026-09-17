@@ -18,10 +18,10 @@ import type {
   ModelAttributeCtx,
   ModelSymbol,
   NumLiteral,
+  ParsedTaggedLiteral,
   PslSpan,
   RejectingArgType,
   SymbolTable,
-  TaggedLiteralValue,
   TypedFuncCall,
 } from '@internal/psl-parser';
 import {
@@ -186,7 +186,7 @@ type DefaultArgValue =
   | boolean
   | (string | NumLiteral | boolean)[]
   | TypedFuncCall
-  | TaggedLiteralValue;
+  | ParsedTaggedLiteral;
 
 function scalarDefaultArms(
   isList: boolean,

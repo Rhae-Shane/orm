@@ -1,4 +1,4 @@
-import type { TaggedLiteralValue } from '@internal/framework-components/control';
+import type { TaggedLiteralCanonicalization } from '@internal/framework-components/control';
 import type { PslDiagnostic, PslSpan } from '@internal/framework-components/psl-ast';
 import type { Result } from '@internal/utils/result';
 import type { Simplify, UnionToIntersection } from '@internal/utils/types';
@@ -183,8 +183,18 @@ export type StrArgType<
   Ctx extends AttributeCtx = AttributeCtx,
 > = string extends T ? UnrestrictedStrArgType<Ctx> : FixedStrArgType<T, Ctx>;
 
+/**
+ * A tagged literal argument as parsed: its tag, the canonicalization of its string literal, and its
+ * span. Neither the tag nor the canonicalization has been checked; lowering does both.
+ */
+export interface ParsedTaggedLiteral {
+  readonly tag: string;
+  readonly canonicalization: TaggedLiteralCanonicalization;
+  readonly span: PslSpan;
+}
+
 export interface TaggedLiteralArgType<Ctx extends AttributeCtx = AttributeCtx>
-  extends ArgTypeOutput<TaggedLiteralValue, Ctx> {
+  extends ArgTypeOutput<ParsedTaggedLiteral, Ctx> {
   readonly kind: 'taggedLiteral';
   readonly tags: readonly string[];
   readonly documentation: string;

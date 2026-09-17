@@ -646,7 +646,7 @@ const dbgeneratedSig: FuncCallSig = {
 function sqlLiteralTagEntry(usage: string): ControlDefaultLiteralTagEntry {
   return {
     usage,
-    documentation: "Uses the SQL between the fences, verbatim, as the column's default expression.",
+    documentation: "Uses the SQL in the string, verbatim, as the column's default expression.",
     lower: ({ literal, context }) => {
       const reject = (message: string) => ({
         ok: false as const,

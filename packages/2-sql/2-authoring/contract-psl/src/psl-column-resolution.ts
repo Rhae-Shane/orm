@@ -23,21 +23,22 @@ import {
   validateAuthoringHelperArguments,
 } from '@internal/framework-components/authoring';
 import type { AnyCodecDescriptor, CodecLookup } from '@internal/framework-components/codec';
-import type {
-  ControlDefaultLiteralTagRegistry,
-  ControlMutationDefaultRegistry,
-  DefaultFunctionLoweringContext,
-  LoweredDefaultResult,
-  MutationDefaultGeneratorDescriptor,
+import {
+  type ControlDefaultLiteralTagRegistry,
+  type ControlMutationDefaultRegistry,
+  type DefaultFunctionLoweringContext,
+  describeTaggedLiteralFailure,
+  type LoweredDefaultResult,
+  type MutationDefaultGeneratorDescriptor,
 } from '@internal/framework-components/control';
 import type {
   FieldSymbol,
   ModelSymbol,
   NumLiteral,
+  ParsedTaggedLiteral,
   PslSpan,
   ResolvedTypeConstructorCall,
   SymbolTable,
-  TaggedLiteralValue,
 } from '@internal/psl-parser';
 import type { SourceFile } from '@internal/psl-parser/syntax';
 import type {
@@ -702,19 +703,38 @@ export function resolveFieldTypeDescriptor(input: {
   return { ok: true, descriptor };
 }
 
-/** The attribute spec only accepts registered tags, so a missing entry is a wiring bug, not user input. */
+const TAGGED_LITERAL_CANONICALIZATION_CODES = {
+  nul: 'PSL_TAGGED_LITERAL_NUL',
+  'too-large': 'PSL_TAGGED_LITERAL_TOO_LARGE',
+} as const;
+
 function lowerTaggedLiteral(
-  literal: TaggedLiteralValue,
+  literal: ParsedTaggedLiteral,
   registry: ControlDefaultLiteralTagRegistry,
   context: DefaultFunctionLoweringContext,
 ): LoweredDefaultResult {
+  const reject = (code: string, message: string): LoweredDefaultResult => ({
+    ok: false,
+    diagnostic: { code, message, sourceId: context.sourceId, span: literal.span },
+  });
   const entry = registry.get(literal.tag);
   if (entry === undefined) {
-    throw new InternalError(
-      `Default literal tag "${literal.tag}" was accepted by the attribute spec but has no registry entry`,
+    return reject(
+      'PSL_UNKNOWN_DEFAULT_LITERAL_TAG',
+      `Unknown literal tag "${literal.tag}". Known tags: ${[...registry.keys()].join(', ')}.`,
     );
   }
-  return entry.lower({ literal, context });
+  const { canonicalization } = literal;
+  if (!canonicalization.ok) {
+    return reject(
+      TAGGED_LITERAL_CANONICALIZATION_CODES[canonicalization.reason],
+      describeTaggedLiteralFailure(canonicalization.reason),
+    );
+  }
+  return entry.lower({
+    literal: { tag: literal.tag, body: canonicalization.body, span: literal.span },
+    context,
+  });
 }
 
 export function lowerDefaultForField(input: {

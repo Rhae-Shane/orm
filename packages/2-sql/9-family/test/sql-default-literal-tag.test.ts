@@ -42,7 +42,7 @@ describe('sqlDefaultLiteralTagEntry', () => {
   it('records its usage and documentation', () => {
     expect(entry.usage).toBe('pg.sql`...`');
     expect(entry.documentation).toBe(
-      "Uses the SQL between the fences, verbatim, as the column's default expression.",
+      "Uses the SQL in the string, verbatim, as the column's default expression.",
     );
   });
 

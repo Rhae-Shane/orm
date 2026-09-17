@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FieldAttributeCtx } from '../src/exports';
-import { oneOf, str, taggedLiteral } from '../src/exports';
+import { taggedLiteral } from '../src/exports';
 import { Cursor, parse, parseAttribute } from '../src/parse';
 import type { SourceFile } from '../src/source-file';
 import { buildSymbolTable } from '../src/symbol-table';
@@ -38,62 +38,6 @@ function argOf(exprSource: string): { expr: ExpressionAst; ctx: FieldAttributeCt
   return { expr, ctx: makeCtx(cursor.sourceFile) };
 }
 
-describe('oneOf with a tagged literal alternative', () => {
-  const type = oneOf(str(), taggedLiteral(['sql'], { documentation: 'Raw SQL.' }));
-
-  it('surfaces the one alternative-specific failure instead of the generic list', () => {
-    const { expr, ctx } = argOf('pg.sql`x`');
-    const result = type.parse(expr, ctx);
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.failure).toEqual([
-        expect.objectContaining({
-          code: 'PSL_UNKNOWN_DEFAULT_LITERAL_TAG',
-          message: 'Unknown literal tag "pg.sql". Known tags: sql.',
-        }),
-      ]);
-    }
-  });
-
-  it('returns the first specific failure when several alternatives produce one', () => {
-    const twoTagArms = oneOf(
-      taggedLiteral(['sql'], { documentation: 'Raw SQL.' }),
-      taggedLiteral(['pg.sql'], { documentation: 'Raw SQL.' }),
-    );
-    const { expr, ctx } = argOf('other`x`');
-    const result = twoTagArms.parse(expr, ctx);
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.failure).toEqual([
-        expect.objectContaining({ message: 'Unknown literal tag "other". Known tags: sql.' }),
-      ]);
-    }
-  });
-
-  it('still tries later alternatives after a specific failure', () => {
-    const twoTagArms = oneOf(
-      taggedLiteral(['sql'], { documentation: 'Raw SQL.' }),
-      taggedLiteral(['pg.sql'], { documentation: 'Raw SQL.' }),
-    );
-    const { expr, ctx } = argOf('pg.sql`x`');
-    const result = twoTagArms.parse(expr, ctx);
-    expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toMatchObject({ tag: 'pg.sql', body: 'x' });
-  });
-
-  it('keeps the generic list when no alternative fails with a specific code', () => {
-    const { expr, ctx } = argOf('42');
-    const result = type.parse(expr, ctx);
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.failure[0]).toMatchObject({
-        code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
-        message: 'Expected one of: string | sql`...`',
-      });
-    }
-  });
-});
-
 describe('taggedLiteral', () => {
   const type = taggedLiteral(['sql', 'pg.sql'], { documentation: 'Raw SQL, used verbatim.' });
 
@@ -104,46 +48,36 @@ describe('taggedLiteral', () => {
     expect(type.documentation).toBe('Raw SQL, used verbatim.');
   });
 
-  it('accepts a known tag and returns the canonical body with its span', () => {
+  it('returns the tag, the canonicalized body, and the span of the whole literal', () => {
     const { expr, ctx } = argOf('pg.sql`\n  now()\n`');
     const result = type.parse(expr, ctx);
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value).toEqual({
         tag: 'pg.sql',
-        body: 'now()',
+        canonicalization: { ok: true, body: 'now()' },
         span: { start: { offset: 3, line: 1, column: 4 }, end: { offset: 20, line: 3, column: 2 } },
       });
     }
   });
 
-  it('accepts a quote fence', () => {
+  it('accepts a double-quoted string', () => {
     const { expr, ctx } = argOf('sql"now()"');
-    const result = type.parse(expr, ctx);
-    expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toMatchObject({ tag: 'sql', body: 'now()' });
+    expect(type.parse(expr, ctx)).toMatchObject({
+      ok: true,
+      value: { tag: 'sql', canonicalization: { ok: true, body: 'now()' } },
+    });
   });
 
-  it('rejects an unknown tag and lists the known tags in registration order', () => {
+  it('accepts a tag it does not list, leaving the tag check to lowering', () => {
     const { expr, ctx } = argOf('sqlite.sql`x`');
-    const result = type.parse(expr, ctx);
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.failure).toEqual([
-        {
-          code: 'PSL_UNKNOWN_DEFAULT_LITERAL_TAG',
-          message: 'Unknown literal tag "sqlite.sql". Known tags: sql, pg.sql.',
-          sourceId: 'schema.prisma',
-          span: {
-            start: { offset: 3, line: 1, column: 4 },
-            end: { offset: 16, line: 1, column: 17 },
-          },
-        },
-      ]);
-    }
+    expect(type.parse(expr, ctx)).toMatchObject({
+      ok: true,
+      value: { tag: 'sqlite.sql', canonicalization: { ok: true, body: 'x' } },
+    });
   });
 
-  it('rejects an argument that is not a tagged literal', () => {
+  it('rejects an argument that is not a tagged literal with the generic code', () => {
     for (const source of ['"sql"', 'sql', 'sql()', '42']) {
       const { expr, ctx } = argOf(source);
       const result = type.parse(expr, ctx);
@@ -160,32 +94,22 @@ describe('taggedLiteral', () => {
 
   it('passes a body containing a dollar-brace sequence through verbatim', () => {
     const { expr, ctx } = argOf('sql`a $' + '{x} b`');
-    const result = type.parse(expr, ctx);
-    expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value.body).toBe('a $' + '{x} b');
+    expect(type.parse(expr, ctx)).toMatchObject({
+      ok: true,
+      value: { canonicalization: { ok: true, body: 'a $' + '{x} b' } },
+    });
   });
 
-  it('reports a NUL character', () => {
-    const { expr, ctx } = argOf('sql`a\0b`');
-    const result = type.parse(expr, ctx);
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.failure[0]).toMatchObject({
-        code: 'PSL_TAGGED_LITERAL_NUL',
-        message: 'Tagged literals must not contain NUL characters.',
-      });
-    }
-  });
-
-  it('reports a body over 65536 bytes', () => {
-    const { expr, ctx } = argOf(`sql\`${'a'.repeat(65537)}\``);
-    const result = type.parse(expr, ctx);
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.failure[0]).toMatchObject({
-        code: 'PSL_TAGGED_LITERAL_TOO_LARGE',
-        message: 'Tagged literal exceeds 65536 bytes.',
-      });
-    }
+  it('returns a failed canonicalization for lowering to report', () => {
+    const nul = argOf('sql`a\0b`');
+    expect(type.parse(nul.expr, nul.ctx)).toMatchObject({
+      ok: true,
+      value: { canonicalization: { ok: false, reason: 'nul', offset: 1 } },
+    });
+    const large = argOf(`sql\`${'a'.repeat(65537)}\``);
+    expect(type.parse(large.expr, large.ctx)).toMatchObject({
+      ok: true,
+      value: { canonicalization: { ok: false, reason: 'too-large' } },
+    });
   });
 });

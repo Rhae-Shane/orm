@@ -14,7 +14,7 @@ export const PSL_INVALID_DEFAULT_SQL: ContributedPslDiagnosticCode = 'PSL_INVALI
 export function sqlDefaultLiteralTagEntry(usage: string): ControlDefaultLiteralTagEntry {
   return {
     usage,
-    documentation: "Uses the SQL between the fences, verbatim, as the column's default expression.",
+    documentation: "Uses the SQL in the string, verbatim, as the column's default expression.",
     lower: ({ literal, context }): LoweredDefaultResult => {
       const reject = (message: string): LoweredDefaultResult => ({
         ok: false,

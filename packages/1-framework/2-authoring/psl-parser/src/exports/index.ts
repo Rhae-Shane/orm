@@ -1,4 +1,3 @@
-export type { TaggedLiteralValue } from '@internal/framework-components/control';
 export type {
   PslAttribute,
   PslAttributeArgument,
@@ -86,6 +85,7 @@ export type {
   OptionalArgType,
   OutOf,
   Param,
+  ParsedTaggedLiteral,
   PositionalParam,
   PosOut,
   RejectingArgType,

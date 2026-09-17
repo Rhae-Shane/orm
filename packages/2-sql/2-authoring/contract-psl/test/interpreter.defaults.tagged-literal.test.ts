@@ -40,8 +40,8 @@ describe('interpretPslDocumentToSqlContract tagged literal defaults', () => {
   };
 
   it.each([
-    ['backtick fence', 'v String @default(sql`md5(random()::text)`)'],
-    ['quote fence', 'v String @default(sql"md5(random()::text)")'],
+    ['backtick string', 'v String @default(sql`md5(random()::text)`)'],
+    ['double-quoted string', 'v String @default(sql"md5(random()::text)")'],
     ['pg.sql tag', 'v String @default(pg.sql`md5(random()::text)`)'],
   ])('lowers the %s to a function default with the canonical body', (_name, fieldLine) => {
     expect(columnDefault(fieldLine, 'v')).toEqual({
@@ -80,15 +80,50 @@ describe('interpretPslDocumentToSqlContract tagged literal defaults', () => {
     });
   });
 
-  it('rejects an unregistered tag and lists the known tags', () => {
+  const lineThreeSpan = (startColumn: number, length: number) => ({
+    start: { offset: 24 + startColumn, line: 3, column: startColumn },
+    end: { offset: 24 + startColumn + length, line: 3, column: startColumn + length },
+  });
+
+  it('rejects an unregistered tag at the literal and lists the known tags', () => {
     expect(diagnostics('v String @default(sqlite.sql`x`)')).toEqual([
-      expect.objectContaining({
+      {
         code: 'PSL_UNKNOWN_DEFAULT_LITERAL_TAG',
         message: 'Unknown literal tag "sqlite.sql". Known tags: sql, pg.sql.',
         sourceId: 'schema.prisma',
-        span: expect.objectContaining({ start: expect.objectContaining({ line: 3 }) }),
-      }),
+        span: lineThreeSpan(21, 'sqlite.sql`x`'.length),
+      },
     ]);
+  });
+
+  it('rejects a NUL character at the literal', () => {
+    expect(diagnostics('v String @default(sql`a\0b`)')).toEqual([
+      {
+        code: 'PSL_TAGGED_LITERAL_NUL',
+        message: 'Tagged literals must not contain NUL characters.',
+        sourceId: 'schema.prisma',
+        span: lineThreeSpan(21, 'sql`a\0b`'.length),
+      },
+    ]);
+  });
+
+  it('rejects a body over 65536 bytes at the literal', () => {
+    const literal = `sql\`${'a'.repeat(65537)}\``;
+    expect(diagnostics(`v String @default(${literal})`)).toEqual([
+      {
+        code: 'PSL_TAGGED_LITERAL_TOO_LARGE',
+        message: 'Tagged literal exceeds 65536 bytes.',
+        sourceId: 'schema.prisma',
+        span: lineThreeSpan(21, literal.length),
+      },
+    ]);
+  });
+
+  it('allows whitespace between the tag and the string', () => {
+    expect(columnDefault('v String @default(sql `md5(random()::text)`)', 'v')).toEqual({
+      kind: 'function',
+      expression: 'md5(random()::text)',
+    });
   });
 
   it('rejects a body the SQL check refuses', () => {
