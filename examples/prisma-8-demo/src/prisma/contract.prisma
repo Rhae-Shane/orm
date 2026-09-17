@@ -43,6 +43,7 @@ model Post {
   userId    Uuid
   priority  Priority @default(Low)
   createdAt DateTime       @default(now())
+  expiresAt DateTime       @default(sql`(now() + '7 days'::interval)`)
   embedding Embedding1536?
 
   // Three engagement counters, one per integer representation. They are

@@ -131,11 +131,17 @@ describe('TS-authored enum on the demo contract (Post.priority)', () => {
           );
           const rows = await runtime.query(
             sql.post
-              .select('id', 'priority')
+              .select('id', 'priority', 'createdAt', 'expiresAt')
               .where((f, fns) => fns.eq(f.id, '10000000-0000-0000-0000-0000000000fe'))
               .build(),
           );
           expect(rows[0]?.priority).toBe(0);
+          // `expiresAt` is the raw SQL default `(now() + '7 days'::interval)`, assigned by the database
+          // alongside `createdAt`'s `now()`.
+          const secondsUntilExpiry = rows[0]!.expiresAt
+            .since(rows[0]!.createdAt)
+            .total({ unit: 'seconds' });
+          expect(Math.abs(secondsUntilExpiry - 7 * 24 * 60 * 60)).toBeLessThan(60);
         } finally {
           await close();
         }
