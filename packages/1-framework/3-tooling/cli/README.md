@@ -932,7 +932,7 @@ The `contract.output` field specifies the path to `contract.json`. This is the c
 Plan a migration from contract changes. Compares a starting contract against a destination contract and produces a new migration package with the required operations. No database connection is needed — fully offline.
 
 ```bash
-prisma migration plan [--config <path>] [--name <slug>] [--from <contract>] [--to <contract>] [--json] [-v] [-q] [--color/--no-color]
+prisma migration plan [--config <path>] [--name <slug>] [--from <contract>] [--to <contract>] [--rename <from>=<to>]... [--json] [-v] [-q] [--color/--no-color]
 ```
 
 **Options:**
@@ -940,6 +940,7 @@ prisma migration plan [--config <path>] [--name <slug>] [--from <contract>] [--t
 - `--name <slug>`: Name slug for the migration directory (default: `migration`)
 - `--from <contract>`: Starting contract reference (hash, prefix, ref name, migration directory, `<dir>^`, `@empty`, or filesystem path). `@empty` names the empty-database origin deliberately. Defaults to the `db` ref; when the ref is absent, greenfield only on an empty graph — over existing migrations the command refuses (`MIGRATION.PLAN_ORIGIN_UNKNOWN`) unless `--from @empty` is passed.
 - `--to <contract>`: Destination contract reference (same grammar as `--from`). Defaults to the emitted `contract.json`. Use `--to <migration-dir>^` to plan a rollback toward a predecessor state.
+- `--rename <from>=<to>`: States that the storage a model maps to was renamed, so the plan renames it and keeps its data instead of dropping and recreating it. Either side may be `<namespace>.<name>`. Repeat once per rename. `migration new` accepts the same flag and scaffolds the operations `migration plan` would plan for it. MongoDB refuses the flag.
 - `--json`: Output as JSON object
 - `-q, --quiet`: Quiet mode (errors only)
 - `-v, --verbose`: Verbose output (debug info, timings)

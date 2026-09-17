@@ -1,5 +1,5 @@
 /**
- * `--rename-table` on a Postgres table that carries indexes, constraints and foreign keys.
+ * `--rename` on a Postgres table that carries indexes, constraints and foreign keys.
  *
  * Wire-named indexes and checks whose prefix derives from the table name pair by content hash and plan as renames. Primary keys, uniques and foreign keys the contract leaves unnamed were named by the planner from the old table name, so each gets a companion constraint rename to the name the planner now derives from the new table name. Explicitly named constraints keep their names, and foreign keys on other tables keep theirs.
  */

@@ -431,11 +431,7 @@ export interface StorageEntityRenameCoordinate {
 }
 
 /**
- * An operator-stated rename of one storage entity (a SQL table, a document
- * collection) between the previous state and the next contract. The planner
- * cannot infer a rename from a diff — the entity under the old name is gone
- * and one under the new name appeared — so the operator states it and the
- * planner applies it to the previous state before diffing.
+ * An operator-stated rename of the storage a model maps to, between the previous state and the next contract. The planner cannot infer a rename from a diff — the storage under the old name is gone and one under the new name appeared — so the operator states it and the planner applies it to the previous state before diffing.
  */
 export interface StorageEntityRename {
   readonly from: StorageEntityRenameCoordinate;

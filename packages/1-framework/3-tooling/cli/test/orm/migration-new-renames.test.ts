@@ -1,5 +1,5 @@
 /**
- * `migration new --rename-table` hands the target planner the stated renames together with the contract the migration starts from and the one it ends at, so the planner can scaffold the same rename operations `migration plan` would plan.
+ * `migration new --rename` hands the target planner the stated renames together with the contract the migration starts from and the one it ends at, so the planner can scaffold the same rename operations `migration plan` would plan.
  */
 
 import { createTestCli } from '@prisma/cli-engine/testing';
@@ -47,7 +47,7 @@ async function scaffoldContext(
   return typeof received === 'object' && received !== null ? { ...received } : undefined;
 }
 
-describe('migration new --rename-table', () => {
+describe('migration new --rename', () => {
   it('passes the renames with the previous and the next contract', async () => {
     const project = await createOfflineProject({ storageHash: HASH_TO });
     await seedMigrationPackage({
@@ -58,7 +58,7 @@ describe('migration new --rename-table', () => {
     });
     await seedContractSnapshot({ migrationsDir: project.migrationsDir, storageHash: HASH_FROM });
 
-    const context = await scaffoldContext(project, ['--rename-table', 'userProfile=UserProfile']);
+    const context = await scaffoldContext(project, ['--rename', 'userProfile=UserProfile']);
 
     expect(context?.['renames']).toMatchObject({
       intents: [INTENT],
@@ -71,7 +71,7 @@ describe('migration new --rename-table', () => {
   it('passes no previous contract when the project has no migration history', async () => {
     const project = await createOfflineProject({ storageHash: HASH_TO });
 
-    const context = await scaffoldContext(project, ['--rename-table', 'userProfile=UserProfile']);
+    const context = await scaffoldContext(project, ['--rename', 'userProfile=UserProfile']);
 
     expect(context?.['renames']).toMatchObject({
       intents: [INTENT],

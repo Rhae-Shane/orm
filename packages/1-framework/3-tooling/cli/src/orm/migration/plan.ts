@@ -11,7 +11,7 @@ import { executeMigrationPlanCommand } from '../../control-api/operations/migrat
 import type { CreateControlClient } from '../../control-api/types';
 import { previewBlockHeader } from '../../utils/formatters/migrations';
 import { runCommandAction } from '../../utils/next-actions';
-import { parseRenameTableFlags } from '../../utils/rename-table-flag';
+import { parseRenameFlags } from '../../utils/rename-flag';
 import { ormConfigSection } from '../config-section';
 import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
@@ -234,17 +234,16 @@ export function createMigrationPlanCommand(createClient: CreateControlClient) {
             'Destination contract reference; defaults to the emitted contract. Same grammar as --from',
           placeholder: 'contract',
         }),
-        // biome-ignore lint/plugin/no-family-vocabulary: the flag is the SQL family's user-facing grammar for a stated rename
-        renameTable: flag.repeated({
+        rename: flag.repeated({
           brief:
-            'A table the contract change renames, as <from>=<to> (either side may be <schema>.<name>); repeat per table',
+            'Storage a model maps to that the contract change renames, as <from>=<to> (either side may be <namespace>.<name>); repeat per rename',
           placeholder: 'from=to',
         }),
       },
     },
     needs: { config: ormConfigSection },
     handler: async (args, ctx) => {
-      const renames = parseRenameTableFlags(args.flags.renameTable);
+      const renames = parseRenameFlags(args.flags.rename);
       if (!renames.ok) {
         return notOk(normalizeError(renames.failure));
       }

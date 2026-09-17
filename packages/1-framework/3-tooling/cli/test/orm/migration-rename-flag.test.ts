@@ -1,5 +1,5 @@
 /**
- * `--rename-table` is parsed once, the same way, on `migration plan` and
+ * `--rename` is parsed once, the same way, on `migration plan` and
  * `migration new`, and the parsed intents reach each command's control
  * operation. The operations themselves are doubles here; what they do with the
  * intents is covered by the planner tests and the journeys.
@@ -52,7 +52,7 @@ afterAll(() => {
 });
 
 beforeEach(() => {
-  projectDir = createTestProjectDir('orm-migration-rename-table');
+  projectDir = createTestProjectDir('orm-migration-rename');
   projectDirs.push(projectDir);
   writeProjectManifest(projectDir);
   writeFileSync(
@@ -116,16 +116,16 @@ const EXPECTED_RENAMES = [
   { from: { namespaceId: 'auth', name: 'orderLine' }, to: { name: 'OrderLine' } },
 ];
 
-describe('migration plan --rename-table', () => {
+describe('migration plan --rename', () => {
   it('passes every parsed intent to the plan operation', async () => {
     const run = await harness().run(
       [
         'migration',
         'plan',
         '--json',
-        '--rename-table',
+        '--rename',
         'userProfile=UserProfile',
-        '--rename-table',
+        '--rename',
         'auth.orderLine=OrderLine',
       ],
       { cwd: projectDir },
@@ -146,30 +146,29 @@ describe('migration plan --rename-table', () => {
   });
 
   it('rejects a malformed value before the operation runs', async () => {
-    const run = await harness().run(
-      ['migration', 'plan', '--json', '--rename-table', 'userProfile'],
-      { cwd: projectDir },
-    );
+    const run = await harness().run(['migration', 'plan', '--json', '--rename', 'userProfile'], {
+      cwd: projectDir,
+    });
 
     expect(run.exitCode).not.toBe(0);
     expect(envelopeOf(run.json)).toMatchObject({
       ok: false,
-      error: { code: 'CLI.INVALID_RENAME_TABLE_FLAG' },
+      error: { code: 'CLI.INVALID_RENAME_FLAG' },
     });
     expect(mocks.executeMigrationPlanCommand).not.toHaveBeenCalled();
   });
 });
 
-describe('migration new --rename-table', () => {
+describe('migration new --rename', () => {
   it('passes every parsed intent to the scaffold operation', async () => {
     const run = await harness().run(
       [
         'migration',
         'new',
         '--json',
-        '--rename-table',
+        '--rename',
         'userProfile=UserProfile',
-        '--rename-table',
+        '--rename',
         'auth.orderLine=OrderLine',
       ],
       { cwd: projectDir },
@@ -183,14 +182,14 @@ describe('migration new --rename-table', () => {
   });
 
   it('rejects a malformed value before the operation runs', async () => {
-    const run = await harness().run(['migration', 'new', '--json', '--rename-table', 'a=b=c'], {
+    const run = await harness().run(['migration', 'new', '--json', '--rename', 'a=b=c'], {
       cwd: projectDir,
     });
 
     expect(run.exitCode).not.toBe(0);
     expect(envelopeOf(run.json)).toMatchObject({
       ok: false,
-      error: { code: 'CLI.INVALID_RENAME_TABLE_FLAG' },
+      error: { code: 'CLI.INVALID_RENAME_FLAG' },
     });
     expect(mocks.executeMigrationNewCommand).not.toHaveBeenCalled();
   });

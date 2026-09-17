@@ -38,7 +38,7 @@ export function tableRenameScaffoldError(
   );
 }
 
-/** A `--rename-table <from>=<to>` intent as the CLI parsed it. */
+/** A `--rename <from>=<to>` intent as the CLI parsed it. */
 export type TableRenameIntent = StorageEntityRename;
 
 /** An intent after both sides were matched against the contracts. */
@@ -117,7 +117,7 @@ function resolvedTableLabel(namespaceId: string, tableName: string): string {
 function unmatched(intent: TableRenameIntent, reason: string): SqlPlannerConflict {
   return {
     kind: 'tableRenameUnmatched',
-    summary: `${TABLE_RENAME_UNMATCHED_CODE}: --rename-table "${tableRenameIntentLabel(intent)}" does not match the contracts: ${reason}.`,
+    summary: `${TABLE_RENAME_UNMATCHED_CODE}: --rename "${tableRenameIntentLabel(intent)}" does not match the contracts: ${reason}.`,
     why: 'A rename intent must name a table of the previous contract as its old name and a table of the next contract as its new name, and the new name must not already exist in the previous contract. Check the spelling and the schema qualifier, or drop the flag if the table was not renamed.',
     meta: { code: TABLE_RENAME_UNMATCHED_CODE, from: intent.from.name, to: intent.to.name },
   };
@@ -317,7 +317,7 @@ export function applyTableRenameIntents(
     return notOk(
       input.intents.map((intent) => ({
         kind: 'unsupportedOperation',
-        summary: `${TABLE_RENAME_NO_PREVIOUS_CONTRACT_CODE}: --rename-table "${tableRenameIntentLabel(intent)}" needs a previous contract to apply the rename to, and this plan starts from an empty database.`,
+        summary: `${TABLE_RENAME_NO_PREVIOUS_CONTRACT_CODE}: --rename "${tableRenameIntentLabel(intent)}" needs a previous contract to apply the rename to, and this plan starts from an empty database.`,
         why: 'A rename intent only makes sense between two contracts. Plan from the migration that created the table. A database managed with db update has no migration history: rename the table there by hand with ALTER TABLE ... RENAME TO ..., and drop the flag.',
         meta: { code: TABLE_RENAME_NO_PREVIOUS_CONTRACT_CODE },
       })),
@@ -343,14 +343,14 @@ export function applyTableRenameIntents(
       conflicts.push(
         unmatched(
           intent,
-          `table "${resolvedTableLabel(namespaceId, from)}" is already renamed by --rename-table "${tableRenameIntentLabel(earlierOld)}"`,
+          `table "${resolvedTableLabel(namespaceId, from)}" is already renamed by --rename "${tableRenameIntentLabel(earlierOld)}"`,
         ),
       );
     } else if (earlierNew !== undefined) {
       conflicts.push(
         unmatched(
           intent,
-          `table "${resolvedTableLabel(namespaceId, to)}" is already the new name in --rename-table "${tableRenameIntentLabel(earlierNew)}"`,
+          `table "${resolvedTableLabel(namespaceId, to)}" is already the new name in --rename "${tableRenameIntentLabel(earlierNew)}"`,
         ),
       );
     } else {

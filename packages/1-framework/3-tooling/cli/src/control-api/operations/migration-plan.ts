@@ -70,7 +70,7 @@ export interface MigrationPlanOptions {
   readonly from?: string;
   readonly to?: string;
   /**
-   * Operator-stated renames (`--rename-table`), applied by the planner to the
+   * Operator-stated renames (`--rename`), applied by the planner to the
    * origin contract before it diffs; each becomes the first operations of
    * the planned migration. Only the delta leg receives them: an auto-baseline
    * leg plans the origin from nothing and has no previous state to rename.

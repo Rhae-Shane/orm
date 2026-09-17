@@ -9,7 +9,7 @@ import type { MigrationNewResult } from '../../control-api/operations/migration-
 import { executeMigrationNewCommand } from '../../control-api/operations/migration-new';
 import type { CreateControlClient } from '../../control-api/types';
 import { runCommandAction } from '../../utils/next-actions';
-import { parseRenameTableFlags } from '../../utils/rename-table-flag';
+import { parseRenameFlags } from '../../utils/rename-flag';
 import { ormConfigSection } from '../config-section';
 import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
@@ -84,17 +84,16 @@ export function createMigrationNewCommand(createClient: CreateControlClient) {
           brief: 'Starting contract hash (default: latest migration target)',
           placeholder: 'hash',
         }),
-        // biome-ignore lint/plugin/no-family-vocabulary: the flag is the SQL family's user-facing grammar for a stated rename
-        renameTable: flag.repeated({
+        rename: flag.repeated({
           brief:
-            'A table this migration renames, as <from>=<to> (either side may be <schema>.<name>); the scaffold starts with one rename call per value',
+            'Storage a model maps to that this migration renames, as <from>=<to> (either side may be <namespace>.<name>); the scaffold starts with the operations migration plan would plan for it',
           placeholder: 'from=to',
         }),
       },
     },
     needs: { config: ormConfigSection },
     handler: async (args, ctx) => {
-      const renames = parseRenameTableFlags(args.flags.renameTable);
+      const renames = parseRenameFlags(args.flags.rename);
       if (!renames.ok) {
         return notOk(normalizeError(renames.failure));
       }

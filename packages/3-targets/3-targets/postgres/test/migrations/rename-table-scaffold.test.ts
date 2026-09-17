@@ -1,5 +1,5 @@
 /**
- * `migration new --rename-table` on Postgres: the scaffold carries the same rename operations `migration plan` plans for the stated renames, and refuses the intents `migration plan` refuses.
+ * `migration new --rename` on Postgres: the scaffold carries the same rename operations `migration plan` plans for the stated renames, and refuses the intents `migration plan` refuses.
  */
 
 import type { Contract } from '@internal/contract/types';

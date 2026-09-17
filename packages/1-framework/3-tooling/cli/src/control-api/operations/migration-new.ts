@@ -51,7 +51,7 @@ export interface MigrationNewOptions {
   readonly name?: string;
   readonly from?: string;
   /**
-   * Operator-stated renames (`--rename-table`): the scaffold starts with the rename operations `migration plan` would plan for them, and its manifest is attested over those ops, so a migration that only renames is complete as written.
+   * Operator-stated renames (`--rename`): the scaffold starts with the rename operations `migration plan` would plan for them, and its manifest is attested over those ops, so a migration that only renames is complete as written.
    */
   readonly renames?: readonly StorageEntityRename[];
   /** Renders the declarations of the destination snapshot from its `contract.json`. */

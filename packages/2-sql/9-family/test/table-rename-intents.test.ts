@@ -375,7 +375,7 @@ describe('applyTableRenameIntents', () => {
       expect(result.failure).toEqual([
         {
           kind: 'unsupportedOperation',
-          summary: `${TABLE_RENAME_NO_PREVIOUS_CONTRACT_CODE}: --rename-table "userProfile=UserProfile" needs a previous contract to apply the rename to, and this plan starts from an empty database.`,
+          summary: `${TABLE_RENAME_NO_PREVIOUS_CONTRACT_CODE}: --rename "userProfile=UserProfile" needs a previous contract to apply the rename to, and this plan starts from an empty database.`,
           why: 'A rename intent only makes sense between two contracts. Plan from the migration that created the table. A database managed with db update has no migration history: rename the table there by hand with ALTER TABLE ... RENAME TO ..., and drop the flag.',
           meta: { code: TABLE_RENAME_NO_PREVIOUS_CONTRACT_CODE },
         },
@@ -406,7 +406,7 @@ describe('applyTableRenameIntents', () => {
         ).toEqual([
           expect.objectContaining({
             kind: 'tableRenameUnmatched',
-            summary: `${TABLE_RENAME_UNMATCHED_CODE}: --rename-table "auth.userProfile=Member" does not match the contracts: table "auth.userProfile" is already renamed by --rename-table "userProfile=Profile".`,
+            summary: `${TABLE_RENAME_UNMATCHED_CODE}: --rename "auth.userProfile=Member" does not match the contracts: table "auth.userProfile" is already renamed by --rename "userProfile=Profile".`,
             meta: { code: TABLE_RENAME_UNMATCHED_CODE, from: 'userProfile', to: 'Member' },
           }),
         ]);
@@ -421,7 +421,7 @@ describe('applyTableRenameIntents', () => {
         ).toEqual([
           expect.objectContaining({
             kind: 'tableRenameUnmatched',
-            summary: `${TABLE_RENAME_UNMATCHED_CODE}: --rename-table "account=auth.Profile" does not match the contracts: table "auth.Profile" is already the new name in --rename-table "userProfile=Profile".`,
+            summary: `${TABLE_RENAME_UNMATCHED_CODE}: --rename "account=auth.Profile" does not match the contracts: table "auth.Profile" is already the new name in --rename "userProfile=Profile".`,
           }),
         ]);
       });

@@ -1,7 +1,7 @@
 /**
  * Renaming a table keeps its rows (Postgres).
  *
- * A model whose table name changes used to plan as `dropTable` plus `createTable`. With `--rename-table <from>=<to>` the operator states the rename and the migration carries a `renameTable` operation instead, plus a rename of each constraint and index named after the old table.
+ * A model whose table name changes used to plan as `dropTable` plus `createTable`. With `--rename <from>=<to>` the operator states the rename and the migration carries a `renameTable` operation instead, plus a rename of each constraint and index named after the old table.
  *
  * Both journeys create `userProfile` with rows, a unique constraint, a foreign key, an index, row-level security and a policy, then drop the model's `@@map` so it names `UserProfile`. After `migrate`, the rows, the policy and RLS are kept, every constraint and index carries the new table name, `db verify --schema-only` is clean, a plan with no schema change is empty, and a later migration that removes the unique constraint, the foreign key and the index applies.
  *
@@ -160,7 +160,7 @@ async function expectLaterChangesApply(
 }
 
 withTempDir(({ createTempDir }) => {
-  describe('Journey R1: rename a table with migration plan --rename-table', () => {
+  describe('Journey R1: rename a table with migration plan --rename', () => {
     const db = useDevDatabase();
 
     it(
@@ -183,7 +183,7 @@ withTempDir(({ createTempDir }) => {
         expect(
           `${bareError?.why}\n${bareError?.summary}\n${JSON.stringify(bareError?.nextActions)}`,
           'R1.05: guard points at the flag',
-        ).toContain('--rename-table');
+        ).toContain('prisma migration plan --rename "userProfile=UserProfile"');
         expect(getMigrationDirs(ctx), 'R1.05: nothing written').toHaveLength(1);
 
         const stale = await runMigrationPlan(ctx, [
@@ -191,7 +191,7 @@ withTempDir(({ createTempDir }) => {
           'stale',
           '--from',
           origin,
-          '--rename-table',
+          '--rename',
           'userProfile=Nope',
           '--json',
         ]);
@@ -208,7 +208,7 @@ withTempDir(({ createTempDir }) => {
           'rename-user-profile',
           '--from',
           origin,
-          '--rename-table',
+          '--rename',
           'userProfile=UserProfile',
           '--json',
         ]);
@@ -232,7 +232,7 @@ withTempDir(({ createTempDir }) => {
     );
   });
 
-  describe('Journey R2: rename a table with migration new --rename-table', () => {
+  describe('Journey R2: rename a table with migration new --rename', () => {
     const db = useDevDatabase();
 
     it(
@@ -248,7 +248,7 @@ withTempDir(({ createTempDir }) => {
         const scaffold = await runMigrationNew(ctx, [
           '--name',
           'rename-user-profile',
-          '--rename-table',
+          '--rename',
           'userProfile=UserProfile',
         ]);
         expect(scaffold.exitCode, `R2.05: migration new: ${scaffold.stderr}`).toBe(0);

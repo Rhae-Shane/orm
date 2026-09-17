@@ -1,5 +1,5 @@
 /**
- * `--rename-table` on a SQLite table that carries indexes, constraints and foreign keys.
+ * `--rename` on a SQLite table that carries indexes, constraints and foreign keys.
  *
  * SQLite renames a table's automatic indexes and rewrites foreign keys that reference it, and it names no primary key, unique or foreign key the contract leaves unnamed, so those need nothing beyond the rename. A wire-named index whose prefix derives from the table name keeps its old name through `ALTER TABLE ... RENAME TO`, and SQLite cannot rename an index, so it is dropped and created under the new name; an index holds no rows, so nothing is lost.
  */

@@ -1,5 +1,5 @@
 /**
- * `--rename-table` intents on the Postgres planner: the stated tables are
+ * `--rename` intents on the Postgres planner: the stated tables are
  * renamed in the previous contract before the diff, one `renameTable` op is
  * prepended per intent, and an intent that matches neither side is a
  * planning failure rather than a warning.

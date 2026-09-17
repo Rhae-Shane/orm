@@ -1,5 +1,5 @@
 /**
- * `migration new --rename-table` on SQLite: the scaffold carries the same rename operations `migration plan` plans for the stated renames, and refuses the intents `migration plan` refuses, including a namespace qualifier SQLite does not have.
+ * `migration new --rename` on SQLite: the scaffold carries the same rename operations `migration plan` plans for the stated renames, and refuses the intents `migration plan` refuses, including a namespace qualifier SQLite does not have.
  */
 
 import type { Contract } from '@internal/contract/types';

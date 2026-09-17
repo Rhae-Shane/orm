@@ -9,11 +9,11 @@ const GRAMMAR = '<from>=<to>, each side optionally qualified as <namespace>.<nam
 
 function invalid(value: string, reason: string): CliStructuredError {
   return new CliStructuredError(
-    'CLI.INVALID_RENAME_TABLE_FLAG',
-    `Invalid --rename-table value "${value}": ${reason}.`,
+    'CLI.INVALID_RENAME_FLAG',
+    `Invalid --rename value "${value}": ${reason}.`,
     {
-      why: `--rename-table names one storage entity to rename, as ${GRAMMAR}.`,
-      fix: `Write the flag as --rename-table ${GRAMMAR}, once per renamed entity.`,
+      why: `--rename names the storage a model maps to and its new name, as ${GRAMMAR}.`,
+      fix: `Write the flag as --rename ${GRAMMAR}, once per rename.`,
       meta: { value },
     },
   );
@@ -45,13 +45,9 @@ function coordinateLabel(coordinate: StorageEntityRenameCoordinate): string {
 }
 
 /**
- * Parses every `--rename-table <from>=<to>` value the operator gave, in the
- * order given. A malformed value, a value whose two sides are the same
- * entity, a value whose sides name different namespaces, and two values that
- * share an old or a new name are each refused with
- * `CLI.INVALID_RENAME_TABLE_FLAG`.
+ * Parses every `--rename <from>=<to>` value the operator gave, in the order given. A malformed value, a value whose two sides are the same, a value whose sides name different namespaces, and two values that share an old or a new name are each refused with `CLI.INVALID_RENAME_FLAG`.
  */
-export function parseRenameTableFlags(
+export function parseRenameFlags(
   values: readonly string[] | undefined,
 ): Result<readonly StorageEntityRename[], CliStructuredError> {
   const renames: StorageEntityRename[] = [];
@@ -81,7 +77,7 @@ export function parseRenameTableFlags(
       return notOk(
         invalid(
           value,
-          `a rename cannot move a table from namespace "${from.value.namespaceId}" to namespace "${to.value.namespaceId}"`,
+          `a rename cannot move "${coordinateLabel(from.value)}" to namespace "${to.value.namespaceId}"`,
         ),
       );
     }

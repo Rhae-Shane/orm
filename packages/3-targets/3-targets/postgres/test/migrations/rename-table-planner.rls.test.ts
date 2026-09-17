@@ -1,5 +1,5 @@
 /**
- * `--rename-table` on a row-level-security table: the Postgres `rls` marker and every policy name the table they attach to, so a rename moves them with the table. `ALTER TABLE ... RENAME TO` keeps RLS enabled and the policies attached, and policy names do not derive from the table name, so the plan is the rename alone.
+ * `--rename` on a row-level-security table: the Postgres `rls` marker and every policy name the table they attach to, so a rename moves them with the table. `ALTER TABLE ... RENAME TO` keeps RLS enabled and the policies attached, and policy names do not derive from the table name, so the plan is the rename alone.
  */
 
 import { type Contract, coreHash, profileHash } from '@internal/contract/types';

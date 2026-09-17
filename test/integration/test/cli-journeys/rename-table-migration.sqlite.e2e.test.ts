@@ -1,7 +1,7 @@
 /**
  * Renaming a table keeps its rows (SQLite).
  *
- * The SQLite twin of `rename-table-migration.e2e.test.ts`, driven through a file database and the SQLite facade config. Create `userProfile` with rows, a unique constraint, a foreign key and an index, then drop the `@@map` so the model names `UserProfile`. `migration plan --rename-table` plans the rename plus a drop and a create of each index named after the old table; `migrate` keeps the rows; `db verify --schema-only` is clean; a plan with no schema change is empty; and a later migration that removes the unique constraint, the foreign key and the index applies.
+ * The SQLite twin of `rename-table-migration.e2e.test.ts`, driven through a file database and the SQLite facade config. Create `userProfile` with rows, a unique constraint, a foreign key and an index, then drop the `@@map` so the model names `UserProfile`. `migration plan --rename` plans the rename plus a drop and a create of each index named after the old table; `migrate` keeps the rows; `db verify --schema-only` is clean; a plan with no schema change is empty; and a later migration that removes the unique constraint, the foreign key and the index applies.
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -100,7 +100,7 @@ function withDatabase<T>(dbPath: string, run: (db: DatabaseSync) => T): T {
 }
 
 withTempDir(({ createTempDir }) => {
-  describe('Journey R3 (SQLite): rename a table with migration plan --rename-table', () => {
+  describe('Journey R3 (SQLite): rename a table with migration plan --rename', () => {
     it(
       'stale intent fails; stated intent renames the table and recreates its named indexes, keeps the rows, and later changes apply',
       async () => {
@@ -136,7 +136,7 @@ withTempDir(({ createTempDir }) => {
           'stale',
           '--from',
           origin,
-          '--rename-table',
+          '--rename',
           'userProfile=Nope',
           '--json',
         ]);
@@ -151,7 +151,7 @@ withTempDir(({ createTempDir }) => {
           'rename-user-profile',
           '--from',
           origin,
-          '--rename-table',
+          '--rename',
           'userProfile=UserProfile',
           '--json',
         ]);
