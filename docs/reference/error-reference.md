@@ -1278,6 +1278,10 @@ A ref name resolves to nothing: no pointer file with that name exists, and the f
 
 A reference parsed, but as the wrong kind for the argument position — e.g. a migration-only reference where a contract reference is required (raised by the shared ref-resolution mapper). The message and fix come from the resolver's own diagnosis. Payload: `input`, `expectedGrammar`.
 
+### MIGRATION.RENAME_UNSUPPORTED
+
+A stated rename (`--rename-table <from>=<to>`) was given to `migration plan` or `migration new` on a MongoDB project. The MongoDB planner has no rename operation, so it refuses rather than planning a drop of the old collection and a create of the new one. Nothing is planned or written; on `migration plan` it is reported as a conflict inside `MIGRATION.PLANNING_FAILED`. Rename the collection by hand with `renameCollection`, then run the command again without the rename. Payload: none.
+
 ### MIGRATION.RUNNER_FAILED
 
 Generic wrapper for a migration runner failure during execution that has no more specific code; the summary/why carry the underlying detail (also used to surface the legacy-marker-shape condition from marker reads, with `meta.runnerErrorCode`). `migrate` and `db init` map unrecognized apply failures through it, passing the failure's own meta through unchanged. Inspect the reported summary/why detail and address the underlying failure before re-running the command. Payload: the wrapped failure's meta, when it has any; `runnerErrorCode` at the legacy-marker-shape site.

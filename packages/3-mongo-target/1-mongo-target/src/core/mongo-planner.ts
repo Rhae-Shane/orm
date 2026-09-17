@@ -9,6 +9,8 @@ import type {
   MigrationPlannerResult,
   MigrationPlanWithAuthoringSurface,
   MigrationScaffoldContext,
+  StorageEntityRename,
+  StorageEntityRenameCoordinate,
 } from '@internal/framework-components/control';
 import type { MongoContract } from '@internal/mongo-contract';
 import type {
@@ -19,6 +21,7 @@ import type {
   MongoSchemaValidator,
 } from '@internal/mongo-schema-ir';
 import { canonicalize, deepEqual } from '@internal/mongo-schema-ir';
+import { mongoTargetError } from './mongo-target-errors';
 import type { OpFactoryCall } from './op-factory-call';
 import {
   CollModCall,
@@ -30,6 +33,24 @@ import {
   schemaIndexToCreateIndexOptions,
 } from './op-factory-call';
 import { PlannerProducedMongoMigration } from './planner-produced-migration';
+
+const RENAME_UNSUPPORTED_CODE = 'MIGRATION.RENAME_UNSUPPORTED';
+
+function coordinateLabel(coordinate: StorageEntityRenameCoordinate): string {
+  return coordinate.namespaceId === undefined
+    ? coordinate.name
+    : `${coordinate.namespaceId}.${coordinate.name}`;
+}
+
+function renamesLabel(renames: readonly StorageEntityRename[]): string {
+  return renames
+    .map((rename) => `"${coordinateLabel(rename.from)}=${coordinateLabel(rename.to)}"`)
+    .join(', ');
+}
+
+function renamesUnsupportedWhy(retry: 'plan' | 'scaffold'): string {
+  return `The MongoDB planner has no rename operation, so it cannot keep the documents of a renamed collection. Rename the collection by hand with renameCollection, then ${retry} again without the rename.`;
+}
 
 function buildIndexLookupKey(index: MongoSchemaIndex): string {
   const keys = index.keys.map((k) => `${k.field}:${k.direction}`).join(',');
@@ -299,7 +320,20 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
      * into the produced plan's `renderTypeScript()` metadata.
      */
     readonly snapshotsImportPath: string;
+    readonly renames?: readonly StorageEntityRename[];
   }): MigrationPlannerResult {
+    if (options.renames !== undefined && options.renames.length > 0) {
+      return {
+        kind: 'failure',
+        conflicts: [
+          {
+            kind: 'renameUnsupported',
+            summary: `${RENAME_UNSUPPORTED_CODE}: MongoDB does not support stated renames (${renamesLabel(options.renames)}), so nothing was planned.`,
+            why: renamesUnsupportedWhy('plan'),
+          },
+        ],
+      };
+    }
     const contract = options.contract as MongoContract;
     const result = this.planCalls(options);
     if (result.kind === 'failure') return result;
@@ -326,6 +360,13 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
    * not import from the generated contract `.d.ts`.
    */
   emptyMigration(context: MigrationScaffoldContext): MigrationPlanWithAuthoringSurface {
+    if (context.renames !== undefined && context.renames.length > 0) {
+      throw mongoTargetError(
+        RENAME_UNSUPPORTED_CODE,
+        `MongoDB does not support stated renames (${renamesLabel(context.renames)}), so nothing was scaffolded.`,
+        { why: renamesUnsupportedWhy('scaffold') },
+      );
+    }
     return new PlannerProducedMongoMigration(
       [],
       {

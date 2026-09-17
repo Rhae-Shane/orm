@@ -23,6 +23,7 @@ import { findLatestMigration } from '@internal/migration-tools/migration-graph';
 import { writeMigrationTs } from '@internal/migration-tools/migration-ts';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
+import { isStructuredError } from '@internal/utils/structured-error';
 import { join, relative } from 'pathe';
 import {
   CliStructuredError,
@@ -253,6 +254,16 @@ export async function executeMigrationNewCommand(
   } catch (error) {
     if (CliStructuredError.is(error)) {
       return notOk(error);
+    }
+    if (isStructuredError(error)) {
+      return notOk(
+        new CliStructuredError(error.code, error.message, {
+          ...ifDefined('why', error.why),
+          ...ifDefined('fix', error.fix),
+          ...ifDefined('meta', error.meta),
+          cause: error,
+        }),
+      );
     }
     return notOk(
       errorUnexpected(error instanceof Error ? error.message : String(error), {
