@@ -61,7 +61,7 @@ export function detectTableNameCaseChanges(input: {
     conflicts.push({
       kind: 'tableNameCaseChanged',
       summary: `${TABLE_NAME_CASE_CHANGED_CODE}: table "${create.tableName}" would be created and table "${drop.tableName}" dropped. Prisma 8 changed the default table name: a model with no @@map now names its table verbatim, so model ${create.tableName} points at "${create.tableName}" instead of "${drop.tableName}".`,
-      why: `To keep table "${drop.tableName}" and its rows, add @@map("${drop.tableName}") to model ${create.tableName} (or run the add-model-map codemod over the schema) and plan again. To rename the table and keep its rows instead, state the rename when planning: prisma migration plan --rename-table "${drop.tableName}=${create.tableName}" (either side may be <schema>.<name>); the plan then carries one renameTable operation in place of the drop and the create.`,
+      why: `To keep table "${drop.tableName}" and its rows, add @@map("${drop.tableName}") to model ${create.tableName} (or run the add-model-map codemod over the schema) and plan again. To rename the table and keep its rows instead: in a project with migration history, state the rename when planning: prisma migration plan --rename-table "${drop.tableName}=${create.tableName}" (either side may be <schema>.<name>), and the plan carries one renameTable operation in place of the drop and the create; in a project that uses db update, rename it by hand: ALTER TABLE "${drop.tableName}" RENAME TO "${create.tableName}" (schema-qualified where applicable), after which the plan is empty.`,
       location: {
         namespaceId: create.namespaceId,
         entityKind: 'table',

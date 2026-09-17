@@ -138,9 +138,11 @@ describe('SQLite planner table-name case guard', () => {
     ]);
     expect(result.conflicts[0]?.summary).toContain('MIGRATION.TABLE_NAME_CASE_CHANGED');
     expect(result.conflicts[0]?.why).toContain(
-      'migration plan --rename-table "userProfile=UserProfile"',
+      'in a project with migration history, state the rename when planning: prisma migration plan --rename-table "userProfile=UserProfile"',
     );
-    expect(result.conflicts[0]?.why).not.toContain('ALTER TABLE');
+    expect(result.conflicts[0]?.why).toContain(
+      'in a project that uses db update, rename it by hand: ALTER TABLE "userProfile" RENAME TO "UserProfile"',
+    );
   });
 
   it('still refuses when UserProfile also gained a column', () => {
