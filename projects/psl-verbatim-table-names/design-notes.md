@@ -13,7 +13,7 @@ The storage name of a model with no `@@map` is the model name. This was already 
 
 - **Keep the lowered-first-letter default and fix only `contract infer`** (the original TML-3248 fix). Rejected: it leaves a default nobody knew about, that matches no convention, and that contradicts every other authoring surface.
 - **Have infer always write `@@map`.** Rejected for the same reason; it papers over the default instead of removing it.
-- **Detect the rename in the planner and emit a table rename.** Rejected: there is no rename-table operation, and a structural-match heuristic would also fire on genuine renames later. The planner detects and refuses; the codemod is the fix.
+- **Detect the rename in the planner and emit a table rename.** Rejected: a structural-match heuristic would fire on genuine drops and creates, and carry rows into the wrong table. The planner detects and refuses; the codemod keeps existing tables, and slice 2 adds a rename operation the operator requests explicitly with `--rename`.
 - **Regenerate all repo fixtures with the new names.** Rejected: adding `@@map` to existing repo schemas keeps every emitted artifact byte-identical and exercises the user codemod on real schemas.
 
 ## Decisions taken in discussion (2026-09-16)
