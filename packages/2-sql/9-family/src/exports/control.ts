@@ -68,7 +68,7 @@ export type {
 export {
   applyTableRenameIntents,
   TABLE_RENAME_UNMATCHED_CODE,
-  tableRenameIntentLabel,
+  tableRenameScaffoldError,
 } from '../core/migrations/table-rename-intents';
 export type {
   CodecControlHooks,

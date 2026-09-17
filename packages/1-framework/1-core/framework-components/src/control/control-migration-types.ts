@@ -522,18 +522,21 @@ export interface MigrationPlanner<
    * Produce an empty migration with the target's authoring conventions.
    *
    * Used by `migration new` to scaffold a fresh `migration.ts`. The
-   * returned plan carries only the operations `context.renames` asks for
-   * (none by default); its `renderTypeScript()` yields a stub the user can
-   * edit.
+   * returned plan carries no operations unless `context.renames` states
+   * renames; its `renderTypeScript()` yields a stub the user can edit.
+   *
+   * With renames, the plan carries the same rename operations `plan` would
+   * plan for them between `context.renames.fromContract` and
+   * `context.renames.toContract`, and nothing else. A rename that `plan`
+   * would refuse, and any rename on a planner that cannot rename, throws a
+   * structured error.
    *
    * `spaceId` is stamped onto the produced plan; reconciliation flows
    * (`db init`, `db update`) and authoring flows (`migration new`) all
    * pass it explicitly.
-   *
-   * A planner that cannot rename throws a structured error when `context.renames` is not empty.
    */
   emptyMigration(
-    context: MigrationScaffoldContext,
+    context: MigrationScaffoldContext<TFamilyId, TTargetId>,
     spaceId: string,
   ): MigrationPlanWithAuthoringSurface;
 }
@@ -667,7 +670,23 @@ export interface TargetMigrationsCapability<
  * (e.g. the contract `.d.ts` import for typed-contract builders). Passed to
  * `MigrationPlanner.emptyMigration(context)`.
  */
-export interface MigrationScaffoldContext {
+/**
+ * Operator-stated renames for a scaffold, with the two contracts a planner resolves them against. `fromContract` is `null` when the migration has no previous contract.
+ */
+export interface MigrationScaffoldRenames<
+  TFamilyId extends string = string,
+  TTargetId extends string = string,
+> {
+  readonly intents: readonly StorageEntityRename[];
+  readonly fromContract: Contract | null;
+  readonly toContract: Contract;
+  readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<TFamilyId, TTargetId>>;
+}
+
+export interface MigrationScaffoldContext<
+  TFamilyId extends string = string,
+  TTargetId extends string = string,
+> {
   /** Absolute path to the migration package directory. Used by targets to compute relative imports. */
   readonly packageDir: string;
   /** Absolute path to the contract.json file, if one exists. Used by targets that emit typed-contract imports. */
@@ -693,9 +712,7 @@ export interface MigrationScaffoldContext {
    */
   readonly snapshotsImportPath: string;
   /**
-   * Operator-stated renames the scaffold starts with: one rename operation
-   * per entry, in the order given, so a hand-authored migration that only
-   * renames needs no editing. Absent or empty scaffolds an empty body.
+   * Operator-stated renames the scaffold starts with, so a hand-authored migration that only renames needs no editing. Absent scaffolds an empty body.
    */
-  readonly renames?: readonly StorageEntityRename[];
+  readonly renames?: MigrationScaffoldRenames<TFamilyId, TTargetId>;
 }

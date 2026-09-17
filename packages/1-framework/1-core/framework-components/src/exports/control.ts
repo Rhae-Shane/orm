@@ -55,6 +55,7 @@ export type {
   MigrationRunnerResult,
   MigrationRunnerSuccessValue,
   MigrationScaffoldContext,
+  MigrationScaffoldRenames,
   OpFactoryCall,
   SchemaEntityCoordinate,
   SchemaOwnership,

@@ -4,114 +4,26 @@
  * Wire-named indexes and checks whose prefix derives from the table name pair by content hash and plan as renames. Primary keys, uniques and foreign keys the contract leaves unnamed were named by the planner from the old table name, so each gets a companion constraint rename to the name the planner now derives from the new table name. Explicitly named constraints keep their names, and foreign keys on other tables keep theirs.
  */
 
-import { type Contract, coreHash, profileHash } from '@internal/contract/types';
-import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
+import type { Contract } from '@internal/contract/types';
 import { APP_SPACE_ID } from '@internal/framework-components/control';
-import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import {
-  type CheckConstraintInput,
-  type ForeignKeyInput,
-  type IndexInput,
-  type PrimaryKeyInput,
+import type {
+  CheckConstraintInput,
+  ForeignKeyInput,
+  IndexInput,
   SqlStorage,
-  StorageTable,
-  type UniqueConstraintInput,
 } from '@internal/sql-contract/types';
 import { computeCheckContentHash, computeIndexContentHash } from '@internal/sql-schema-ir/naming';
-import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { createPostgresMigrationPlanner } from '../../src/core/migrations/planner';
 import { postgresContractToSchema } from '../../src/core/migrations/postgres-contract-to-schema';
-import { postgresCreateNamespace } from '../../src/core/postgres-schema';
-
-const stubLowerer: ExecuteRequestLowerer = {
-  lower: () => ({ sql: 'stub', params: [] }),
-  lowerToExecuteRequest: async () => ({ sql: 'stub', params: [] }),
-};
-
-const text = { nativeType: 'text', codecId: 'pg/text@1', nullable: false };
-const int4 = { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false };
-const NICKNAME_CHECK = 'length(nickname) > 0';
-
-interface ProfileSpec {
-  readonly primaryKey?: PrimaryKeyInput;
-  readonly uniques?: readonly UniqueConstraintInput[];
-  readonly foreignKeys?: (tableName: string) => readonly ForeignKeyInput[];
-  readonly indexes?: (tableName: string) => readonly IndexInput[];
-  readonly checks?: (tableName: string) => readonly CheckConstraintInput[];
-}
-
-function profileTable(tableName: string, spec: ProfileSpec): StorageTable {
-  return new StorageTable({
-    columns: { id: int4, email: text, handle: text, nickname: text, accountId: int4 },
-    primaryKey: spec.primaryKey ?? { columns: ['id'], name: 'profile_pk' },
-    uniques: spec.uniques ?? [],
-    indexes: spec.indexes?.(tableName) ?? [],
-    foreignKeys: spec.foreignKeys?.(tableName) ?? [],
-    checks: spec.checks?.(tableName) ?? [],
-  });
-}
-
-function reference(tableName: string, columns: readonly string[]) {
-  return { namespaceId: UNBOUND_NAMESPACE_ID, tableName, columns };
-}
-
-const accountTable = new StorageTable({
-  columns: { id: int4 },
-  primaryKey: { columns: ['id'], name: 'account_pk' },
-  uniques: [],
-  indexes: [],
-  foreignKeys: [],
-});
-
-function postTable(profileTableName: string): StorageTable {
-  return new StorageTable({
-    columns: { id: int4, profileId: int4 },
-    primaryKey: { columns: ['id'], name: 'post_pk' },
-    uniques: [],
-    indexes: [],
-    foreignKeys: [
-      {
-        source: reference('post', ['profileId']),
-        target: reference(profileTableName, ['id']),
-      },
-    ],
-  });
-}
-
-function contractOf(
-  profileTableName: string,
-  spec: ProfileSpec,
-  hashSeed: string,
-  extraTables: (profileTableName: string) => Record<string, StorageTable> = () => ({}),
-): Contract<SqlStorage> {
-  return {
-    target: 'postgres',
-    targetFamily: 'sql',
-    profileHash: profileHash(hashSeed),
-    storage: new SqlStorage({
-      storageHash: coreHash(hashSeed),
-      namespaces: {
-        [UNBOUND_NAMESPACE_ID]: postgresCreateNamespace({
-          id: UNBOUND_NAMESPACE_ID,
-          entries: {
-            table: {
-              [profileTableName]: profileTable(profileTableName, spec),
-              account: accountTable,
-              ...extraTables(profileTableName),
-            },
-            policy: {},
-          },
-        }),
-      },
-    }),
-    roots: {},
-    domain: applicationDomainOf({ models: {} }),
-    capabilities: {},
-    extensions: {},
-    meta: {},
-  };
-}
+import {
+  contractOf,
+  NICKNAME_CHECK,
+  type ProfileSpec,
+  postTable,
+  reference,
+  stubLowerer,
+} from './rename-table-fixtures';
 
 async function plannedOps(from: Contract<SqlStorage>, to: Contract<SqlStorage>) {
   const result = createPostgresMigrationPlanner(stubLowerer).plan({

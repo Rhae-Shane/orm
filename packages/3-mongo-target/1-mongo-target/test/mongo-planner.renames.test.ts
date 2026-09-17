@@ -70,7 +70,12 @@ describe('MongoMigrationPlanner stated renames', () => {
         fromHash: '00',
         toHash: '01',
         snapshotsImportPath: '../../snapshots',
-        renames: RENAMES,
+        renames: {
+          intents: RENAMES,
+          fromContract: contractWith('userProfile'),
+          toContract: contractWith('UserProfile'),
+          frameworkComponents: [],
+        },
       }),
     ).toThrow(
       expect.objectContaining({
@@ -97,7 +102,12 @@ describe('MongoMigrationPlanner stated renames', () => {
       fromHash: '00',
       toHash: '01',
       snapshotsImportPath: '../../snapshots',
-      renames: [],
+      renames: {
+        intents: [],
+        fromContract: contractWith('users'),
+        toContract: contractWith('users'),
+        frameworkComponents: [],
+      },
     });
 
     expect(result.kind).toBe('success');

@@ -51,9 +51,7 @@ export interface MigrationNewOptions {
   readonly name?: string;
   readonly from?: string;
   /**
-   * Operator-stated renames (`--rename-table`): the scaffold starts with one
-   * rename call per entry and its manifest is attested over those ops, so a
-   * migration that only renames is complete as written.
+   * Operator-stated renames (`--rename-table`): the scaffold starts with the rename operations `migration plan` would plan for them, and its manifest is attested over those ops, so a migration that only renames is complete as written.
    */
   readonly renames?: readonly StorageEntityRename[];
   /** Renders the declarations of the destination snapshot from its `contract.json`. */
@@ -187,11 +185,11 @@ export async function executeMigrationNewCommand(
   }
 
   try {
-    assertFrameworkComponentsCompatible(config.family.familyId, config.target.targetId, [
-      config.target,
-      config.adapter,
-      ...(config.extensions ?? []),
-    ]);
+    const frameworkComponents = assertFrameworkComponentsCompatible(
+      config.family.familyId,
+      config.target.targetId,
+      [config.target, config.adapter, ...(config.extensions ?? [])],
+    );
 
     // Before any write: an unreadable or contradictory project manifest fails
     // the command outright rather than after a half-scaffolded migration
@@ -207,6 +205,19 @@ export async function executeMigrationNewCommand(
       return notOk(declarations.failure);
     }
 
+    // The planner resolves stated renames against the contract the migration
+    // starts from and the one it ends at, so the scaffold carries the same
+    // rename operations `migration plan` would plan.
+    const renames =
+      options.renames === undefined || options.renames.length === 0
+        ? undefined
+        : {
+            intents: options.renames,
+            fromContract:
+              fromHash === null ? null : (await aggregate.app.contractAt(fromHash)).contract,
+            toContract,
+            frameworkComponents,
+          };
     const planner = migrations.createPlanner(controlAdapter);
     const scaffold = planner.emptyMigration(
       {
@@ -215,7 +226,7 @@ export async function executeMigrationNewCommand(
         fromHash,
         toHash: toStorageHash,
         snapshotsImportPath: snapshotsImportPathFrom(packageDir, migrationsDir),
-        ...ifDefined('renames', options.renames),
+        ...ifDefined('renames', renames),
       },
       APP_SPACE_ID,
     );

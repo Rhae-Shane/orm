@@ -15,6 +15,7 @@ import {
   partitionIssuesByControlPolicy,
   planFieldEventOperations,
   plannerFailure,
+  tableRenameScaffoldError,
 } from '@internal/family-sql/control';
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
@@ -23,6 +24,7 @@ import type {
   MigrationPlanner,
   MigrationPlanWithAuthoringSurface,
   MigrationScaffoldContext,
+  MigrationScaffoldRenames,
   SchemaDiffIssue,
   SchemaOwnership,
   StorageEntityRename,
@@ -36,6 +38,7 @@ import { SqlCheckConstraintIR, SqlIndexIR } from '@internal/sql-schema-ir/types'
 import { assertDefined } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
+import { notOk, ok, type Result } from '@internal/utils/result';
 import { PostgresRlsPolicy } from '../postgres-rls-policy';
 import { postgresNodeStorageCoordinate } from '../schema-ir/node-storage-coordinate';
 import { PostgresDatabaseSchemaNode } from '../schema-ir/postgres-database-schema-node';
@@ -82,6 +85,16 @@ type PlannerFrameworkComponents = SqlMigrationPlannerPlanOptions extends {
 
 type PlannerOptionsWithComponents = SqlMigrationPlannerPlanOptions & {
   readonly frameworkComponents: PlannerFrameworkComponents;
+};
+
+interface PlannedTableRenames {
+  readonly fromContract: Contract<SqlStorage> | null;
+  readonly previousSchema: SqlMigrationPlannerPlanOptions['schema'];
+  readonly calls: readonly PostgresOpFactoryCall[];
+}
+
+const SCAFFOLD_POLICY: MigrationOperationPolicy = {
+  allowedOperationClasses: ['additive', 'widening', 'destructive', 'data'],
 };
 
 export function createPostgresMigrationPlanner(
@@ -175,23 +188,13 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
   }
 
   emptyMigration(
-    context: MigrationScaffoldContext,
+    context: MigrationScaffoldContext<'sql', 'postgres'>,
     spaceId: string,
   ): MigrationPlanWithAuthoringSurface {
-    // A scaffold has no contract to resolve a namespace against, so the
-    // qualifier on either side names the DDL schema directly, and an intent
-    // with no qualifier stays unbound, like every other unqualified authored
-    // statement. The flag parser has already refused two different qualifiers.
-    const renameCalls = (context.renames ?? []).map(
-      (rename) =>
-        new RenameTableCall(
-          rename.from.namespaceId ?? rename.to.namespaceId ?? UNBOUND_NAMESPACE_ID,
-          rename.from.name,
-          rename.to.name,
-        ),
-    );
     return new TypeScriptRenderablePostgresMigration(
-      renameCalls,
+      context.renames === undefined
+        ? []
+        : this.scaffoldTableRenames(context, context.renames, spaceId),
       {
         from: context.fromHash,
         to: context.toHash,
@@ -200,6 +203,118 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
       context.snapshotsImportPath,
       this.#lowerer,
     );
+  }
+
+  /**
+   * The rename operations `planSql` plans for the stated renames, and nothing else: the table and constraint renames, then the index and check renames on the renamed tables. Every other difference between the two contracts is left to the author.
+   */
+  private scaffoldTableRenames(
+    context: MigrationScaffoldContext<'sql', 'postgres'>,
+    renames: MigrationScaffoldRenames<'sql', 'postgres'>,
+    spaceId: string,
+  ): readonly PostgresOpFactoryCall[] {
+    const contract = blindCast<
+      Contract<SqlStorage>,
+      'the family resolver only binds the Postgres planner for a SQL contract'
+    >(renames.toContract);
+    const fromContract = blindCast<
+      Contract<SqlStorage> | null,
+      'the family resolver only binds the Postgres planner for a SQL contract'
+    >(renames.fromContract);
+    const options: SqlMigrationPlannerPlanOptions = {
+      contract,
+      fromContract,
+      schema: postgresContractToSchema(fromContract, renames.frameworkComponents),
+      policy: SCAFFOLD_POLICY,
+      frameworkComponents: renames.frameworkComponents,
+      spaceId,
+      snapshotsImportPath: context.snapshotsImportPath,
+      renames: renames.intents,
+    };
+    const planned = this.planTableRenames(options);
+    if (!planned.ok) {
+      throw tableRenameScaffoldError(planned.failure);
+    }
+    PostgresDatabaseSchemaNode.assert(planned.value.previousSchema);
+    const { issues } = buildPostgresPlanDiff({
+      contract,
+      actualSchema: planned.value.previousSchema,
+      frameworkComponents: renames.frameworkComponents,
+    });
+    const relationalIssues = issues.filter((issue) => !isPolicyDiffIssue(issue));
+    const renamedTables = planned.value.calls.filter(
+      (call): call is RenameTableCall => call.factoryName === 'renameTable',
+    );
+    const onRenamedTable = (call: { readonly schemaName: string; readonly tableName: string }) =>
+      renamedTables.some(
+        (renamed) => renamed.schemaName === call.schemaName && renamed.tableName === call.tableName,
+      );
+    return [
+      ...planned.value.calls,
+      ...this.pairIndexRenames(options, relationalIssues).calls.filter(onRenamedTable),
+      ...this.pairCheckRenames(options, relationalIssues).calls.filter(onRenamedTable),
+    ];
+  }
+
+  /**
+   * Applies the stated renames to the previous contract and plans the table and constraint renames they need. Without renames it hands back the previous contract and schema unchanged and no calls.
+   */
+  private planTableRenames(
+    options: SqlMigrationPlannerPlanOptions,
+  ): Result<PlannedTableRenames, readonly SqlPlannerConflict[]> {
+    const intents = options.renames ?? [];
+    if (intents.length === 0) {
+      return ok({ fromContract: options.fromContract, previousSchema: options.schema, calls: [] });
+    }
+    const applied = applyTableRenameIntents({
+      fromContract: options.fromContract,
+      toContract: options.contract,
+      intents,
+      renameTableReferences: renameRlsReferences,
+    });
+    if (!applied.ok) {
+      return notOk(applied.failure);
+    }
+    const calls = applied.value.renames.flatMap((rename): PostgresOpFactoryCall[] => {
+      const schemaName =
+        rename.namespaceId === UNBOUND_NAMESPACE_ID
+          ? UNBOUND_NAMESPACE_ID
+          : resolveDdlSchemaForNamespaceStorage(options.contract.storage, rename.namespaceId);
+      const previous =
+        options.fromContract?.storage.namespaces[rename.namespaceId]?.entries.table?.[rename.from];
+      const next =
+        options.contract.storage.namespaces[rename.namespaceId]?.entries.table?.[rename.to];
+      assertDefined(
+        previous,
+        `a resolved rename names table "${rename.from}" of the previous contract`,
+      );
+      assertDefined(next, `a resolved rename names table "${rename.to}" of the next contract`);
+      return [
+        new RenameTableCall(schemaName, rename.from, rename.to),
+        ...constraintRenamesForTableRename({
+          schemaName,
+          from: rename.from,
+          to: rename.to,
+          previous,
+          next,
+        }),
+      ];
+    });
+    const disallowed = calls.filter(
+      (call) => !options.policy.allowedOperationClasses.includes(call.operationClass),
+    );
+    if (disallowed.length > 0) {
+      return notOk(
+        disallowed.map((call) =>
+          conflictForDisallowedCall(call, options.policy.allowedOperationClasses),
+        ),
+      );
+    }
+    return ok({
+      fromContract: applied.value.contract,
+      previousSchema: postgresContractToSchema(applied.value.contract, options.frameworkComponents),
+      calls,
+    });
   }
 
   private planSql(options: SqlMigrationPlannerPlanOptions): PostgresPlanResult {
@@ -215,67 +330,16 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
     // Operator-stated renames are applied to the previous contract before
     // the diff, and the "from" tree is re-derived from that renamed contract,
     // so the differ sees each renamed table under its new name and plans its
-    // column, index and constraint changes normally. The renames themselves
-    // become the first operations of the plan. An intent that matches
-    // neither side, or a rename the policy's classes do not admit, fails the
-    // plan here rather than degrading to a drop and a create.
-    const intents = options.renames ?? [];
-    const applied =
-      intents.length === 0
-        ? undefined
-        : applyTableRenameIntents({
-            fromContract: options.fromContract,
-            toContract: options.contract,
-            intents,
-            renameTableReferences: renameRlsReferences,
-          });
-    if (applied !== undefined && !applied.ok) {
-      return plannerFailure(applied.failure);
+    // column, index and constraint changes normally. The table and
+    // constraint renames become the first operations of the plan. An intent
+    // that matches neither side, or a rename the policy's classes do not
+    // admit, fails the plan here rather than degrading to a drop and a create.
+    const tableRenames = this.planTableRenames(options);
+    if (!tableRenames.ok) {
+      return plannerFailure(tableRenames.failure);
     }
-    const fromContract = applied === undefined ? options.fromContract : applied.value.contract;
-    const previousSchema =
-      applied === undefined
-        ? options.schema
-        : postgresContractToSchema(applied.value.contract, options.frameworkComponents);
-    const renameTableCalls = (applied?.value.renames ?? []).flatMap(
-      (rename): PostgresOpFactoryCall[] => {
-        const schemaName =
-          rename.namespaceId === UNBOUND_NAMESPACE_ID
-            ? UNBOUND_NAMESPACE_ID
-            : resolveDdlSchemaForNamespaceStorage(options.contract.storage, rename.namespaceId);
-        const previous =
-          options.fromContract?.storage.namespaces[rename.namespaceId]?.entries.table?.[
-            rename.from
-          ];
-        const next =
-          options.contract.storage.namespaces[rename.namespaceId]?.entries.table?.[rename.to];
-        assertDefined(
-          previous,
-          `a resolved rename names table "${rename.from}" of the previous contract`,
-        );
-        assertDefined(next, `a resolved rename names table "${rename.to}" of the next contract`);
-        return [
-          new RenameTableCall(schemaName, rename.from, rename.to),
-          ...constraintRenamesForTableRename({
-            schemaName,
-            from: rename.from,
-            to: rename.to,
-            previous,
-            next,
-          }),
-        ];
-      },
-    );
-    const disallowedRenames = renameTableCalls.filter(
-      (call) => !options.policy.allowedOperationClasses.includes(call.operationClass),
-    );
-    if (disallowedRenames.length > 0) {
-      return plannerFailure(
-        disallowedRenames.map((call) =>
-          conflictForDisallowedCall(call, options.policy.allowedOperationClasses),
-        ),
-      );
-    }
+    const { fromContract, previousSchema } = tableRenames.value;
+    const renameTableCalls = tableRenames.value.calls;
 
     // The one combined tree diff drives the whole plan: relational findings
     // become structural DDL via `planIssues`, policy findings become RLS ops
@@ -529,7 +593,7 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
    * additive half, like the policy pass.
    */
   private pairIndexRenames(
-    options: PlannerOptionsWithComponents,
+    options: Pick<SqlMigrationPlannerPlanOptions, 'contract' | 'policy'>,
     issues: readonly SchemaDiffIssue<SqlSchemaDiffNode>[],
   ): {
     readonly calls: readonly RenameIndexCall[];
@@ -649,7 +713,7 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
    * plus a drop when `destructive` is allowed too.
    */
   private pairCheckRenames(
-    options: PlannerOptionsWithComponents,
+    options: Pick<SqlMigrationPlannerPlanOptions, 'contract' | 'policy'>,
     issues: readonly SchemaDiffIssue<SqlSchemaDiffNode>[],
   ): {
     readonly calls: readonly RenameConstraintCall[];

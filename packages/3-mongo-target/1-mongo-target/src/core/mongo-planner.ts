@@ -360,10 +360,10 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
    * not import from the generated contract `.d.ts`.
    */
   emptyMigration(context: MigrationScaffoldContext): MigrationPlanWithAuthoringSurface {
-    if (context.renames !== undefined && context.renames.length > 0) {
+    if (context.renames !== undefined && context.renames.intents.length > 0) {
       throw mongoTargetError(
         RENAME_UNSUPPORTED_CODE,
-        `MongoDB does not support stated renames (${renamesLabel(context.renames)}), so nothing was scaffolded.`,
+        `MongoDB does not support stated renames (${renamesLabel(context.renames.intents)}), so nothing was scaffolded.`,
         { why: renamesUnsupportedWhy('scaffold') },
       );
     }

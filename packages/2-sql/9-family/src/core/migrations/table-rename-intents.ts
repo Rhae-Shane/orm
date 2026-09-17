@@ -12,12 +12,31 @@ import {
   SqlStorage,
   StorageTable,
 } from '@internal/sql-contract/types';
+import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
+import type { StructuredError } from '@internal/utils/structured-error';
+import { sqlFamilyError } from '../errors';
 import type { SqlPlannerConflict } from './types';
 
 export const TABLE_RENAME_UNMATCHED_CODE = 'MIGRATION.TABLE_RENAME_UNMATCHED';
 export const TABLE_RENAME_NO_PREVIOUS_CONTRACT_CODE = 'MIGRATION.TABLE_RENAME_NO_PREVIOUS_CONTRACT';
+
+/**
+ * The error `migration new` raises for rename intents a planner refused. It carries the code the refusals carry as conflicts of `migration plan`.
+ */
+export function tableRenameScaffoldError(
+  conflicts: readonly SqlPlannerConflict[],
+): StructuredError {
+  const noPreviousContract = conflicts.every(
+    (conflict) => conflict.meta?.['code'] === TABLE_RENAME_NO_PREVIOUS_CONTRACT_CODE,
+  );
+  return sqlFamilyError(
+    noPreviousContract ? TABLE_RENAME_NO_PREVIOUS_CONTRACT_CODE : TABLE_RENAME_UNMATCHED_CODE,
+    conflicts.map((conflict) => conflict.summary).join('\n'),
+    ifDefined('why', conflicts[0]?.why),
+  );
+}
 
 /** A `--rename-table <from>=<to>` intent as the CLI parsed it. */
 export type TableRenameIntent = StorageEntityRename;
@@ -61,7 +80,7 @@ function coordinateLabel(coordinate: StorageEntityRename['from']): string {
     : `${coordinate.namespaceId}.${coordinate.name}`;
 }
 
-export function tableRenameIntentLabel(intent: TableRenameIntent): string {
+function tableRenameIntentLabel(intent: TableRenameIntent): string {
   return `${coordinateLabel(intent.from)}=${coordinateLabel(intent.to)}`;
 }
 
