@@ -405,7 +405,7 @@ export class RenameTableCall extends PostgresOpFactoryCallNode {
     }
     opts.push(`table: ${jsonToTsSource(this.oldTableName)}`);
     opts.push(`to: ${jsonToTsSource(this.tableName)}`);
-    return `this.renameTable({ ${opts.join(', ')} })`;
+    return `...this.renameTable({ ${opts.join(', ')} })`;
   }
 
   override importRequirements(): readonly ImportRequirement[] {

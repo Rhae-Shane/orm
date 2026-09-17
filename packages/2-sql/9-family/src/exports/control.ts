@@ -20,6 +20,17 @@ export type {
   SqlDescribedContractSpace,
 } from '../core/control-target-descriptor';
 export type {
+  AppliedTableRename,
+  ApplyTableRenameInput,
+  RenameTableReferences,
+  ResolvedTableRename,
+  TableRename,
+} from '../core/migrations/apply-table-rename';
+export {
+  applyTableRename,
+  TABLE_RENAME_UNMATCHED_CODE,
+} from '../core/migrations/apply-table-rename';
+export type {
   ContractToSchemaIROptions,
   DefaultRenderer,
   DefaultResolver,
@@ -57,22 +68,12 @@ export type {
 export type {
   TableNameCaseGuardTable,
   TableRenameByHand,
+  TableRenameInMigration,
 } from '../core/migrations/table-name-case-guard';
 export {
   detectTableNameCaseChanges,
   TABLE_NAME_CASE_CHANGED_CODE,
 } from '../core/migrations/table-name-case-guard';
-export type {
-  AppliedTableRenames,
-  ApplyTableRenameIntentsInput,
-  ResolvedTableRename,
-  TableRenameIntent,
-} from '../core/migrations/table-rename-intents';
-export {
-  applyTableRenameIntents,
-  TABLE_RENAME_UNMATCHED_CODE,
-  tableRenameScaffoldError,
-} from '../core/migrations/table-rename-intents';
 export type {
   CodecControlHooks,
   CreateSqlMigrationPlanOptions,

@@ -3,50 +3,38 @@ import type {
   MigrationOperationPolicy,
   SqlMigrationPlanner,
   SqlMigrationPlannerPlanOptions,
-  SqlPlannerConflict,
   SqlPlannerFailureResult,
 } from '@internal/family-sql/control';
 import {
-  applyTableRenameIntents,
   detectTableNameCaseChanges,
   extractCodecControlHooks,
   planFieldEventOperations,
   plannerFailure,
-  tableRenameScaffoldError,
 } from '@internal/family-sql/control';
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import type {
   MigrationPlanner,
   MigrationScaffoldContext,
-  MigrationScaffoldRenames,
   SchemaDiffIssue,
   SchemaOwnership,
-  StorageEntityRename,
 } from '@internal/framework-components/control';
 import { issueOutcome } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import type { SqlStorage } from '@internal/sql-contract/types';
 import {
   RelationalSchemaNodeKind,
   type SqlSchemaIR,
   SqlTableIR,
 } from '@internal/sql-schema-ir/types';
-import { blindCast } from '@internal/utils/casts';
-import { notOk, ok, type Result } from '@internal/utils/result';
-import { buildSqlitePlanDiff, sqliteContractToSchema } from './diff-database-schema';
-import {
-  indexNameCaseChange,
-  pairIndexReplacements,
-  renamedTableIndex,
-} from './index-replacements';
+import { buildSqlitePlanDiff } from './diff-database-schema';
+import { indexNameCaseChange, pairIndexReplacements } from './index-replacements';
 import {
   coalesceSubtreeIssues,
   conflictForDisallowedCall,
   issueNode,
   planIssues,
 } from './issue-planner';
-import { RenameTableCall, type SqliteOpFactoryCall } from './op-factory-call';
+import { RenameTableCall } from './op-factory-call';
 import { renameTableSteps } from './operations/tables';
 import {
   type SqliteMigrationDestinationInfo,
@@ -54,20 +42,6 @@ import {
 } from './planner-produced-sqlite-migration';
 import { sqlitePlannerStrategies } from './planner-strategies';
 import type { SqlitePlanTargetDetails } from './planner-target-details';
-
-interface PlannedTableRenames {
-  readonly fromContract: Contract<SqlStorage> | null;
-  readonly previousSchema: SqlMigrationPlannerPlanOptions['schema'];
-  readonly calls: readonly RenameTableCall[];
-}
-
-const SCAFFOLD_POLICY: MigrationOperationPolicy = {
-  allowedOperationClasses: ['additive', 'widening', 'destructive', 'data'],
-};
-
-function renamedTableNames(calls: readonly RenameTableCall[]): ReadonlySet<string> {
-  return new Set(calls.map((call) => call.tableName));
-}
 
 export function createSqliteMigrationPlanner(
   lowerer: ExecuteRequestLowerer,
@@ -137,22 +111,16 @@ export class SqliteMigrationPlanner
      * {@link SqlMigrationPlannerPlanOptions.snapshotsImportPath}.
      */
     readonly snapshotsImportPath: string;
-    /** See {@link SqlMigrationPlannerPlanOptions.renames}. */
-    readonly renames?: readonly StorageEntityRename[];
   }): SqlitePlanResult {
     return this.planSql(options as SqlMigrationPlannerPlanOptions);
   }
 
   emptyMigration(
-    context: MigrationScaffoldContext<'sql', 'sqlite'>,
+    context: MigrationScaffoldContext,
     spaceId: string,
   ): TypeScriptRenderableSqliteMigration {
-    const renameCalls =
-      context.renames === undefined
-        ? []
-        : this.scaffoldTableRenames(context, context.renames, spaceId);
     return new TypeScriptRenderableSqliteMigration(
-      renameCalls,
+      [],
       {
         from: context.fromHash,
         to: context.toHash,
@@ -164,116 +132,14 @@ export class SqliteMigrationPlanner
     );
   }
 
-  /**
-   * The rename operations `planSql` plans for the stated renames, and nothing else: the table renames, then the index drops and creates on the renamed tables. Every other difference between the two contracts is left to the author.
-   */
-  private scaffoldTableRenames(
-    context: MigrationScaffoldContext<'sql', 'sqlite'>,
-    renames: MigrationScaffoldRenames<'sql', 'sqlite'>,
-    spaceId: string,
-  ): readonly SqliteOpFactoryCall[] {
-    const fromContract = blindCast<
-      Contract<SqlStorage> | null,
-      'the family resolver only binds the SQLite planner for a SQL contract'
-    >(renames.fromContract);
-    const options: SqlMigrationPlannerPlanOptions = {
-      contract: blindCast<
-        Contract<SqlStorage>,
-        'the family resolver only binds the SQLite planner for a SQL contract'
-      >(renames.toContract),
-      fromContract,
-      schema: sqliteContractToSchema(fromContract),
-      policy: SCAFFOLD_POLICY,
-      frameworkComponents: renames.frameworkComponents,
-      spaceId,
-      snapshotsImportPath: context.snapshotsImportPath,
-      renames: renames.intents,
-    };
-    const planned = this.planTableRenames(options);
-    if (!planned.ok) {
-      throw tableRenameScaffoldError(planned.failure);
-    }
-    const { issues } = this.collectSchemaIssues({
-      ...options,
-      schema: planned.value.previousSchema,
-    });
-    return [
-      ...planned.value.calls,
-      ...pairIndexReplacements(issues, renamedTableIndex(renamedTableNames(planned.value.calls)))
-        .calls,
-    ];
-  }
-
-  /**
-   * Applies the stated renames to the previous contract and plans the table renames. Without renames it hands back the previous contract and schema unchanged and no calls.
-   */
-  private planTableRenames(
-    options: SqlMigrationPlannerPlanOptions,
-  ): Result<PlannedTableRenames, readonly SqlPlannerConflict[]> {
-    const intents = options.renames ?? [];
-    if (intents.length === 0) {
-      return ok({ fromContract: options.fromContract, previousSchema: options.schema, calls: [] });
-    }
-    const applied = applyTableRenameIntents({
-      fromContract: options.fromContract,
-      toContract: options.contract,
-      intents,
-      renameTableReferences: undefined,
-    });
-    if (!applied.ok) {
-      return notOk(applied.failure);
-    }
-    const calls = applied.value.renames.map(
-      (rename) => new RenameTableCall(rename.from, rename.to),
-    );
-    const disallowed = calls.filter(
-      (call) => !options.policy.allowedOperationClasses.includes(call.operationClass),
-    );
-    if (disallowed.length > 0) {
-      return notOk(
-        disallowed.map((call) =>
-          conflictForDisallowedCall(call, options.policy.allowedOperationClasses),
-        ),
-      );
-    }
-    return ok({
-      fromContract: applied.value.contract,
-      previousSchema: sqliteContractToSchema(applied.value.contract),
-      calls,
-    });
-  }
-
   private planSql(options: SqlMigrationPlannerPlanOptions): SqlitePlanResult {
     const policyResult = this.ensureAdditivePolicy(options.policy);
     if (policyResult) return policyResult;
 
-    // Operator-stated renames are applied to the previous contract before
-    // the diff, and the "from" tree is re-derived from that renamed contract,
-    // so the differ sees each renamed table under its new name. The renames
-    // themselves become the first operations of the plan; an intent that
-    // matches neither side, or a rename the policy's classes do not admit,
-    // fails the plan rather than degrading to a drop and a create.
-    const tableRenames = this.planTableRenames(options);
-    if (!tableRenames.ok) {
-      return plannerFailure(tableRenames.failure);
-    }
-    const { fromContract, previousSchema } = tableRenames.value;
-    const renameTableCalls = tableRenames.value.calls;
+    const fromContract = options.fromContract;
 
-    const {
-      expected,
-      actual,
-      issues: diffIssues,
-    } = this.collectSchemaIssues({
-      ...options,
-      schema: previousSchema,
-    });
-    const onRenamedTable = renamedTableIndex(renamedTableNames(renameTableCalls));
-    const replacedIndexes = pairIndexReplacements(
-      diffIssues,
-      (old, replacement) =>
-        onRenamedTable(old, replacement) || indexNameCaseChange(old, replacement),
-    );
+    const { expected, actual, issues: diffIssues } = this.collectSchemaIssues(options);
+    const replacedIndexes = pairIndexReplacements(diffIssues, indexNameCaseChange);
     const disallowedIndexCalls = replacedIndexes.calls.filter(
       (call) => !options.policy.allowedOperationClasses.includes(call.operationClass),
     );
@@ -294,6 +160,7 @@ export class SqliteMigrationPlanner
       namespaceIdOf: () => UNBOUND_NAMESPACE_ID,
       renameByHandStatements: (rename) =>
         renameTableSteps(rename.from, rename.to).map((renameStep) => renameStep.sql),
+      renameTableCall: (rename) => new RenameTableCall(rename.from, rename.to).renderTypeScript(),
       contract: options.contract,
       defaultNamespaceId: UNBOUND_NAMESPACE_ID,
     });
@@ -330,12 +197,7 @@ export class SqliteMigrationPlanner
     // toOp + importRequirements ride directly through the same emit path
     // as structural ops, no `RawSqlCall` wrap. The table renames run first:
     // every later operation addresses the renamed table by its new name.
-    const calls = [
-      ...renameTableCalls,
-      ...replacedIndexes.calls,
-      ...result.value.calls,
-      ...fieldEventOps,
-    ];
+    const calls = [...replacedIndexes.calls, ...result.value.calls, ...fieldEventOps];
 
     const destination: SqliteMigrationDestinationInfo = {
       storageHash: options.contract.storage.storageHash,

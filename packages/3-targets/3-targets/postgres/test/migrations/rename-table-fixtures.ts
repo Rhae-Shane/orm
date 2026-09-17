@@ -1,4 +1,4 @@
-import { type Contract, type ControlPolicy, coreHash, profileHash } from '@internal/contract/types';
+import { type Contract, coreHash, profileHash } from '@internal/contract/types';
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
@@ -28,7 +28,6 @@ export interface ProfileSpec {
   readonly foreignKeys?: (tableName: string) => readonly ForeignKeyInput[];
   readonly indexes?: (tableName: string) => readonly IndexInput[];
   readonly checks?: (tableName: string) => readonly CheckConstraintInput[];
-  readonly control?: ControlPolicy;
 }
 
 function profileTable(tableName: string, spec: ProfileSpec): StorageTable {
@@ -39,7 +38,6 @@ function profileTable(tableName: string, spec: ProfileSpec): StorageTable {
     indexes: spec.indexes?.(tableName) ?? [],
     foreignKeys: spec.foreignKeys?.(tableName) ?? [],
     checks: spec.checks?.(tableName) ?? [],
-    ...(spec.control === undefined ? {} : { control: spec.control }),
   });
 }
 

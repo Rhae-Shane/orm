@@ -111,13 +111,13 @@ describe('RenameTableCall (postgres)', () => {
     });
   });
 
-  it('renderTypeScript() emits the facade call, schema-qualified only when bound', () => {
+  it('renderTypeScript() spreads the facade call, which returns every rename, schema-qualified only when bound', () => {
     expect(new RenameTableCall('auth', 'userProfile', 'UserProfile').renderTypeScript()).toBe(
-      'this.renameTable({ schema: "auth", table: "userProfile", to: "UserProfile" })',
+      '...this.renameTable({ schema: "auth", table: "userProfile", to: "UserProfile" })',
     );
     expect(
       new RenameTableCall(UNBOUND_NAMESPACE_ID, 'userProfile', 'UserProfile').renderTypeScript(),
-    ).toBe('this.renameTable({ table: "userProfile", to: "UserProfile" })');
+    ).toBe('...this.renameTable({ table: "userProfile", to: "UserProfile" })');
   });
 
   it('needs no facade import because the call is a method on the migration', () => {

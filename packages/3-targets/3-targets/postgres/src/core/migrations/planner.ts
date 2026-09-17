@@ -1,14 +1,12 @@
 import type { Contract } from '@internal/contract/types';
 import type {
   MigrationOperationPolicy,
-  ResolvedTableRename,
   SqlMigrationPlannerPlanOptions,
   SqlPlannerConflict,
   SqlPlannerFailureResult,
   SuppressionRecord,
 } from '@internal/family-sql/control';
 import {
-  applyTableRenameIntents,
   controlPolicyForCall,
   detectTableNameCaseChanges,
   extractCodecControlHooks,
@@ -16,7 +14,6 @@ import {
   partitionIssuesByControlPolicy,
   planFieldEventOperations,
   plannerFailure,
-  tableRenameScaffoldError,
 } from '@internal/family-sql/control';
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
@@ -25,21 +22,16 @@ import type {
   MigrationPlanner,
   MigrationPlanWithAuthoringSurface,
   MigrationScaffoldContext,
-  MigrationScaffoldRenames,
   SchemaDiffIssue,
   SchemaOwnership,
-  StorageEntityRename,
 } from '@internal/framework-components/control';
 import { issueOutcome } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { namingOf, parseWireName } from '@internal/sql-schema-ir/naming';
 import type { SqlSchemaIR } from '@internal/sql-schema-ir/types';
-import { SqlCheckConstraintIR, SqlIndexIR } from '@internal/sql-schema-ir/types';
-import { assertDefined } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
-import { notOk, ok, type Result } from '@internal/utils/result';
 import { DEFAULT_NAMESPACE_ID } from '../namespace-ids';
 import { PostgresRlsPolicy } from '../postgres-rls-policy';
 import { postgresNodeStorageCoordinate } from '../schema-ir/node-storage-coordinate';
@@ -55,6 +47,7 @@ import {
   resolvePostgresNodeIssueCreationFactoryName,
 } from './control-policy';
 import { buildPostgresPlanDiff } from './diff-database-schema';
+import { pairCheckRenames, pairIndexRenames } from './index-and-check-renames';
 import {
   coalesceSubtreeIssues,
   conflictForDisallowedCall,
@@ -66,18 +59,14 @@ import type { PostgresOpFactoryCall } from './op-factory-call';
 import {
   CreatePostgresRlsPolicyCall,
   DropPostgresRlsPolicyCall,
-  RenameConstraintCall,
-  RenameIndexCall,
   RenamePostgresRlsPolicyCall,
   RenameTableCall,
 } from './op-factory-call';
 import { renameTableStatement } from './operations/tables';
 import { TypeScriptRenderablePostgresMigration } from './planner-produced-postgres-migration';
 import { postgresPlannerStrategies } from './planner-strategies';
-import { postgresContractToSchema } from './postgres-contract-to-schema';
-import { renameRlsReferences } from './rename-rls-references';
 import { resolveDdlSchemaForNamespaceStorage } from './resolve-ddl-schema';
-import { constraintRenamesForTableRename } from './table-rename-constraint-renames';
+import { emissionSchemaForNamespace } from './table-rename-calls';
 import { verifyPostgresNamespacePresence } from './verify-postgres-namespaces';
 
 type PlannerFrameworkComponents = SqlMigrationPlannerPlanOptions extends {
@@ -90,31 +79,6 @@ type PlannerOptionsWithComponents = SqlMigrationPlannerPlanOptions & {
   readonly frameworkComponents: PlannerFrameworkComponents;
 };
 
-interface PlannedTableRenames {
-  readonly fromContract: Contract<SqlStorage> | null;
-  readonly previousSchema: SqlMigrationPlannerPlanOptions['schema'];
-  readonly calls: readonly PostgresOpFactoryCall[];
-}
-
-function emissionSchemaForNamespace(contract: Contract<SqlStorage>, namespaceId: string): string {
-  return namespaceId === UNBOUND_NAMESPACE_ID
-    ? UNBOUND_NAMESPACE_ID
-    : resolveDdlSchemaForNamespaceStorage(contract.storage, namespaceId);
-}
-
-function renamedTableNode(
-  schema: PostgresDatabaseSchemaNode,
-  contract: Contract<SqlStorage>,
-  rename: ResolvedTableRename,
-): PostgresTableSchemaNode {
-  const ddlSchema = resolveDdlSchemaForNamespaceStorage(contract.storage, rename.namespaceId);
-  const table = Object.values(schema.namespaces).find(
-    (namespace) => namespace.schemaName === ddlSchema,
-  )?.tables[rename.to];
-  assertDefined(table, `a resolved rename names table "${rename.to}" in schema "${ddlSchema}"`);
-  return table;
-}
-
 function partitionPostgresCallsByControlPolicy<TCall extends PostgresOpFactoryCall>(
   calls: readonly TCall[],
   contract: Contract<SqlStorage>,
@@ -126,10 +90,6 @@ function partitionPostgresCallsByControlPolicy<TCall extends PostgresOpFactoryCa
     resolveFactoryName: (call) => call.factoryName,
   });
 }
-
-const SCAFFOLD_POLICY: MigrationOperationPolicy = {
-  allowedOperationClasses: ['additive', 'widening', 'destructive', 'data'],
-};
 
 export function createPostgresMigrationPlanner(
   lowerer: ExecuteRequestLowerer,
@@ -215,20 +175,16 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
      * {@link SqlMigrationPlannerPlanOptions.snapshotsImportPath}.
      */
     readonly snapshotsImportPath: string;
-    /** See {@link SqlMigrationPlannerPlanOptions.renames}. */
-    readonly renames?: readonly StorageEntityRename[];
   }): PostgresPlanResult {
     return this.planSql(options as SqlMigrationPlannerPlanOptions);
   }
 
   emptyMigration(
-    context: MigrationScaffoldContext<'sql', 'postgres'>,
+    context: MigrationScaffoldContext,
     spaceId: string,
   ): MigrationPlanWithAuthoringSurface {
     return new TypeScriptRenderablePostgresMigration(
-      context.renames === undefined
-        ? []
-        : this.scaffoldTableRenames(context, context.renames, spaceId),
+      [],
       {
         from: context.fromHash,
         to: context.toHash,
@@ -237,110 +193,6 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
       context.snapshotsImportPath,
       this.#lowerer,
     );
-  }
-
-  /**
-   * The rename operations `planSql` plans for the stated renames, and nothing else: the table and constraint renames, then the index and check renames on the renamed tables, less those the tables' control policies suppress. Every other difference between the two contracts is left to the author.
-   */
-  private scaffoldTableRenames(
-    context: MigrationScaffoldContext<'sql', 'postgres'>,
-    renames: MigrationScaffoldRenames<'sql', 'postgres'>,
-    spaceId: string,
-  ): readonly PostgresOpFactoryCall[] {
-    const contract = blindCast<
-      Contract<SqlStorage>,
-      'the family resolver only binds the Postgres planner for a SQL contract'
-    >(renames.toContract);
-    const fromContract = blindCast<
-      Contract<SqlStorage> | null,
-      'the family resolver only binds the Postgres planner for a SQL contract'
-    >(renames.fromContract);
-    const options: SqlMigrationPlannerPlanOptions = {
-      contract,
-      fromContract,
-      schema: postgresContractToSchema(fromContract, renames.frameworkComponents),
-      policy: SCAFFOLD_POLICY,
-      frameworkComponents: renames.frameworkComponents,
-      spaceId,
-      snapshotsImportPath: context.snapshotsImportPath,
-      renames: renames.intents,
-    };
-    const planned = this.planTableRenames(options);
-    if (!planned.ok) {
-      throw tableRenameScaffoldError(planned.failure);
-    }
-    PostgresDatabaseSchemaNode.assert(planned.value.previousSchema);
-    const { issues } = buildPostgresPlanDiff({
-      contract,
-      actualSchema: planned.value.previousSchema,
-      frameworkComponents: renames.frameworkComponents,
-    });
-    const relationalIssues = issues.filter((issue) => !isPolicyDiffIssue(issue));
-    const renamedTables = planned.value.calls.filter(
-      (call): call is RenameTableCall => call.factoryName === 'renameTable',
-    );
-    const onRenamedTable = (call: { readonly schemaName: string; readonly tableName: string }) =>
-      renamedTables.some(
-        (renamed) => renamed.schemaName === call.schemaName && renamed.tableName === call.tableName,
-      );
-    return partitionPostgresCallsByControlPolicy(
-      [
-        ...planned.value.calls,
-        ...this.pairIndexRenames(options, relationalIssues).calls.filter(onRenamedTable),
-        ...this.pairCheckRenames(options, relationalIssues).calls.filter(onRenamedTable),
-      ],
-      contract,
-    ).kept;
-  }
-
-  /**
-   * Applies the stated renames to the previous contract and plans the table and constraint renames they need. Without renames it hands back the previous contract and schema unchanged and no calls.
-   */
-  private planTableRenames(
-    options: SqlMigrationPlannerPlanOptions,
-  ): Result<PlannedTableRenames, readonly SqlPlannerConflict[]> {
-    const intents = options.renames ?? [];
-    if (intents.length === 0) {
-      return ok({ fromContract: options.fromContract, previousSchema: options.schema, calls: [] });
-    }
-    const applied = applyTableRenameIntents({
-      fromContract: options.fromContract,
-      toContract: options.contract,
-      intents,
-      renameTableReferences: renameRlsReferences,
-    });
-    if (!applied.ok) {
-      return notOk(applied.failure);
-    }
-    const previousSchema = postgresContractToSchema(
-      applied.value.contract,
-      options.frameworkComponents,
-    );
-    const nextSchema = postgresContractToSchema(options.contract, options.frameworkComponents);
-    const calls = applied.value.renames.flatMap((rename): PostgresOpFactoryCall[] => {
-      const schemaName = emissionSchemaForNamespace(options.contract, rename.namespaceId);
-      return [
-        new RenameTableCall(schemaName, rename.from, rename.to),
-        ...constraintRenamesForTableRename({
-          schemaName,
-          from: rename.from,
-          to: rename.to,
-          previous: renamedTableNode(previousSchema, options.contract, rename),
-          next: renamedTableNode(nextSchema, options.contract, rename),
-        }),
-      ];
-    });
-    const disallowed = calls.filter(
-      (call) => !options.policy.allowedOperationClasses.includes(call.operationClass),
-    );
-    if (disallowed.length > 0) {
-      return notOk(
-        disallowed.map((call) =>
-          conflictForDisallowedCall(call, options.policy.allowedOperationClasses),
-        ),
-      );
-    }
-    return ok({ fromContract: applied.value.contract, previousSchema, calls });
   }
 
   private planSql(options: SqlMigrationPlannerPlanOptions): PostgresPlanResult {
@@ -353,19 +205,8 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
       return policyResult;
     }
 
-    // Operator-stated renames are applied to the previous contract before
-    // the diff, and the "from" tree is re-derived from that renamed contract,
-    // so the differ sees each renamed table under its new name and plans its
-    // column, index and constraint changes normally. The table and
-    // constraint renames become the first operations of the plan. An intent
-    // that matches neither side, or a rename the policy's classes do not
-    // admit, fails the plan here rather than degrading to a drop and a create.
-    const tableRenames = this.planTableRenames(options);
-    if (!tableRenames.ok) {
-      return plannerFailure(tableRenames.failure);
-    }
-    const { fromContract, previousSchema } = tableRenames.value;
-    const renameTableCalls = tableRenames.value.calls;
+    const fromContract = options.fromContract;
+    const previousSchema = options.schema;
 
     // The one combined tree diff drives the whole plan: relational findings
     // become structural DDL via `planIssues`, policy findings become RLS ops
@@ -432,8 +273,8 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
     // mapping turns them into create + drop. Consumed issues never reach
     // `planIssues`; the rename calls go through the same call-side
     // control-policy partition the policy ops use.
-    const indexRenames = this.pairIndexRenames(options, schemaIssues);
-    const checkRenames = this.pairCheckRenames(options, schemaIssues);
+    const indexRenames = pairIndexRenames(options, schemaIssues);
+    const checkRenames = pairCheckRenames(options, schemaIssues);
     const renameConsumed = new Set([...indexRenames.consumed, ...checkRenames.consumed]);
     const plannableIssues =
       renameConsumed.size === 0
@@ -482,6 +323,12 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
           rename.to,
         ),
       ],
+      renameTableCall: (rename) =>
+        new RenameTableCall(
+          rename.namespaceId ?? UNBOUND_NAMESPACE_ID,
+          rename.from,
+          rename.to,
+        ).renderTypeScript(),
       contract: options.contract,
       defaultNamespaceId: DEFAULT_NAMESPACE_ID,
     });
@@ -514,11 +361,6 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
       return plannerFailure([...(result.ok ? [] : result.failure), ...schemaDiff.conflicts]);
     }
 
-    const renameTablePartition = partitionPostgresCallsByControlPolicy(
-      renameTableCalls,
-      options.contract,
-    );
-
     const indexRenamePartition = partitionPostgresCallsByControlPolicy(
       [...indexRenames.calls, ...checkRenames.calls],
       options.contract,
@@ -549,10 +391,7 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
       fieldEventPostgresCalls,
       options.contract,
     );
-    // The table renames run first: every later operation addresses the
-    // renamed table by its new name.
     const calls = [
-      ...renameTablePartition.kept,
       ...result.value.calls,
       ...indexRenamePartition.kept,
       ...schemaDiffPartition.kept,
@@ -565,7 +404,6 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
     const seenWarnings = new Set<string>();
     const warnings: SqlPlannerConflict[] = [
       ...issuePartition.suppressions,
-      ...renameTablePartition.suppressions,
       ...indexRenamePartition.suppressions,
       ...schemaDiff.suppressions,
       ...schemaDiffPartition.suppressions,
@@ -593,229 +431,6 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
       ),
       ...(warnings.length > 0 ? { warnings: Object.freeze(warnings) } : {}),
     });
-  }
-
-  /**
-   * Rename post-pass for indexes, per `(schema, table)`, widening-only,
-   * deterministic by sorted names — the same structure as the policy pass
-   * below (which stays untouched: policies pair by hash only).
-   *
-   * Hash pairing (prefix-only renames): extras whose live names parse as
-   * wire names, grouped by `(schema, table, hash)`; missing nodes iterated
-   * in sorted-name order consume the sorted-name-first candidate.
-   *
-   * Content pairing (exact→wire convergence), after hash pairing has
-   * consumed its matches: the remaining wire-named-missing nodes
-   * (`prefix` defined) against the remaining extras of any name shape,
-   * paired iff content-equal (columns ordered-strict both-defined-or-
-   * both-undefined, `unique`/`type` strict, `options` loose, bodies
-   * byte-equal).
-   *
-   * Leftovers proceed as create/drop exactly as before; without the
-   * widening allowance the pass is skipped and pairing degrades to the
-   * additive half, like the policy pass.
-   */
-  private pairIndexRenames(
-    options: Pick<SqlMigrationPlannerPlanOptions, 'contract' | 'policy'>,
-    issues: readonly SchemaDiffIssue<SqlSchemaDiffNode>[],
-  ): {
-    readonly calls: readonly RenameIndexCall[];
-    readonly consumed: ReadonlySet<SchemaDiffIssue<SqlSchemaDiffNode>>;
-  } {
-    const consumed = new Set<SchemaDiffIssue<SqlSchemaDiffNode>>();
-    const calls: RenameIndexCall[] = [];
-    if (!options.policy.allowedOperationClasses.includes('widening')) {
-      return { calls, consumed };
-    }
-
-    interface IndexFinding {
-      readonly issue: SchemaDiffIssue<SqlSchemaDiffNode>;
-      readonly node: SqlIndexIR;
-      readonly ddlSchema: string;
-      readonly tableName: string;
-    }
-    const missing: IndexFinding[] = [];
-    const extra: IndexFinding[] = [];
-    for (const issue of issues) {
-      const node = issueNode(issue);
-      if (node === undefined || !SqlIndexIR.is(node)) continue;
-      const ddlSchema = issue.path[1];
-      const tableName = issue.path[2];
-      if (ddlSchema === undefined || tableName === undefined) continue;
-      if (issueOutcome(issue) === 'not-found') {
-        missing.push({ issue, node, ddlSchema, tableName });
-      } else if (issueOutcome(issue) === 'not-expected') {
-        extra.push({ issue, node, ddlSchema, tableName });
-      }
-    }
-    if (missing.length === 0 || extra.length === 0) {
-      return { calls, consumed };
-    }
-
-    const byName = (a: IndexFinding, b: IndexFinding): number =>
-      a.node.name < b.node.name ? -1 : a.node.name > b.node.name ? 1 : 0;
-    // DDL emission must stay unqualified for the unbound namespace, exactly
-    // like the per-issue mapping's `emissionSchemaName`.
-    const emissionSchema = (ddlSchema: string): string =>
-      resolveNamespaceIdForDdlSchema(options.contract, ddlSchema) === UNBOUND_NAMESPACE_ID
-        ? UNBOUND_NAMESPACE_ID
-        : ddlSchema;
-    const pairingKey = (finding: IndexFinding, hash: string): string =>
-      JSON.stringify([finding.ddlSchema, finding.tableName, hash]);
-    const rename = (missingFinding: IndexFinding, candidate: IndexFinding): void => {
-      consumed.add(missingFinding.issue);
-      consumed.add(candidate.issue);
-      calls.push(
-        new RenameIndexCall(
-          emissionSchema(missingFinding.ddlSchema),
-          missingFinding.tableName,
-          candidate.node.name,
-          missingFinding.node.name,
-        ),
-      );
-    };
-
-    const sortedMissing = [...missing].sort(byName);
-
-    const extrasByHash = new Map<string, IndexFinding[]>();
-    for (const finding of extra) {
-      const parsed = parseWireName(finding.node.name);
-      if (parsed === undefined) continue;
-      const key = pairingKey(finding, parsed.hash);
-      const group = extrasByHash.get(key) ?? [];
-      group.push(finding);
-      extrasByHash.set(key, group);
-    }
-    for (const group of extrasByHash.values()) {
-      group.sort(byName);
-    }
-    for (const missingFinding of sortedMissing) {
-      const parsed = parseWireName(missingFinding.node.name);
-      if (parsed === undefined) continue;
-      const candidate = extrasByHash.get(pairingKey(missingFinding, parsed.hash))?.shift();
-      if (candidate === undefined) continue;
-      rename(missingFinding, candidate);
-    }
-
-    const sortedExtras = [...extra].sort(byName);
-    for (const missingFinding of sortedMissing) {
-      if (consumed.has(missingFinding.issue)) continue;
-      if (missingFinding.node.prefix === undefined) continue;
-      const candidate = sortedExtras.find(
-        (extraFinding) =>
-          !consumed.has(extraFinding.issue) &&
-          extraFinding.ddlSchema === missingFinding.ddlSchema &&
-          extraFinding.tableName === missingFinding.tableName &&
-          missingFinding.node.contentEquals(extraFinding.node, {
-            columnPresence: 'matching',
-            bodies: 'verbatim',
-          }),
-      );
-      if (candidate === undefined) continue;
-      rename(missingFinding, candidate);
-    }
-
-    return { calls, consumed };
-  }
-
-  /**
-   * Check-constraint rename post-pass: a `not-found` and a `not-expected`
-   * check on the same table whose wire-name content hashes match but whose
-   * prefixes differ is a prefix-only rename, and collapses into one
-   * `ALTER TABLE … RENAME CONSTRAINT`.
-   *
-   * This is the index pass's hash-pairing phase and nothing else. There is
-   * deliberately no content-pairing phase: a live check body is whatever
-   * Postgres reprinted, so it never byte-matches the authored text, and
-   * pairing an exact-named live check by content would bless whatever
-   * predicate is actually live. Adoption of an old exact-named check stays
-   * drop + add.
-   *
-   * Runs only when the policy allows `widening` (rename's class). Without it
-   * the pass no-ops and the pair degrades to the slice-1 behavior: an add,
-   * plus a drop when `destructive` is allowed too.
-   */
-  private pairCheckRenames(
-    options: Pick<SqlMigrationPlannerPlanOptions, 'contract' | 'policy'>,
-    issues: readonly SchemaDiffIssue<SqlSchemaDiffNode>[],
-  ): {
-    readonly calls: readonly RenameConstraintCall[];
-    readonly consumed: ReadonlySet<SchemaDiffIssue<SqlSchemaDiffNode>>;
-  } {
-    const consumed = new Set<SchemaDiffIssue<SqlSchemaDiffNode>>();
-    const calls: RenameConstraintCall[] = [];
-    if (!options.policy.allowedOperationClasses.includes('widening')) {
-      return { calls, consumed };
-    }
-
-    interface CheckFinding {
-      readonly issue: SchemaDiffIssue<SqlSchemaDiffNode>;
-      readonly node: SqlCheckConstraintIR;
-      readonly ddlSchema: string;
-      readonly tableName: string;
-    }
-    const missing: CheckFinding[] = [];
-    const extra: CheckFinding[] = [];
-    for (const issue of issues) {
-      const node = issueNode(issue);
-      if (node === undefined || !SqlCheckConstraintIR.is(node)) continue;
-      const ddlSchema = issue.path[1];
-      const tableName = issue.path[2];
-      if (ddlSchema === undefined || tableName === undefined) continue;
-      if (issueOutcome(issue) === 'not-found') {
-        missing.push({ issue, node, ddlSchema, tableName });
-      } else if (issueOutcome(issue) === 'not-expected') {
-        extra.push({ issue, node, ddlSchema, tableName });
-      }
-    }
-    if (missing.length === 0 || extra.length === 0) {
-      return { calls, consumed };
-    }
-
-    const byName = (a: CheckFinding, b: CheckFinding): number =>
-      a.node.name < b.node.name ? -1 : a.node.name > b.node.name ? 1 : 0;
-    // DDL emission must stay unqualified for the unbound namespace, exactly
-    // like the per-issue mapping's `emissionSchemaName`.
-    const emissionSchema = (ddlSchema: string): string =>
-      resolveNamespaceIdForDdlSchema(options.contract, ddlSchema) === UNBOUND_NAMESPACE_ID
-        ? UNBOUND_NAMESPACE_ID
-        : ddlSchema;
-    const pairingKey = (finding: CheckFinding, hash: string): string =>
-      JSON.stringify([finding.ddlSchema, finding.tableName, hash]);
-
-    const sortedMissing = [...missing].sort(byName);
-
-    const extrasByHash = new Map<string, CheckFinding[]>();
-    for (const finding of extra) {
-      const parsed = parseWireName(finding.node.name);
-      if (parsed === undefined) continue;
-      const key = pairingKey(finding, parsed.hash);
-      const group = extrasByHash.get(key) ?? [];
-      group.push(finding);
-      extrasByHash.set(key, group);
-    }
-    for (const group of extrasByHash.values()) {
-      group.sort(byName);
-    }
-    for (const missingFinding of sortedMissing) {
-      const parsed = parseWireName(missingFinding.node.name);
-      if (parsed === undefined) continue;
-      const candidate = extrasByHash.get(pairingKey(missingFinding, parsed.hash))?.shift();
-      if (candidate === undefined) continue;
-      consumed.add(missingFinding.issue);
-      consumed.add(candidate.issue);
-      calls.push(
-        new RenameConstraintCall(
-          emissionSchema(missingFinding.ddlSchema),
-          missingFinding.tableName,
-          'checkConstraint',
-          candidate.node.name,
-          missingFinding.node.name,
-        ),
-      );
-    }
-
-    return { calls, consumed };
   }
 
   /**

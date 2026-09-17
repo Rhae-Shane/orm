@@ -339,7 +339,7 @@ export class RenameTableCall extends SqliteOpFactoryCallNode {
   }
 
   renderTypeScript(): string {
-    return `this.renameTable({ table: ${jsonToTsSource(this.oldTableName)}, to: ${jsonToTsSource(this.tableName)} })`;
+    return `...this.renameTable({ table: ${jsonToTsSource(this.oldTableName)}, to: ${jsonToTsSource(this.tableName)} })`;
   }
 
   override importRequirements(): readonly ImportRequirement[] {

@@ -121,9 +121,9 @@ describe('RenameTableCall (sqlite)', () => {
     });
   });
 
-  it('renderTypeScript() emits the facade call', () => {
+  it('renderTypeScript() spreads the facade call, which returns every rename', () => {
     expect(new RenameTableCall('userProfile', 'UserProfile').renderTypeScript()).toBe(
-      'this.renameTable({ table: "userProfile", to: "UserProfile" })',
+      '...this.renameTable({ table: "userProfile", to: "UserProfile" })',
     );
   });
 

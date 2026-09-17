@@ -2,6 +2,7 @@ import type { Contract } from '@internal/contract/types';
 import type { SqlMigrationPlanOperation } from '@internal/family-sql/control';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
 import { Migration as SqlMigration } from '@internal/family-sql/migration';
+import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import type { ControlStack } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { MigrationContractViews } from '@internal/migration-tools/migration';
@@ -38,7 +39,6 @@ import {
   RenameConstraintCall,
   RenameIndexCall,
   RenamePostgresRlsPolicyCall,
-  RenameTableCall,
   SetDefaultCall,
   SetNotNullCall,
 } from './op-factory-call';
@@ -48,6 +48,7 @@ import { installExtension } from './operations/dependencies';
 import type { CreateIndexExtras } from './operations/indexes';
 import type { ForeignKeySpec } from './operations/shared';
 import type { PostgresPlanTargetDetails } from './planner-target-details';
+import { postgresTableRenameCalls } from './table-rename-calls';
 
 /**
  * Target-owned base class for Postgres migrations.
@@ -109,6 +110,16 @@ export abstract class PostgresMigration<
     this.controlAdapter = stack?.adapter
       ? (stack.adapter.create(stack) as SqlControlAdapter<'postgres'>)
       : undefined;
+  }
+
+  private frameworkComponents(): ReadonlyArray<TargetBoundComponentDescriptor<'sql', string>> {
+    const stack = this.stack;
+    if (stack === undefined) return [];
+    return [
+      stack.target,
+      ...(stack.adapter === undefined ? [] : [stack.adapter]),
+      ...stack.extensions,
+    ];
   }
 
   /**
@@ -341,16 +352,21 @@ export abstract class PostgresMigration<
     ).toOp(this.controlAdapterFor('dropConstraint'));
   }
 
+  /**
+   * Emit the operations that rename a table: the table rename, then a rename of each primary key, unique constraint, foreign key, index and check whose name was derived from the old table name, read from this migration's start and end contracts. Spread the result into `operations`: `...this.renameTable({ table: 'userProfile', to: 'UserProfile' })`. `schema` names the table's namespace when more than one declares the table. Throws `MIGRATION.TABLE_RENAME_UNMATCHED` when the start contract lacks the table or the end contract lacks the new name.
+   */
   protected renameTable(options: {
     readonly schema?: string;
     readonly table: string;
     readonly to: string;
-  }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
-    return new RenameTableCall(
-      options.schema ?? UNBOUND_NAMESPACE_ID,
-      options.table,
-      options.to,
-    ).toOp(this.controlAdapterFor('renameTable'));
+  }): readonly Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>>[] {
+    const adapter = this.controlAdapterFor('renameTable');
+    return postgresTableRenameCalls({
+      startContract: this.startContract,
+      endContract: this.endContract,
+      rename: { namespaceId: options.schema, from: options.table, to: options.to },
+      frameworkComponents: this.frameworkComponents(),
+    }).map(async (call) => call.toOp(adapter));
   }
 
   protected dropTable(options: {
