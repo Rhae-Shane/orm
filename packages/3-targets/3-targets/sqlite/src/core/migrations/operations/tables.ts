@@ -245,6 +245,16 @@ function quoteSqlList(values: readonly string[]): string {
   return values.map((v) => `'${escapeLiteral(v)}'`).join(', ');
 }
 
+/**
+ * A condition on the index aliased `l`: it covers exactly these columns. Order is not checked, because SQLite identifies a unique index by its column set.
+ */
+function indexCoversExactly(columns: readonly string[]): string {
+  return (
+    `(SELECT COUNT(*) FROM pragma_index_info(l.name)) = ${columns.length}` +
+    ` AND (SELECT COUNT(*) FROM pragma_index_info(l.name) WHERE name IN (${quoteSqlList(columns)})) = ${columns.length}`
+  );
+}
+
 function columnNameFromNode(issue: SchemaDiffIssue): string | undefined {
   const node = issue.expected ?? issue.actual;
   if (node === undefined) return undefined;
@@ -382,32 +392,30 @@ export function buildRecreatePostchecks(
 
   if (hasUniqueIssue) {
     for (const u of spec.uniques ?? []) {
-      const colCount = u.columns.length;
       const description = u.name
         ? `verify unique constraint "${u.name}" on "${tableName}"`
         : `verify unique constraint (${u.columns.join(', ')}) on "${tableName}"`;
-      // Match any unique index whose covered columns are exactly the expected
-      // set. Order is intentionally not checked — SQLite's unique-index
-      // identity is column-set, not column-sequence.
       checks.push({
         description,
         sql:
           `SELECT EXISTS (SELECT 1 FROM pragma_index_list('${t}') l` +
-          ` WHERE l."unique" = 1` +
-          ` AND (SELECT COUNT(*) FROM pragma_index_info(l.name)) = ${colCount}` +
-          ` AND (SELECT COUNT(*) FROM pragma_index_info(l.name) WHERE name IN (${quoteSqlList(u.columns)})) = ${colCount})`,
+          ` WHERE l."unique" = 1 AND ${indexCoversExactly(u.columns)})`,
       });
     }
   }
 
-  // The checks above only prove expected uniques exist, so removing the last
-  // one would leave the postcheck already true and the runner would skip the
-  // recreate. `origin = 'u'` counts UNIQUE constraints, not CREATE INDEX.
+  // The checks above only prove expected uniques exist, so removing one would
+  // leave the postcheck already true and the runner would skip the recreate.
+  // This check fails while a UNIQUE constraint index (`origin = 'u'`) matches
+  // no expected unique. It does not count indexes: SQLite folds a unique that
+  // repeats a non-integer primary key into the primary key's index.
   if (hasUniqueIssue) {
-    const expected = spec.uniques?.length ?? 0;
+    const expected = (spec.uniques ?? []).map((u) => `(${indexCoversExactly(u.columns)})`);
     checks.push({
-      description: `verify "${tableName}" has exactly ${expected} unique constraints`,
-      sql: `SELECT (SELECT COUNT(*) FROM pragma_index_list('${t}') WHERE origin = 'u') = ${expected}`,
+      description: `verify "${tableName}" has no unique constraint besides the expected ones`,
+      sql:
+        `SELECT NOT EXISTS (SELECT 1 FROM pragma_index_list('${t}') l` +
+        ` WHERE l.origin = 'u' AND NOT (${expected.length === 0 ? '0' : expected.join(' OR ')}))`,
     });
   }
 

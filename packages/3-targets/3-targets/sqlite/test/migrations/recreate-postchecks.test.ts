@@ -248,7 +248,7 @@ describe('buildRecreatePostchecks — constraints', () => {
     expect(fkChecks[1]!.sql).toContain('HAVING COUNT(*) = 2');
   });
 
-  it('checks the unique constraint count, so removing the last unique is not already satisfied', () => {
+  it('checks that no unexpected unique remains, so removing the last unique is not already satisfied', () => {
     const spec = tableSpec({ columns: [colSpec({ name: 'email' })], uniques: [] });
     const issues = [
       issue({ path: ['database', 'users', 'unique:email'], actual: unique(['email']) }),
@@ -256,8 +256,8 @@ describe('buildRecreatePostchecks — constraints', () => {
 
     expect(buildRecreatePostchecks('users', issues, spec)).toEqual([
       {
-        description: 'verify "users" has exactly 0 unique constraints',
-        sql: `SELECT (SELECT COUNT(*) FROM pragma_index_list('users') WHERE origin = 'u') = 0`,
+        description: 'verify "users" has no unique constraint besides the expected ones',
+        sql: `SELECT NOT EXISTS (SELECT 1 FROM pragma_index_list('users') l WHERE l.origin = 'u' AND NOT (0))`,
       },
     ]);
   });
