@@ -38,6 +38,12 @@ function coordinateKey(coordinate: StorageEntityRenameCoordinate): string {
   return `${coordinate.namespaceId ?? ''}.${coordinate.name}`;
 }
 
+function coordinateLabel(coordinate: StorageEntityRenameCoordinate): string {
+  return coordinate.namespaceId === undefined
+    ? coordinate.name
+    : `${coordinate.namespaceId}.${coordinate.name}`;
+}
+
 /**
  * Parses every `--rename-table <from>=<to>` value the operator gave, in the
  * order given. A malformed value, a value whose two sides are the same
@@ -70,10 +76,10 @@ export function parseRenameTableFlags(
     const toKey = coordinateKey(to.value);
     if (fromKey === toKey) return notOk(invalid(value, 'the old and new names are the same'));
     if (seenFrom.has(fromKey)) {
-      return notOk(invalid(value, `"" is renamed more than once`));
+      return notOk(invalid(value, `"${coordinateLabel(from.value)}" is renamed more than once`));
     }
     if (seenTo.has(toKey)) {
-      return notOk(invalid(value, `more than one value renames to ""`));
+      return notOk(invalid(value, `more than one value renames to "${coordinateLabel(to.value)}"`));
     }
     seenFrom.add(fromKey);
     seenTo.add(toKey);

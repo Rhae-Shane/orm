@@ -65,17 +65,21 @@ describe('parseRenameTableFlags', () => {
     });
   });
 
-  it('rejects two values that rename the same table', () => {
-    expect(failureOf(['userProfile=UserProfile', 'userProfile=Profile'])).toMatchObject({
-      code: 'CLI.INVALID_RENAME_TABLE_FLAG',
-      summary: expect.stringContaining('userProfile'),
-    });
+  it('rejects two values that rename the same table, naming the table', () => {
+    expect(failureOf(['userProfile=UserProfile', 'userProfile=Profile'])?.summary).toBe(
+      'Invalid --rename-table value "userProfile=Profile": "userProfile" is renamed more than once.',
+    );
   });
 
-  it('rejects two values that rename to the same table', () => {
-    expect(failureOf(['userProfile=UserProfile', 'profile=UserProfile'])).toMatchObject({
-      code: 'CLI.INVALID_RENAME_TABLE_FLAG',
-      summary: expect.stringContaining('UserProfile'),
-    });
+  it('names the qualified table when two qualified values rename it', () => {
+    expect(failureOf(['auth.userProfile=UserProfile', 'auth.userProfile=Profile'])?.summary).toBe(
+      'Invalid --rename-table value "auth.userProfile=Profile": "auth.userProfile" is renamed more than once.',
+    );
+  });
+
+  it('rejects two values that rename to the same table, naming the table', () => {
+    expect(failureOf(['userProfile=UserProfile', 'profile=UserProfile'])?.summary).toBe(
+      'Invalid --rename-table value "profile=UserProfile": more than one value renames to "UserProfile".',
+    );
   });
 });
