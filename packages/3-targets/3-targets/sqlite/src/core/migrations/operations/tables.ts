@@ -7,6 +7,7 @@ import { blindCast } from '@internal/utils/casts';
 import { tableExistsAst } from '../../../contract-free/checks';
 import { stripOuterParens } from '../../default-normalizer';
 import { escapeLiteral, quoteIdentifier } from '../../sql-utils';
+import { sqliteIdentifiersCollide } from '../identifier-case';
 import { buildCreateIndexSql } from '../planner-ddl-builders';
 import { buildTargetDetails } from '../planner-target-details';
 import {
@@ -82,13 +83,13 @@ export function renameTableViaName(toName: string): string {
 }
 
 export function renameChangesOnlyCase(fromName: string, toName: string): boolean {
-  return fromName.toLowerCase() === toName.toLowerCase();
+  return sqliteIdentifiersCollide(fromName, toName);
 }
 
 /**
- * SQLite compares table names case-insensitively, so a rename that only
- * changes case (`userProfile` to `UserProfile`) is refused as "already
- * exists" when done in one statement. It goes through a temporary name.
+ * SQLite takes names that differ only in the case of ASCII letters for the
+ * same name, so such a rename (`userProfile` to `UserProfile`) is refused as
+ * "already exists" when done in one statement. It goes through a temporary name.
  */
 export function renameTableSteps(fromName: string, toName: string): Op['execute'] {
   const from = quoteIdentifier(fromName);

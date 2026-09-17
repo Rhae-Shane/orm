@@ -38,4 +38,11 @@ describe('SQLite planner index names that differ only in case', () => {
       `Drop index user_profile_handle_idx_${HANDLE_INDEX_HASH} on UserProfile`,
     ]);
   });
+
+  it('keeps the usual order for an index whose name changes only in the case of a non-ASCII letter, which SQLite does not fold', async () => {
+    expect(await plannedLabels('Äpfel', 'äpfel')).toEqual([
+      `Create index äpfel_handle_idx_${HANDLE_INDEX_HASH} on UserProfile`,
+      `Drop index Äpfel_handle_idx_${HANDLE_INDEX_HASH} on UserProfile`,
+    ]);
+  });
 });

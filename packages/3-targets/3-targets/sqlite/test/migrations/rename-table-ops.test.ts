@@ -78,6 +78,14 @@ describe('RenameTableCall (sqlite)', () => {
     ]);
   });
 
+  it('renames in one statement when only a non-ASCII letter changes case, since SQLite folds only ASCII letters', async () => {
+    const { lowerer, received } = recordingCheckLowerer();
+    const op = await new RenameTableCall('Äpfel', 'äpfel').toOp(lowerer);
+
+    expect(op.execute.map((step) => step.sql)).toEqual(['ALTER TABLE "Äpfel" RENAME TO "äpfel"']);
+    expect(received).not.toContainEqual(tableExistsAst('_prisma_rename_äpfel').tableAbsent());
+  });
+
   it('prechecks that the temporary name is free on a case-only rename, saying why it is needed', async () => {
     const { lowerer, received } = recordingCheckLowerer();
     const op = await new RenameTableCall('userProfile', 'UserProfile').toOp(lowerer);

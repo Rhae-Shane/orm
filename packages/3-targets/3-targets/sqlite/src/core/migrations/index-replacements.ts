@@ -2,6 +2,7 @@ import type { SchemaDiffIssue } from '@internal/framework-components/control';
 import { issueOutcome } from '@internal/framework-components/control';
 import { parseWireName } from '@internal/sql-schema-ir/naming';
 import { SqlIndexIR } from '@internal/sql-schema-ir/types';
+import { sqliteIdentifiersCollide } from './identifier-case';
 import { issueNode } from './issue-planner';
 import { CreateIndexCall, DropIndexCall, type SqliteOpFactoryCall } from './op-factory-call';
 
@@ -49,11 +50,11 @@ export function renamedTableIndex(renamedTables: ReadonlySet<string>): IndexRepl
 export const indexNameCaseChange: IndexReplacementMatch = (old, replacement) =>
   old.tableName === replacement.tableName &&
   old.index.name !== replacement.index.name &&
-  old.index.name.toLowerCase() === replacement.index.name.toLowerCase() &&
+  sqliteIdentifiersCollide(old.index.name, replacement.index.name) &&
   JSON.stringify(old.index.columns ?? []) === JSON.stringify(replacement.index.columns ?? []);
 
 /**
- * Pairs each index the plan drops with the index that replaces it, and plans every paired drop before every paired create. SQLite cannot rename an index, and it compares index names without case, so a replacement whose name differs from the old one only in case would otherwise collide with it. The paired issues are returned as consumed so the ordinary diff does not plan them again.
+ * Pairs each index the plan drops with the index that replaces it, and plans every paired drop before every paired create. SQLite cannot rename an index, and it compares index names without regard to the case of ASCII letters, so a replacement whose name differs from the old one only in that case would otherwise collide with it. The paired issues are returned as consumed so the ordinary diff does not plan them again.
  */
 export function pairIndexReplacements(
   issues: readonly SchemaDiffIssue[],
