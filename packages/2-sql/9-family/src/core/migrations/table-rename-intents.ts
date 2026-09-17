@@ -50,7 +50,7 @@ function coordinateLabel(coordinate: StorageEntityRename['from']): string {
     : `${coordinate.namespaceId}.${coordinate.name}`;
 }
 
-function intentLabel(intent: TableRenameIntent): string {
+export function tableRenameIntentLabel(intent: TableRenameIntent): string {
   return `${coordinateLabel(intent.from)}=${coordinateLabel(intent.to)}`;
 }
 
@@ -79,7 +79,7 @@ function lookupTable(
 function unmatched(intent: TableRenameIntent, reason: string): SqlPlannerConflict {
   return {
     kind: 'tableRenameUnmatched',
-    summary: `${TABLE_RENAME_UNMATCHED_CODE}: --rename-table "${intentLabel(intent)}" does not match the contracts: ${reason}.`,
+    summary: `${TABLE_RENAME_UNMATCHED_CODE}: --rename-table "${tableRenameIntentLabel(intent)}" does not match the contracts: ${reason}.`,
     why: 'A rename intent must name a table of the previous contract as its old name and a table of the next contract as its new name, and the new name must not already exist in the previous contract. Check the spelling and the schema qualifier, or drop the flag if the table was not renamed.',
     meta: { code: TABLE_RENAME_UNMATCHED_CODE, from: intent.from.name, to: intent.to.name },
   };

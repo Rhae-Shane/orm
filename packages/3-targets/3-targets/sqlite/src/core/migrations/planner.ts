@@ -11,6 +11,7 @@ import {
   extractCodecControlHooks,
   planFieldEventOperations,
   plannerFailure,
+  tableRenameIntentLabel,
 } from '@internal/family-sql/control';
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
@@ -28,6 +29,7 @@ import {
   type SqlSchemaIR,
   SqlTableIR,
 } from '@internal/sql-schema-ir/types';
+import { sqliteError } from '../errors';
 import { buildSqlitePlanDiff, sqliteContractToSchema } from './diff-database-schema';
 import {
   coalesceSubtreeIssues,
@@ -121,9 +123,21 @@ export class SqliteMigrationPlanner
     context: MigrationScaffoldContext,
     spaceId: string,
   ): TypeScriptRenderableSqliteMigration {
-    const renameCalls = (context.renames ?? []).map(
-      (rename) => new RenameTableCall(rename.from.name, rename.to.name),
-    );
+    const renameCalls = (context.renames ?? []).map((rename) => {
+      const namespaceId = rename.from.namespaceId ?? rename.to.namespaceId;
+      if (namespaceId !== undefined) {
+        throw sqliteError(
+          'MIGRATION.TABLE_RENAME_UNMATCHED',
+          `--rename-table "${tableRenameIntentLabel(rename)}" names a namespace, "${namespaceId}", and SQLite has no namespaces.`,
+          {
+            why: 'A SQLite database has one namespace, so a rename intent names its tables without a qualifier.',
+            fix: 'Drop the namespace qualifier from the --rename-table value.',
+            meta: { from: rename.from.name, to: rename.to.name },
+          },
+        );
+      }
+      return new RenameTableCall(rename.from.name, rename.to.name);
+    });
     return new TypeScriptRenderableSqliteMigration(
       renameCalls,
       {

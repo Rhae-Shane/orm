@@ -175,13 +175,14 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
     context: MigrationScaffoldContext,
     spaceId: string,
   ): MigrationPlanWithAuthoringSurface {
-    // A scaffold has no contract to resolve a namespace against, so a
-    // qualified intent names the DDL schema directly and an unqualified one
-    // stays unbound, like every other unqualified authored statement.
+    // A scaffold has no contract to resolve a namespace against, so the
+    // qualifier on either side names the DDL schema directly, and an intent
+    // with no qualifier stays unbound, like every other unqualified authored
+    // statement. The flag parser has already refused two different qualifiers.
     const renameCalls = (context.renames ?? []).map(
       (rename) =>
         new RenameTableCall(
-          rename.from.namespaceId ?? UNBOUND_NAMESPACE_ID,
+          rename.from.namespaceId ?? rename.to.namespaceId ?? UNBOUND_NAMESPACE_ID,
           rename.from.name,
           rename.to.name,
         ),

@@ -47,8 +47,9 @@ function coordinateLabel(coordinate: StorageEntityRenameCoordinate): string {
 /**
  * Parses every `--rename-table <from>=<to>` value the operator gave, in the
  * order given. A malformed value, a value whose two sides are the same
- * entity, and two values that share an old or a new name are each refused
- * with `CLI.INVALID_RENAME_TABLE_FLAG`.
+ * entity, a value whose sides name different namespaces, and two values that
+ * share an old or a new name are each refused with
+ * `CLI.INVALID_RENAME_TABLE_FLAG`.
  */
 export function parseRenameTableFlags(
   values: readonly string[] | undefined,
@@ -72,6 +73,18 @@ export function parseRenameTableFlags(
     if (!from.ok) return from;
     const to = parseCoordinate(value, right);
     if (!to.ok) return to;
+    if (
+      from.value.namespaceId !== undefined &&
+      to.value.namespaceId !== undefined &&
+      from.value.namespaceId !== to.value.namespaceId
+    ) {
+      return notOk(
+        invalid(
+          value,
+          `a rename cannot move a table from namespace "${from.value.namespaceId}" to namespace "${to.value.namespaceId}"`,
+        ),
+      );
+    }
     const fromKey = coordinateKey(from.value);
     const toKey = coordinateKey(to.value);
     if (fromKey === toKey) return notOk(invalid(value, 'the old and new names are the same'));

@@ -58,6 +58,21 @@ describe('parseRenameTableFlags', () => {
     expect(envelope?.fix).toContain('<from>=<to>');
   });
 
+  it('accepts both sides qualified with the same namespace', () => {
+    expect(parsedValue(['auth.userProfile=auth.UserProfile'])).toEqual([
+      {
+        from: { namespaceId: 'auth', name: 'userProfile' },
+        to: { namespaceId: 'auth', name: 'UserProfile' },
+      },
+    ]);
+  });
+
+  it('rejects a value that moves a table to another namespace', () => {
+    expect(failureOf(['auth.userProfile=sales.UserProfile'])?.summary).toBe(
+      'Invalid --rename-table value "auth.userProfile=sales.UserProfile": a rename cannot move a table from namespace "auth" to namespace "sales".',
+    );
+  });
+
   it('rejects a value whose two sides are the same table', () => {
     expect(failureOf(['userProfile=userProfile'])).toMatchObject({
       code: 'CLI.INVALID_RENAME_TABLE_FLAG',

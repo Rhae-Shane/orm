@@ -169,7 +169,7 @@ The main CLI received a `--format` value other than `pretty` or `json`. Raised d
 
 ### CLI.INVALID_RENAME_TABLE_FLAG
 
-A `--rename-table` value given to `migration plan` or `migration new` is not `<from>=<to>` (each side optionally qualified as `<namespace>.<name>`), names the same entity on both sides, or repeats an old or a new name already used by another value on the same command. Nothing is planned or written. Payload: `value`.
+A `--rename-table` value given to `migration plan` or `migration new` is not `<from>=<to>` (each side optionally qualified as `<namespace>.<name>`), names the same entity on both sides, qualifies its two sides with different namespaces (a rename cannot move a table between namespaces), or repeats an old or a new name already used by another value on the same command. Nothing is planned or written. Payload: `value`.
 
 ### CLI.INVALID_VERIFY_MODE
 
@@ -1312,7 +1312,7 @@ The planner would drop table `X` and create table `Y` in the same namespace, whe
 
 ### MIGRATION.TABLE_RENAME_UNMATCHED
 
-A `--rename-table <from>=<to>` intent given to `migration plan` does not match the two contracts being planned: `from` does not exist in the previous contract (or, unqualified, exists in more than one namespace), `to` already exists in the previous contract, `to` does not exist in the next contract, or the two sides name different namespaces. Nothing is planned; reported as a conflict inside `MIGRATION.PLANNING_FAILED`. Check the spelling and the schema qualifier, or drop the flag if the table was not renamed. Payload: `from`, `to`.
+A `--rename-table <from>=<to>` intent given to `migration plan` does not match the two contracts being planned: `from` does not exist in the previous contract (or, unqualified, exists in more than one namespace), `to` already exists in the previous contract, `to` does not exist in the next contract, or the two sides name different namespaces. Nothing is planned; reported as a conflict inside `MIGRATION.PLANNING_FAILED`. `migration new` on SQLite raises it directly when either side carries a namespace qualifier, since SQLite has no namespaces; nothing is written. Check the spelling and the schema qualifier, or drop the flag if the table was not renamed. Payload: `from`, `to`.
 
 ### MIGRATION.TARGET_MISMATCH
 
