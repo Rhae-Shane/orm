@@ -218,8 +218,6 @@ export const pslContractFixtures = {
   ),
   'contract-rls-adopted': join(JOURNEY_FIXTURES_DIR, 'contract-rls-adopted.prisma'),
   'contract-rls-wire': join(JOURNEY_FIXTURES_DIR, 'contract-rls-wire.prisma'),
-  'contract-rename-table-from': join(JOURNEY_FIXTURES_DIR, 'contract-rename-table-from.prisma'),
-  'contract-rename-table-to': join(JOURNEY_FIXTURES_DIR, 'contract-rename-table-to.prisma'),
   'contract-rename-table-objects-from': join(
     JOURNEY_FIXTURES_DIR,
     'contract-rename-table-objects-from.prisma',
