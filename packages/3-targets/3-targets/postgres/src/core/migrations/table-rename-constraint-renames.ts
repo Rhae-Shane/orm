@@ -11,7 +11,7 @@ export interface TableRenameConstraintInput {
   readonly schemaName: string;
   readonly from: string;
   readonly to: string;
-  /** The renamed table as the previous contract describes it once every stated rename is applied. */
+  /** The renamed table as the start contract describes it, under its new name. */
   readonly previous: PostgresTableSchemaNode;
   readonly next: PostgresTableSchemaNode;
 }
@@ -25,7 +25,7 @@ function unchangedIn<TNode extends DiffableNode>(
 }
 
 /**
- * The constraint renames that follow a table rename. A primary key, unique constraint or foreign key the previous contract left unnamed carries a name the planner derived from the old table name. When the next contract keeps the same constraint, it is renamed to the name the next contract gives it explicitly, or otherwise to the name the planner now derives from the new table name. When the constraint changed, it is renamed to the derived name, which is the name the diff's drop of it uses. A constraint the previous contract named keeps its name. Indexes and checks are not handled here: their wire names pair by content hash in the ordinary rename passes.
+ * The constraint renames that follow a table rename. A primary key, unique constraint or foreign key the start contract left unnamed carries a name derived from the old table name. When the end contract keeps the same constraint unchanged, it is renamed to the name the end contract gives it explicitly, or otherwise to the name derived from the new table name. A constraint the end contract changes is not renamed, so it keeps its name in the database. A constraint the start contract named keeps its name. Indexes and checks are not handled here: their wire names pair by content hash in the index and check rename passes.
  */
 export function constraintRenamesForTableRename(
   input: TableRenameConstraintInput,
@@ -37,7 +37,8 @@ export function constraintRenamesForTableRename(
     unchanged: { readonly name?: string } | undefined,
     derivedName: string,
   ): readonly RenameConstraintCall[] => {
-    const newName = unchanged?.name ?? derivedName;
+    if (unchanged === undefined) return [];
+    const newName = unchanged.name ?? derivedName;
     return oldName === newName
       ? []
       : [new RenameConstraintCall(schemaName, to, kind, oldName, newName)];

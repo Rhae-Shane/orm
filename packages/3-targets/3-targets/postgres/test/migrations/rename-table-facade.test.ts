@@ -1,5 +1,5 @@
 /**
- * `this.renameTable` in a hand-written Postgres migration. It reads the migration's start and end contracts and emits the table rename, then a rename of each object on the table whose name the planner derived from the old table name: unnamed primary keys, unique constraints and foreign keys, and wire-named indexes and checks. A constraint the end contract changes takes the name derived from the new table name. Explicitly named objects keep their names. A table missing from either contract is refused.
+ * `this.renameTable` in a hand-written Postgres migration. It reads the migration's start and end contracts and emits the table rename, then a rename of each object on the table whose name the planner derived from the old table name: unnamed primary keys, unique constraints and foreign keys, and wire-named indexes and checks. Only objects the end contract leaves otherwise unchanged are renamed; a constraint the end contract also changes keeps its name. Explicitly named objects keep their names. A table missing from either contract is refused.
  */
 
 import { type Contract, coreHash, profileHash } from '@internal/contract/types';
@@ -195,7 +195,7 @@ describe('PostgresMigration.renameTable', () => {
     ]);
   });
 
-  it('renames a constraint the end contract changes to the name derived from the new table', async () => {
+  it('leaves a foreign key the end contract points at another table under its current name', async () => {
     const memberTable = () => ({
       member: new StorageTable({
         columns: { id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false } },
@@ -228,22 +228,16 @@ describe('PostgresMigration.renameTable', () => {
       ),
     );
 
-    expect(ops.map((op) => op.label)).toEqual([
-      'Rename table "userProfile" to "UserProfile"',
-      'Rename foreign key "userProfile_accountId_fkey" to "UserProfile_accountId_fkey" on "UserProfile"',
-    ]);
+    expect(ops.map((op) => op.label)).toEqual(['Rename table "userProfile" to "UserProfile"']);
   });
 
-  it('renames a primary key whose columns the end contract changes to the name derived from the new table', async () => {
+  it('leaves a primary key whose columns the end contract changes under its current name', async () => {
     expect(
       await renameLabels(
         { primaryKey: { columns: ['id'] } },
         { primaryKey: { columns: ['id', 'email'], name: 'profile_pk' } },
       ),
-    ).toEqual([
-      'Rename table "userProfile" to "UserProfile"',
-      'Rename primary key "userProfile_pkey" to "UserProfile_pkey" on "UserProfile"',
-    ]);
+    ).toEqual(['Rename table "userProfile" to "UserProfile"']);
   });
 
   it('leaves explicitly named objects alone', async () => {

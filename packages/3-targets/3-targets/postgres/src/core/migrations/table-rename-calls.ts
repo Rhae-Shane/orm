@@ -44,7 +44,7 @@ function renamedTableNode(
 }
 
 /**
- * The calls a migration's `renameTable` emits: the table rename, then a rename of each primary key, unique constraint and foreign key the start contract left unnamed, and of each wire-named index and check whose prefix derives from the table name. A constraint takes the end contract's explicit name only when the end contract leaves it otherwise unchanged. Throws `MIGRATION.TABLE_RENAME_UNMATCHED` when the start contract lacks the table or the end contract lacks the new name.
+ * The calls a migration's `renameTable` emits: the table rename, then a rename of each primary key, unique constraint and foreign key the start contract left unnamed, and of each wire-named index and check whose prefix derives from the table name. Only objects the end contract leaves otherwise unchanged are renamed; an unchanged constraint takes the end contract's explicit name if it has one. Throws `MIGRATION.TABLE_RENAME_UNMATCHED` when the start contract lacks the table or the end contract lacks the new name.
  */
 export function postgresTableRenameCalls(input: {
   readonly startContract: Contract<SqlStorage> | null;
