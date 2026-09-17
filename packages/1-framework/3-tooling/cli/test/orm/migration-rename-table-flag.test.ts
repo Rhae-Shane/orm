@@ -31,6 +31,7 @@ vi.mock('../../src/control-api/operations/migration-new', async (importOriginal)
   return { ...actual, executeMigrationNewCommand: mocks.executeMigrationNewCommand };
 });
 
+vi.resetModules();
 const { BIN_GROUPS, createBinCommands } = await import('../../src/orm/cli');
 
 const commands = createBinCommands(() => ({}) as unknown as ControlClient);
@@ -45,6 +46,9 @@ afterAll(() => {
   for (const dir of projectDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
   }
+  vi.doUnmock('../../src/control-api/operations/migration-plan');
+  vi.doUnmock('../../src/control-api/operations/migration-new');
+  vi.resetModules();
 });
 
 beforeEach(() => {
