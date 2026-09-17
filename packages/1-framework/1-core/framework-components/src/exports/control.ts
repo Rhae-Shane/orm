@@ -139,8 +139,13 @@ export type {
   MutationDefaultGeneratorDescriptor,
   SourceDiagnostic,
   SourceSpan,
+  TaggedLiteralValue,
   TypedDefaultFunctionCall,
-  TypedDefaultLiteral,
 } from '../shared/mutation-default-types';
 export type { TaggedLiteralCanonicalization } from '../shared/tagged-literal';
-export { canonicalizeTaggedLiteralBody, TAGGED_LITERAL_MAX_BYTES } from '../shared/tagged-literal';
+export {
+  canonicalizeTaggedLiteralBody,
+  describeTaggedLiteralFailure,
+  resolveBacktickEscapes,
+  TAGGED_LITERAL_MAX_BYTES,
+} from '../shared/tagged-literal';

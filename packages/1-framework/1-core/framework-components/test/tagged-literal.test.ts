@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { canonicalizeTaggedLiteralBody } from '../src/shared/tagged-literal';
+import {
+  canonicalizeTaggedLiteralBody,
+  describeTaggedLiteralFailure,
+  resolveBacktickEscapes,
+  TAGGED_LITERAL_MAX_BYTES,
+} from '../src/shared/tagged-literal';
 
 const MAX_BYTES = 65536;
 
@@ -88,5 +93,32 @@ describe('canonicalizeTaggedLiteralBody', () => {
       ok: true,
       body: 'a'.repeat(MAX_BYTES),
     });
+  });
+});
+
+describe('resolveBacktickEscapes', () => {
+  it.each([
+    ['an escaped backtick', 'a\\`b', 'a`b'],
+    ['an escaped backslash', 'a\\\\b', 'a\\b'],
+    ['an escaped dollar', '\\$1', '$1'],
+    ['any other backslash sequence kept as written', "E'\\n'", "E'\\n'"],
+    ['a Windows path', "'C:\\users'", "'C:\\users'"],
+    ['a trailing backslash', 'a\\', 'a\\'],
+  ])('resolves %s', (_name, raw, resolved) => {
+    expect(resolveBacktickEscapes(raw)).toBe(resolved);
+  });
+});
+
+describe('describeTaggedLiteralFailure', () => {
+  it('names each reason with the message the combinator reports', () => {
+    expect(describeTaggedLiteralFailure('interpolation')).toBe(
+      'Tagged literals do not support $' + '{...} interpolation.',
+    );
+    expect(describeTaggedLiteralFailure('nul')).toBe(
+      'Tagged literals must not contain NUL characters.',
+    );
+    expect(describeTaggedLiteralFailure('too-large')).toBe(
+      `Tagged literal exceeds ${TAGGED_LITERAL_MAX_BYTES} bytes.`,
+    );
   });
 });

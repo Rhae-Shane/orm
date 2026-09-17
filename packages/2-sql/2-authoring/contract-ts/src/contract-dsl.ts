@@ -318,7 +318,7 @@ export class ScalarFieldBuilder<State extends AnyScalarFieldState = AnyScalarFie
   }
 
   /**
-   * @deprecated Write `.default(sql`...`)`, or `.default(now())` / `.default(autoincrement())` / `.default(genRandomUuid())` for a named function. Removed in 8.0.0.
+   * @deprecated Write `` .default(sql`...`) ``, or `.default(now())` / `.default(autoincrement())` / `.default(genRandomUuid())` for a named function. Removed in 8.0.0.
    */
   defaultSql(expression: string): ScalarFieldBuilder<State> {
     return new ScalarFieldBuilder({

@@ -81,20 +81,20 @@ export interface ControlMutationDefaultEntry {
 
 export type ControlMutationDefaultRegistry = ReadonlyMap<string, ControlMutationDefaultEntry>;
 
-/** A `tag`body`` default literal as the attribute spec accepted it: tag, canonical body, and span. */
-export interface TypedDefaultLiteral {
+/** A `` tag`body` `` default literal as the attribute spec accepted it: tag, canonical body, and span. */
+export interface TaggedLiteralValue {
   readonly tag: string;
   readonly body: string;
   readonly span: SourceSpan;
 }
 
 export interface ControlDefaultLiteralTagEntry {
-  /** How the tag is written, for messages: `sql`...``. */
+  /** How the tag is written, for messages: `` sql`...` ``. */
   readonly usage: string;
   /** What the literal does, shown as signature help. */
   readonly documentation: string;
   readonly lower: (input: {
-    readonly literal: TypedDefaultLiteral;
+    readonly literal: TaggedLiteralValue;
     readonly context: DefaultFunctionLoweringContext;
   }) => LoweredDefaultResult;
 }

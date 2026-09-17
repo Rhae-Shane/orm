@@ -18,6 +18,7 @@ export const contract = defineContract({
         createdAt: field.column(timestamptzTemporalColumn).default(sql`now()`),
         tags: field.column(textColumn).many().default(sql`'{}'::text[]`),
         ident: field.column(textColumn).default(genRandomUuid()),
+        escaped: field.column(textColumn).default(sql`E'\n'`),
       },
     }).sql({ table: 't' }),
   },

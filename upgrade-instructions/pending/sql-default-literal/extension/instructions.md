@@ -1,0 +1,49 @@
+---
+changes:
+  - id: default-sql-replaces-default-sql-method
+    summary: |
+      `.defaultSql('...')` on the TypeScript contract builder is deprecated and is removed in 8.0.0.
+      Rewrite each call to `.default(...)` with a named helper or the `sql` template tag.
+    detection:
+      glob: "**/*.{ts,mts,cts}"
+      matches:
+        - '\\.defaultSql\\('
+  - id: control-mutation-defaults-require-literal-tag-registry
+    summary: |
+      `ControlMutationDefaults.defaultLiteralTagRegistry` is required on every pack's
+      `controlMutationDefaults`; add `defaultLiteralTagRegistry: new Map()` or register tags. An
+      attribute spec context's `controlMutationDefaults` now carries both registries.
+    detection:
+      glob: "**/*.{ts,mts,cts}"
+      contains:
+        - "defaultFunctionRegistry"
+---
+
+## `default-sql-replaces-default-sql-method`
+
+Rewrite every `.defaultSql('<expression>')` call by its expression:
+
+| Call | Replacement | Import |
+| --- | --- | --- |
+| `.defaultSql('now()')` | `.default(now())` | `now` from `@internal/sql-contract-ts/contract-builder` |
+| `.defaultSql('autoincrement()')` | `.default(autoincrement())` | `autoincrement` from `@internal/sql-contract-ts/contract-builder` |
+| `.defaultSql('gen_random_uuid()')` | `.default(genRandomUuid())` | `genRandomUuid` from `@internal/postgres/contract-builder` |
+| `.defaultSql('<anything else>')` | `` .default(sql`<anything else>`) `` | `sql` from `@internal/sql-contract-ts/contract-builder` |
+
+`sql` takes no interpolation. Every form lowers to the same `{ kind: 'function', expression }` default, so emitted contracts do not change. In PSL, write `` @default(sql`...`) `` (or `@default(sql"...")`) instead of `@default(dbgenerated("..."))`, and `@default(gen_random_uuid())` on Postgres; `dbgenerated` still works in this release.
+
+## `control-mutation-defaults-require-literal-tag-registry`
+
+`defaultLiteralTagRegistry` is a required member of `ControlMutationDefaults`. A pack whose descriptor contributes `controlMutationDefaults` fails to type-check, and fails at control-stack assembly, until it adds the member. The one-line fix keeps the pack's behaviour:
+
+```ts
+controlMutationDefaults: {
+  defaultFunctionRegistry: createMyDefaultFunctionRegistry(),
+  defaultLiteralTagRegistry: new Map(),
+  generatorDescriptors: createMyGeneratorDescriptors(),
+},
+```
+
+To register tags instead, map a prefixed tag (`mypack.sql`; the unprefixed `sql` belongs to the SQL targets) to a `ControlDefaultLiteralTagEntry`: `usage` (how the tag is written, for messages), `documentation`, and `lower({ literal, context })`, which receives the tag, the canonical body, and the span of a `@default` tagged literal and returns a `LoweredDefaultResult` like a default-function entry does. Two packs registering the same tag is an assembly error.
+
+Code that builds an `AttributeSpecContext` or `FieldAttributeSpecContext` by hand used to pass the default-function registry as `controlMutationDefaults`; pass an object with both registries instead (`{ defaultFunctionRegistry, defaultLiteralTagRegistry }`, or the stack's whole `controlMutationDefaults`).

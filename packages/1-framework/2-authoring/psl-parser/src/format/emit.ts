@@ -104,7 +104,7 @@ class LineWriter {
   }
 }
 
-/** Nodes whose tokens are written with no space between them: dotted names and `tag`body``. */
+/** Nodes whose tokens are written with no space between them: dotted names and `` tag`body` ``. */
 function hugsTokens(kind: SyntaxKind): boolean {
   return kind === 'QualifiedName' || kind === 'TaggedLiteral';
 }

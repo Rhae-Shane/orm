@@ -4,7 +4,7 @@ import type {
 } from '@internal/framework-components/control';
 import { checkSqlDefaultBody } from '@internal/sql-contract/validators';
 
-/** The `sql`...`` default literal every SQL target registers: the canonical body becomes the expression verbatim. */
+/** The `` sql`...` `` default literal every SQL target registers: the canonical body becomes the expression verbatim. */
 export function sqlDefaultLiteralTagEntry(usage: string): ControlDefaultLiteralTagEntry {
   return {
     usage,

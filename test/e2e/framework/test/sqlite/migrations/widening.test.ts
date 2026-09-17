@@ -127,6 +127,29 @@ describe('SQLite Migration E2E - Widening operations (recreate-table)', () => {
     );
   });
 
+  it.each([
+    ['sql`CURRENT_TIMESTAMP`', sql`CURRENT_TIMESTAMP`],
+    ["sql`'x'`", sql`'x'`],
+  ])('plans no operation once %s has been applied', async (_label, columnDefault) => {
+    const contract = defineContract({
+      models: {
+        User: model('User', {
+          fields: {
+            id: int.id(),
+            name: text,
+            createdAt: field.column(datetimeColumn).default(columnDefault),
+          },
+        }),
+      },
+    });
+    await applyMigration(
+      { origin: contract, destination: contract },
+      async ({ plannedOperationIds }) => {
+        expect(plannedOperationIds).toEqual([]);
+      },
+    );
+  });
+
   it('round-trips a string default with an apostrophe through recreate-table', async () => {
     await applyMigration(
       {

@@ -1,3 +1,4 @@
+import type { TaggedLiteralValue } from '@internal/framework-components/control';
 import type { PslDiagnostic, PslSpan } from '@internal/framework-components/psl-ast';
 import type { Result } from '@internal/utils/result';
 import type { Simplify, UnionToIntersection } from '@internal/utils/types';
@@ -181,12 +182,6 @@ export type StrArgType<
   T extends string = string,
   Ctx extends AttributeCtx = AttributeCtx,
 > = string extends T ? UnrestrictedStrArgType<Ctx> : FixedStrArgType<T, Ctx>;
-
-export interface TaggedLiteralValue {
-  readonly tag: string;
-  readonly body: string;
-  readonly span: PslSpan;
-}
 
 export interface TaggedLiteralArgType<Ctx extends AttributeCtx = AttributeCtx>
   extends ArgTypeOutput<TaggedLiteralValue, Ctx> {

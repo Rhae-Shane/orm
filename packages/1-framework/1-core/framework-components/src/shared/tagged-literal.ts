@@ -12,6 +12,44 @@ export type TaggedLiteralCanonicalization =
 
 export const TAGGED_LITERAL_MAX_BYTES = 65536;
 
+/** The message a tagged literal's canonicalization failure is reported with, in PSL and in TypeScript. */
+export function describeTaggedLiteralFailure(
+  reason: 'interpolation' | 'nul' | 'too-large',
+): string {
+  switch (reason) {
+    case 'interpolation':
+      return 'Tagged literals do not support $' + '{...} interpolation.';
+    case 'nul':
+      return 'Tagged literals must not contain NUL characters.';
+    case 'too-large':
+      return `Tagged literal exceeds ${TAGGED_LITERAL_MAX_BYTES} bytes.`;
+  }
+}
+
+const BACKTICK_ESCAPES: ReadonlySet<string> = new Set(['`', '\\', '$']);
+
+/**
+ * Resolves the escapes a backtick fence understands, in PSL and in the TypeScript `sql` tag's raw
+ * text: `` \` `` is a backtick, `\\` one backslash, `\$` a dollar sign. Every other backslash
+ * sequence is kept as written, both characters, so a SQL body may contain `E'\n'` unchanged.
+ */
+export function resolveBacktickEscapes(raw: string): string {
+  let out = '';
+  let i = 0;
+  while (i < raw.length) {
+    const ch = raw.charAt(i);
+    const next = raw.charAt(i + 1);
+    if (ch === '\\' && BACKTICK_ESCAPES.has(next)) {
+      out += next;
+      i += 2;
+      continue;
+    }
+    out += ch;
+    i++;
+  }
+  return out;
+}
+
 const BLANK_LINE = /^[ \t]*$/;
 const LEADING_INDENT = /^[ \t]*/;
 const LINE_BREAK = /\r\n|\r|\n/g;

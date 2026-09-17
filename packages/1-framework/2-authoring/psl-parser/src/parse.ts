@@ -331,7 +331,7 @@ function taggedLiteralFenceIndex(cursor: Cursor): number | undefined {
 }
 
 /**
- * Parses `tag`body`` or `tag"body"`. Trivia between the tag and the fence is
+ * Parses `` tag`body` `` or `tag"body"`. Trivia between the tag and the fence is
  * consumed into the node and reported at the last tag segment, so the rest of
  * the line still parses.
  */

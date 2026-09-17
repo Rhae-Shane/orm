@@ -47,13 +47,25 @@ describe('sql template tag', () => {
     );
   });
 
-  it('rejects a cooked body containing ${, like PSL rejects \\${', () => {
+  it('rejects a body containing ${ with the message PSL uses, and \\${ is no escape', () => {
     expect(() => sql`\${x}`).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.DEFAULT_INVALID',
-        message: 'sql`...` default rejected: the body contains `$' + '{`.',
+        message: 'Tagged literals do not support $' + '{...} interpolation.',
       }),
     );
+  });
+
+  it('reads the raw text: JavaScript escapes are not interpreted', () => {
+    expect(sql`'\d+'`).toEqual({ kind: 'function', expression: "'\\d+'" });
+    expect(sql`E'\n'`).toEqual({ kind: 'function', expression: "E'\\n'" });
+    expect(sql`'C:\users'`).toEqual({ kind: 'function', expression: "'C:\\users'" });
+  });
+
+  it('resolves exactly the three backtick escapes PSL resolves', () => {
+    expect(sql`\``).toEqual({ kind: 'function', expression: '`' });
+    expect(sql`\$1`).toEqual({ kind: 'function', expression: '$1' });
+    expect(sql`a\\b`).toEqual({ kind: 'function', expression: 'a\\b' });
   });
 
   it('rejects a body the SQL check refuses with CONTRACT.DEFAULT_INVALID', () => {

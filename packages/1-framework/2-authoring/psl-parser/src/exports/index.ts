@@ -1,3 +1,4 @@
+export type { TaggedLiteralValue } from '@internal/framework-components/control';
 export type {
   PslAttribute,
   PslAttributeArgument,
@@ -89,7 +90,6 @@ export type {
   PosOut,
   RejectingArgType,
   TaggedLiteralArgType,
-  TaggedLiteralValue,
   TypedFuncCall,
 } from '../attribute-spec/types';
 export { findBlockDescriptor, validateExtensionBlockFromSymbol } from '../extension-block';

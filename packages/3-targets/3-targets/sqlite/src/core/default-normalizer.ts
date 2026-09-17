@@ -93,7 +93,7 @@ export function parseSqliteDefault(
 
 /**
  * The contract-derived side of verify: an authored function default is read
- * through the same parser as an introspected one, so `sql`CURRENT_TIMESTAMP``
+ * through the same parser as an introspected one, so `` sql`CURRENT_TIMESTAMP` ``
  * and the database's `CURRENT_TIMESTAMP` compare equal. Mirrors Postgres's
  * `postgresResolveDefault`.
  */

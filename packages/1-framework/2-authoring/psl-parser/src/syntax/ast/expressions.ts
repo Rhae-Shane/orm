@@ -1,5 +1,8 @@
 import type { TaggedLiteralCanonicalization } from '@internal/framework-components/control';
-import { canonicalizeTaggedLiteralBody } from '@internal/framework-components/control';
+import {
+  canonicalizeTaggedLiteralBody,
+  resolveBacktickEscapes,
+} from '@internal/framework-components/control';
 import { isTerminatedStringLiteral } from '../../tokenizer';
 import type { AstNode } from '../ast-helpers';
 import { filterChildren, findChildToken, findFirstChild } from '../ast-helpers';
@@ -175,32 +178,13 @@ export class StringLiteralExprAst implements AstNode {
 
 export type TaggedLiteralFence = 'backtick' | 'quote';
 
-const BACKTICK_ESCAPES: ReadonlySet<string> = new Set(['`', '\\', '$']);
-
-function resolveBacktickEscapes(raw: string): string {
-  let out = '';
-  let i = 0;
-  while (i < raw.length) {
-    const ch = raw.charAt(i);
-    const next = raw.charAt(i + 1);
-    if (ch === '\\' && BACKTICK_ESCAPES.has(next)) {
-      out += next;
-      i += 2;
-      continue;
-    }
-    out += ch;
-    i++;
-  }
-  return out;
-}
-
 function isTerminatedFence(text: string): boolean {
   if (text.startsWith('`')) return text.length >= 2 && text.endsWith('`');
   return isTerminatedStringLiteral(text);
 }
 
 /**
- * `tag`body`` or `tag"body"`. The tag is one or more identifiers joined by
+ * `` tag`body` `` or `tag"body"`. The tag is one or more identifiers joined by
  * dots; the fence token holds the body with its fences. `body()` is the
  * canonical text shared with the TypeScript `sql` tag.
  */

@@ -52,7 +52,10 @@ function columnLike(
           >(column.codecRef.typeParams),
         }
       : {}),
-    ...(column.resolvedDefault !== undefined ? { default: column.resolvedDefault } : {}),
+    // DDL writes the default as authored; `resolvedDefault` exists for the diff comparison only.
+    ...((column.authoredDefault ?? column.resolvedDefault) !== undefined
+      ? { default: column.authoredDefault ?? column.resolvedDefault }
+      : {}),
   };
 }
 

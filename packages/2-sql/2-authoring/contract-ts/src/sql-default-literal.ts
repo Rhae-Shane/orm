@@ -1,18 +1,17 @@
 import type { ColumnDefault } from '@internal/contract/types';
-import { canonicalizeTaggedLiteralBody } from '@internal/framework-components/control';
+import {
+  canonicalizeTaggedLiteralBody,
+  describeTaggedLiteralFailure,
+  resolveBacktickEscapes,
+} from '@internal/framework-components/control';
 import { checkSqlDefaultBody } from '@internal/sql-contract/validators';
 import { contractError } from './contract-errors';
 
-const CANONICALIZATION_FAILURES = {
-  interpolation: 'the body contains `${`',
-  nul: 'the body contains a NUL character',
-  'too-large': 'the body exceeds 65536 bytes',
-} as const;
-
 /**
- * A raw SQL column default written as a template literal: `sql`gen_random_uuid()``. The body is
- * canonicalized the way PSL canonicalizes `@default(sql`...`)` and then used verbatim as the
- * default expression. Interpolation is not supported.
+ * A raw SQL column default written as a template literal: `` sql`gen_random_uuid()` ``. The raw
+ * text between the backticks is read the way PSL reads a backtick fence (`` \` ``, `\\`, and `\$`
+ * are the only escapes), canonicalized the same way, and used verbatim as the default expression.
+ * Interpolation is not supported.
  */
 export function sql(strings: TemplateStringsArray, ...values: readonly never[]): ColumnDefault {
   if (values.length > 0) {
@@ -22,12 +21,14 @@ export function sql(strings: TemplateStringsArray, ...values: readonly never[]):
       { meta: { interpolations: values.length } },
     );
   }
-  const canonical = canonicalizeTaggedLiteralBody(strings.join(''));
+  const canonical = canonicalizeTaggedLiteralBody(resolveBacktickEscapes(strings.raw.join('')));
   if (!canonical.ok) {
     throw contractError(
       'CONTRACT.DEFAULT_INVALID',
-      `sql\`...\` default rejected: ${CANONICALIZATION_FAILURES[canonical.reason]}.`,
-      { meta: { reason: canonical.reason, offset: canonical.offset } },
+      describeTaggedLiteralFailure(canonical.reason),
+      {
+        meta: { reason: canonical.reason, offset: canonical.offset },
+      },
     );
   }
   const rejected = checkSqlDefaultBody(canonical.body);

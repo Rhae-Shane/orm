@@ -22,6 +22,13 @@
                   "kind": "scalar"
                 }
               },
+              "escaped": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
               "expires": {
                 "nullable": false,
                 "type": {
@@ -57,6 +64,9 @@
               "fields": {
                 "createdAt": {
                   "column": "createdAt"
+                },
+                "escaped": {
+                  "column": "escaped"
                 },
                 "expires": {
                   "column": "expires"
@@ -100,6 +110,15 @@
                     "kind": "function"
                   },
                   "nativeType": "timestamptz",
+                  "nullable": false
+                },
+                "escaped": {
+                  "codecId": "pg/text@1",
+                  "default": {
+                    "expression": "E'\\n'",
+                    "kind": "function"
+                  },
+                  "nativeType": "text",
                   "nullable": false
                 },
                 "expires": {
@@ -152,7 +171,7 @@
         "id": "public"
       }
     },
-    "storageHash": "4650b9f156e24d57b941b0b6d4665c0299577133a69d7fe61e1e004295f19722"
+    "storageHash": "8869a26a6ca442350d2f94735fe3ad48209cf5ac231e881f161b1ef814ebfdae"
   },
   "capabilities": {
     "postgres": {
