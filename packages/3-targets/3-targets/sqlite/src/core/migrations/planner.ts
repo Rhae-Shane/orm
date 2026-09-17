@@ -294,6 +294,8 @@ export class SqliteMigrationPlanner
       namespaceIdOf: () => UNBOUND_NAMESPACE_ID,
       renameByHandStatements: (rename) =>
         renameTableSteps(rename.from, rename.to).map((renameStep) => renameStep.sql),
+      contract: options.contract,
+      defaultNamespaceId: UNBOUND_NAMESPACE_ID,
     });
     if (caseChangeConflicts.length > 0) {
       return plannerFailure(caseChangeConflicts);

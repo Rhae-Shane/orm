@@ -12,16 +12,19 @@
 
 import { type Contract, type ControlPolicy, coreHash, profileHash } from '@internal/contract/types';
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
-import { APP_SPACE_ID } from '@internal/framework-components/control';
+import { APP_SPACE_ID, type StorageEntityRename } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, StorageTable } from '@internal/sql-contract/types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
+import { postgresResolveDefault } from '../../src/core/default-normalizer';
+import { contractToPostgresDatabaseSchemaNode } from '../../src/core/migrations/contract-to-postgres-database-schema-node';
 import { createPostgresMigrationPlanner } from '../../src/core/migrations/planner';
-import { postgresCreateNamespace } from '../../src/core/postgres-schema';
+import { type PostgresContract, postgresCreateNamespace } from '../../src/core/postgres-schema';
 import { PostgresDatabaseSchemaNode } from '../../src/core/schema-ir/postgres-database-schema-node';
 import { PostgresNamespaceSchemaNode } from '../../src/core/schema-ir/postgres-namespace-schema-node';
 import { PostgresTableSchemaNode } from '../../src/core/schema-ir/postgres-table-schema-node';
+import { postgresRenderDefault } from '../../src/exports/control';
 
 const stubLowerer: ExecuteRequestLowerer = {
   lower(_ast, _ctx) {
@@ -242,5 +245,128 @@ describe('Postgres planner table-name case guard', () => {
     const ids = ops.map((op) => op.id);
     expect(ids).toContain('dropTable.userProfile');
     expect(ids).toContain('table.Accounts');
+  });
+});
+
+function namespacedContract(
+  tablesByNamespace: Readonly<Record<string, string>>,
+  hashSeed: string,
+): PostgresContract {
+  return {
+    target: 'postgres',
+    targetFamily: 'sql',
+    profileHash: profileHash(hashSeed),
+    storage: new SqlStorage({
+      storageHash: coreHash(hashSeed),
+      namespaces: Object.fromEntries(
+        Object.entries(tablesByNamespace).map(([namespaceId, tableName]) => [
+          namespaceId,
+          postgresCreateNamespace({
+            id: namespaceId,
+            entries: {
+              table: { [tableName]: storageTable(undefined, undefined, tableName) },
+              policy: {},
+            },
+          }),
+        ]),
+      ),
+    }),
+    roots: {},
+    domain: applicationDomainOf({ models: {} }),
+    capabilities: {},
+    extensions: {},
+    meta: {},
+  };
+}
+
+function planMigration(
+  from: PostgresContract,
+  to: PostgresContract,
+  renames: readonly StorageEntityRename[] = [],
+) {
+  return createPostgresMigrationPlanner(stubLowerer).plan({
+    contract: to,
+    schema: contractToPostgresDatabaseSchemaNode(from, {
+      annotationNamespace: 'pg',
+      renderDefault: postgresRenderDefault,
+      resolveDefault: postgresResolveDefault,
+    }),
+    policy: DESTRUCTIVE_POLICY,
+    fromContract: from,
+    frameworkComponents: [],
+    spaceId: APP_SPACE_ID,
+    snapshotsImportPath: '../../snapshots',
+    ...(renames.length === 0 ? {} : { renames }),
+  });
+}
+
+function suggestedRenameFlag(why: string | undefined): string | undefined {
+  return /prisma migration plan --rename "([^"]+)"/.exec(why ?? '')?.[1];
+}
+
+function coordinate(side: string): StorageEntityRename['from'] {
+  const dot = side.indexOf('.');
+  return dot === -1
+    ? { name: side }
+    : { namespaceId: side.slice(0, dot), name: side.slice(dot + 1) };
+}
+
+function renameFromFlag(flag: string): StorageEntityRename {
+  const [from = '', to = ''] = flag.split('=');
+  return { from: coordinate(from), to: coordinate(to) };
+}
+
+describe('the --rename the Postgres case guard suggests', () => {
+  async function planWithSuggestion(from: PostgresContract, to: PostgresContract) {
+    const refused = planMigration(from, to);
+    expect(refused.kind).toBe('failure');
+    if (refused.kind !== 'failure') throw new Error('the case guard did not refuse');
+    const flag = suggestedRenameFlag(refused.conflicts[0]?.why);
+    if (flag === undefined) throw new Error('the case guard suggested no --rename');
+    const renamed = planMigration(from, to, [renameFromFlag(flag)]);
+    expect(
+      renamed.kind === 'failure' ? renamed.conflicts.map((conflict) => conflict.summary) : [],
+    ).toEqual([]);
+    if (renamed.kind !== 'success') throw new Error('planning with the suggestion failed');
+    const statements = (await Promise.all(renamed.plan.operations)).map((op) =>
+      op.execute.map((step) => step.sql),
+    );
+    return { flag, statements };
+  }
+
+  it('names the namespace when another namespace declares the old table name, and planning with it renames the table', async () => {
+    const result = await planWithSuggestion(
+      namespacedContract({ public: 'userProfile', auth: 'userProfile' }, 'two-namespaces-from'),
+      namespacedContract({ public: 'UserProfile', auth: 'userProfile' }, 'two-namespaces-to'),
+    );
+
+    expect(result).toEqual({
+      flag: 'public.userProfile=public.UserProfile',
+      statements: [['ALTER TABLE "public"."userProfile" RENAME TO "UserProfile"']],
+    });
+  });
+
+  it('names the namespace when the table is not in the default namespace', async () => {
+    const result = await planWithSuggestion(
+      namespacedContract({ auth: 'userProfile' }, 'auth-from'),
+      namespacedContract({ auth: 'UserProfile' }, 'auth-to'),
+    );
+
+    expect(result).toEqual({
+      flag: 'auth.userProfile=auth.UserProfile',
+      statements: [['ALTER TABLE "auth"."userProfile" RENAME TO "UserProfile"']],
+    });
+  });
+
+  it('stays unqualified for a table of the default namespace whose name no other namespace declares', async () => {
+    const result = await planWithSuggestion(
+      namespacedContract({ public: 'userProfile', auth: 'account' }, 'public-from'),
+      namespacedContract({ public: 'UserProfile', auth: 'account' }, 'public-to'),
+    );
+
+    expect(result).toEqual({
+      flag: 'userProfile=UserProfile',
+      statements: [['ALTER TABLE "public"."userProfile" RENAME TO "UserProfile"']],
+    });
   });
 });

@@ -39,6 +39,7 @@ import { assertDefined } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
+import { DEFAULT_NAMESPACE_ID } from '../namespace-ids';
 import { PostgresRlsPolicy } from '../postgres-rls-policy';
 import { postgresNodeStorageCoordinate } from '../schema-ir/node-storage-coordinate';
 import { PostgresDatabaseSchemaNode } from '../schema-ir/postgres-database-schema-node';
@@ -460,6 +461,8 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
           rename.to,
         ),
       ],
+      contract: options.contract,
+      defaultNamespaceId: DEFAULT_NAMESPACE_ID,
     });
     if (caseChangeConflicts.length > 0) {
       return plannerFailure(caseChangeConflicts);
