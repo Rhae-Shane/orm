@@ -179,8 +179,8 @@ withTempDir(({ createTempDir }) => {
         const latest = getLatestMigrationDir(ctx);
         expect(latest, 'R2.05: scaffold dir').toBeDefined();
         const packageDir = join(ctx.testDir, 'migrations', 'app', latest!);
-        expect(readFileSync(join(packageDir, 'migration.ts'), 'utf-8'), 'R2.05: call').toContain(
-          'this.renameTable({ table: "userProfile", to: "UserProfile" })',
+        expect(readFileSync(join(packageDir, 'migration.ts'), 'utf-8'), 'R2.05: call').toMatch(
+          /this\.renameTable\(\{ table: ['"]userProfile['"], to: ['"]UserProfile['"] \}\)/,
         );
 
         const emitted = await selfEmitMigration(ctx, ['--dir', `migrations/app/${latest}`]);

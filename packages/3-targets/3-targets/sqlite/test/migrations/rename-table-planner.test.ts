@@ -120,7 +120,8 @@ describe('SQLite planner rename-table intents', () => {
     const ops = await Promise.all(result.plan.operations);
     expect(ops.map((op) => op.id)).toEqual(['renameTable.userProfile']);
     expect(ops[0]?.execute.map((step) => step.sql)).toEqual([
-      'ALTER TABLE "userProfile" RENAME TO "UserProfile"',
+      'ALTER TABLE "userProfile" RENAME TO "_prisma_rename_UserProfile"',
+      'ALTER TABLE "_prisma_rename_UserProfile" RENAME TO "UserProfile"',
     ]);
     expect(ops[0]?.operationClass).toBe('widening');
     expect(result.plan.describe()).toEqual({

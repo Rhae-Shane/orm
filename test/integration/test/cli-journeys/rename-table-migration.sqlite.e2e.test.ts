@@ -146,9 +146,7 @@ withTempDir(({ createTempDir }) => {
           join(ctx.testDir, 'migrations', 'app', getMigrationDirs(ctx).at(-1)!, 'ops.json'),
           'utf-8',
         );
-        expect(opsJson, 'R3.07: rendered SQL').toContain(
-          'ALTER TABLE \\"userProfile\\" RENAME TO \\"UserProfile\\"',
-        );
+        expect(opsJson, 'R3.07: rendered SQL').toContain('RENAME TO \\"UserProfile\\"');
 
         const apply = await runMigrate(ctx);
         expect(apply.exitCode, `R3.08: migrate: ${apply.stderr}`).toBe(0);

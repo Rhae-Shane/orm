@@ -305,14 +305,39 @@ export class RenameTableCall extends SqliteOpFactoryCallNode {
         step(`ensure table "${this.oldTableName}" exists`, from.sql, from.params),
         step(`ensure table "${this.tableName}" does not exist`, toAbsent.sql, toAbsent.params),
       ],
-      execute: [
-        step(
-          `rename table "${this.oldTableName}" to "${this.tableName}"`,
-          `ALTER TABLE ${quoteIdentifier(this.oldTableName)} RENAME TO ${quoteIdentifier(this.tableName)}`,
-        ),
-      ],
+      execute: this.executeSteps(),
       postcheck: [step(`verify table "${this.tableName}" exists`, toPresent.sql, toPresent.params)],
     };
+  }
+
+  /**
+   * SQLite compares table names case-insensitively, so a rename that only
+   * changes case (`userProfile` to `UserProfile`) is refused as "already
+   * exists" when done in one statement. It goes through a temporary name.
+   */
+  private executeSteps(): Op['execute'] {
+    const from = quoteIdentifier(this.oldTableName);
+    const to = quoteIdentifier(this.tableName);
+    if (this.oldTableName.toLowerCase() !== this.tableName.toLowerCase()) {
+      return [
+        step(
+          `rename table "${this.oldTableName}" to "${this.tableName}"`,
+          `ALTER TABLE ${from} RENAME TO ${to}`,
+        ),
+      ];
+    }
+    const viaName = `_prisma_rename_${this.tableName}`;
+    const via = quoteIdentifier(viaName);
+    return [
+      step(
+        `rename table "${this.oldTableName}" to "${viaName}" (SQLite table names are case-insensitive)`,
+        `ALTER TABLE ${from} RENAME TO ${via}`,
+      ),
+      step(
+        `rename table "${viaName}" to "${this.tableName}"`,
+        `ALTER TABLE ${via} RENAME TO ${to}`,
+      ),
+    ];
   }
 
   renderTypeScript(): string {

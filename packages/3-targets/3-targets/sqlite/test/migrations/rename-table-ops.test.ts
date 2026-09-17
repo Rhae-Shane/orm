@@ -33,40 +33,43 @@ describe('RenameTableCall (sqlite)', () => {
 
   it('renders ALTER TABLE ... RENAME TO with existence prechecks and a postcheck', async () => {
     const { lowerer, received } = recordingCheckLowerer();
-    const op = await new RenameTableCall('userProfile', 'UserProfile').toOp(lowerer);
+    const op = await new RenameTableCall('profile', 'account').toOp(lowerer);
 
     expect(received).toEqual([
-      tableExistsAst('userProfile').tablePresent(),
-      tableExistsAst('UserProfile').tableAbsent(),
-      tableExistsAst('UserProfile').tablePresent(),
+      tableExistsAst('profile').tablePresent(),
+      tableExistsAst('account').tableAbsent(),
+      tableExistsAst('account').tablePresent(),
     ]);
     expect(op).toEqual({
-      id: 'renameTable.userProfile',
-      label: 'Rename table userProfile to UserProfile',
-      summary: 'Renames table userProfile to UserProfile, keeping its rows',
+      id: 'renameTable.profile',
+      label: 'Rename table profile to account',
+      summary: 'Renames table profile to account, keeping its rows',
       operationClass: 'widening',
-      target: {
-        id: 'sqlite',
-        details: { schema: 'main', objectType: 'table', name: 'UserProfile' },
-      },
+      target: { id: 'sqlite', details: { schema: 'main', objectType: 'table', name: 'account' } },
       precheck: [
-        { description: 'ensure table "userProfile" exists', sql: 'LOWERED 1', params: ['p1'] },
-        {
-          description: 'ensure table "UserProfile" does not exist',
-          sql: 'LOWERED 2',
-          params: ['p2'],
-        },
+        { description: 'ensure table "profile" exists', sql: 'LOWERED 1', params: ['p1'] },
+        { description: 'ensure table "account" does not exist', sql: 'LOWERED 2', params: ['p2'] },
       ],
       execute: [
         {
-          description: 'rename table "userProfile" to "UserProfile"',
-          sql: 'ALTER TABLE "userProfile" RENAME TO "UserProfile"',
+          description: 'rename table "profile" to "account"',
+          sql: 'ALTER TABLE "profile" RENAME TO "account"',
         },
       ],
       postcheck: [
-        { description: 'verify table "UserProfile" exists', sql: 'LOWERED 3', params: ['p3'] },
+        { description: 'verify table "account" exists', sql: 'LOWERED 3', params: ['p3'] },
       ],
     });
+  });
+
+  it('renames through a temporary name when only the case changes, which SQLite would otherwise refuse', async () => {
+    const { lowerer } = recordingCheckLowerer();
+    const op = await new RenameTableCall('userProfile', 'UserProfile').toOp(lowerer);
+
+    expect(op.execute.map((step) => step.sql)).toEqual([
+      'ALTER TABLE "userProfile" RENAME TO "_prisma_rename_UserProfile"',
+      'ALTER TABLE "_prisma_rename_UserProfile" RENAME TO "UserProfile"',
+    ]);
   });
 
   it('toOp() without a lowerer reports MIGRATION.SQLITE_CONTROL_STACK_MISSING', async () => {
