@@ -224,6 +224,8 @@ export const pslContractFixtures = {
 
 export type PslContractVariant = keyof typeof pslContractFixtures;
 
+export const sqlitePslConfigFixture = join(JOURNEY_FIXTURES_DIR, 'prisma.config.sqlite.psl.ts');
+
 /**
  * Swaps the active contract in the test directory to a different variant.
  * Copies the variant file over `contract.ts` so the config picks it up on next emit.

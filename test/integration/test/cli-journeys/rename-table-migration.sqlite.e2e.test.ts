@@ -1,11 +1,7 @@
 /**
  * Renaming a table keeps its rows (SQLite).
  *
- * The SQLite twin of `rename-table-migration.e2e.test.ts`: a file database
- * driven through the `@internal/sqlite/config` facade config. Create
- * `userProfile` with rows, drop the `@@map` so the model names
- * `UserProfile`, and confirm that `migration plan --rename-table` plans
- * exactly one rename, applies, keeps the rows, and verifies clean.
+ * The SQLite twin of `rename-table-migration.e2e.test.ts`: a file database driven through the SQLite facade config. Create `userProfile` with rows, drop the `@@map` so the model names `UserProfile`, and confirm that `migration plan --rename-table` plans exactly one rename, applies, keeps the rows, and verifies clean.
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -24,6 +20,7 @@ import {
   runDbVerify,
   runMigrate,
   runMigrationPlan,
+  sqlitePslConfigFixture,
   timeouts,
 } from '../utils/journey-test-helpers';
 
@@ -49,25 +46,12 @@ interface PlanDocument {
   readonly operations: readonly { id: string; label: string; operationClass: string }[];
 }
 
-function sqliteConfig(dbPath: string): string {
-  return `import { defineConfig as ormConfig } from '@internal/sqlite/config';
-import { defineConfig } from '@prisma/cli-engine';
-
-export default defineConfig({
-  orm: ormConfig({
-    contract: './contract.prisma',
-    db: { connection: ${JSON.stringify(dbPath)} },
-    migrations: { dir: 'migrations' },
-  }),
-});
-`;
-}
-
 function setupSqliteJourney(createTempDir: () => string): JourneyContext & { dbPath: string } {
   const testDir = createTempDir();
   const dbPath = join(testDir, 'journey.db');
   const configPath = join(testDir, 'prisma.config.ts');
-  writeFileSync(configPath, sqliteConfig(dbPath), 'utf-8');
+  const config = readFileSync(sqlitePslConfigFixture, 'utf-8').replace('{{DB_PATH}}', () => dbPath);
+  writeFileSync(configPath, config, 'utf-8');
   writeFileSync(join(testDir, 'contract.prisma'), FROM_PSL, 'utf-8');
   writeProjectManifest(testDir);
   return { testDir, configPath, outputDir: testDir, dbPath };
