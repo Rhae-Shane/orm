@@ -1,6 +1,7 @@
 import type { Contract } from '@internal/contract/types';
 import type {
   MigrationOperationPolicy,
+  ResolvedTableRename,
   SqlMigrationPlannerPlanOptions,
   SqlPlannerConflict,
   SqlPlannerFailureResult,
@@ -99,6 +100,19 @@ function emissionSchemaForNamespace(contract: Contract<SqlStorage>, namespaceId:
   return namespaceId === UNBOUND_NAMESPACE_ID
     ? UNBOUND_NAMESPACE_ID
     : resolveDdlSchemaForNamespaceStorage(contract.storage, namespaceId);
+}
+
+function renamedTableNode(
+  schema: PostgresDatabaseSchemaNode,
+  contract: Contract<SqlStorage>,
+  rename: ResolvedTableRename,
+): PostgresTableSchemaNode {
+  const ddlSchema = resolveDdlSchemaForNamespaceStorage(contract.storage, rename.namespaceId);
+  const table = Object.values(schema.namespaces).find(
+    (namespace) => namespace.schemaName === ddlSchema,
+  )?.tables[rename.to];
+  assertDefined(table, `a resolved rename names table "${rename.to}" in schema "${ddlSchema}"`);
+  return table;
 }
 
 function partitionPostgresCallsByControlPolicy<TCall extends PostgresOpFactoryCall>(
@@ -298,25 +312,21 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
     if (!applied.ok) {
       return notOk(applied.failure);
     }
+    const previousSchema = postgresContractToSchema(
+      applied.value.contract,
+      options.frameworkComponents,
+    );
+    const nextSchema = postgresContractToSchema(options.contract, options.frameworkComponents);
     const calls = applied.value.renames.flatMap((rename): PostgresOpFactoryCall[] => {
       const schemaName = emissionSchemaForNamespace(options.contract, rename.namespaceId);
-      const previous =
-        options.fromContract?.storage.namespaces[rename.namespaceId]?.entries.table?.[rename.from];
-      const next =
-        options.contract.storage.namespaces[rename.namespaceId]?.entries.table?.[rename.to];
-      assertDefined(
-        previous,
-        `a resolved rename names table "${rename.from}" of the previous contract`,
-      );
-      assertDefined(next, `a resolved rename names table "${rename.to}" of the next contract`);
       return [
         new RenameTableCall(schemaName, rename.from, rename.to),
         ...constraintRenamesForTableRename({
           schemaName,
           from: rename.from,
           to: rename.to,
-          previous,
-          next,
+          previous: renamedTableNode(previousSchema, options.contract, rename),
+          next: renamedTableNode(nextSchema, options.contract, rename),
         }),
       ];
     });
@@ -330,11 +340,7 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
         ),
       );
     }
-    return ok({
-      fromContract: applied.value.contract,
-      previousSchema: postgresContractToSchema(applied.value.contract, options.frameworkComponents),
-      calls,
-    });
+    return ok({ fromContract: applied.value.contract, previousSchema, calls });
   }
 
   private planSql(options: SqlMigrationPlannerPlanOptions): PostgresPlanResult {

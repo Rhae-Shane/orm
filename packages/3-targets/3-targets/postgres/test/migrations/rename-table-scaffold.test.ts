@@ -172,6 +172,26 @@ describe('Postgres scaffold rename-table intents', () => {
     },
   );
 
+  it('renames a primary key whose columns change after the new table name, and leaves the change to the author', async () => {
+    const from = contractOf('userProfile', { primaryKey: { columns: ['id'] } }, FROM_HASH);
+    const to = contractOf(
+      'UserProfile',
+      { primaryKey: { columns: ['id', 'email'], name: 'profile_pk' } },
+      TO_HASH,
+    );
+
+    expect(plan(from, to)).toMatchObject({
+      kind: 'failure',
+      conflicts: [
+        { kind: 'indexIncompatible', summary: 'database/public/UserProfile/primary-key' },
+      ],
+    });
+    expect(await labelsOf(scaffold({ from, to }))).toEqual([
+      'Rename table "userProfile" to "UserProfile"',
+      'Rename primary key "userProfile_pkey" to "UserProfile_pkey" on "UserProfile"',
+    ]);
+  });
+
   it('scaffolds an empty body without renames', () => {
     const empty = createPostgresMigrationPlanner(stubLowerer).emptyMigration(
       {

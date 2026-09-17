@@ -8,9 +8,11 @@
  * Journey R1 (`migration plan`) also shows that planning without the flag is refused by the case-change guard and that a stale intent fails planning.
  *
  * Journey R2 (`migration new`) authors the rename by hand: the flag pre-fills the scaffolded `migration.ts` with the same operations `migration plan` would plan.
+ *
+ * Journey R5 renames the table in the same migration that points its foreign key at another table under an explicit name. The foreign key is renamed after the new table, then dropped and created against the new table; the rows stay and `db verify --schema-only` is clean.
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { withTempDir } from '../utils/cli-test-helpers';
@@ -34,6 +36,44 @@ import {
   timeouts,
   useDevDatabase,
 } from '../utils/journey-test-helpers';
+
+const FOREIGN_KEY_FROM_PSL = `// use prisma-8
+
+model Account {
+  id       Int           @id
+  profiles UserProfile[]
+}
+
+model Member {
+  id Int @id
+}
+
+model UserProfile {
+  id        Int     @id
+  accountId Int
+  account   Account @relation(fields: [accountId], references: [id])
+
+  @@map("userProfile")
+}
+`;
+
+const FOREIGN_KEY_TO_PSL = `// use prisma-8
+
+model Account {
+  id Int @id
+}
+
+model Member {
+  id       Int           @id
+  profiles UserProfile[]
+}
+
+model UserProfile {
+  id        Int    @id
+  accountId Int
+  member    Member @relation(fields: [accountId], references: [id], map: "profile_member_fk")
+}
+`;
 
 interface PlanDocument {
   readonly operations: readonly { id: string; label: string; operationClass: string }[];
@@ -274,6 +314,76 @@ withTempDir(({ createTempDir }) => {
         expect(apply.exitCode, `R2.07: migrate: ${apply.stderr}`).toBe(0);
         await expectRenameApplied(ctx, db.connectionString, 'R2.08');
         await expectLaterChangesApply(ctx, db.connectionString, 'R2.09');
+      },
+      timeouts.spinUpPpgDev,
+    );
+  });
+
+  describe('Journey R5: rename a table and point its foreign key at another table', () => {
+    const db = useDevDatabase();
+
+    it(
+      'renames the foreign key after the new table, replaces it, keeps the rows, and verifies clean',
+      async () => {
+        const ctx = setupJourney({
+          connectionString: db.connectionString,
+          createTempDir,
+          contractMode: 'psl',
+        });
+        writeFileSync(join(ctx.testDir, 'contract.prisma'), FOREIGN_KEY_FROM_PSL);
+        const emit = await runContractEmit(ctx);
+        expect(emit.exitCode, `R5.01: emit userProfile: ${emit.stderr}`).toBe(0);
+        const initial = await planMigrationAndSelfEmit(ctx, ['--name', 'initial']);
+        expect(initial.exitCode, `R5.02: plan initial: ${initial.stderr}`).toBe(0);
+        const applyInitial = await runMigrate(ctx);
+        expect(applyInitial.exitCode, `R5.03: migrate initial: ${applyInitial.stderr}`).toBe(0);
+        await sql(
+          db.connectionString,
+          `INSERT INTO "public"."Account" (id) VALUES (1);
+         INSERT INTO "public"."Member" (id) VALUES (1);
+         INSERT INTO "public"."userProfile" (id, "accountId") VALUES (1, 1)`,
+        );
+
+        writeFileSync(join(ctx.testDir, 'contract.prisma'), FOREIGN_KEY_TO_PSL);
+        const emitRenamed = await runContractEmit(ctx);
+        expect(emitRenamed.exitCode, `R5.04: emit UserProfile: ${emitRenamed.stderr}`).toBe(0);
+        const plan = await planMigrationAndSelfEmit(ctx, [
+          '--name',
+          'rename-and-retarget',
+          '--from',
+          latestMigrationDirName(ctx),
+          '--rename',
+          'userProfile=UserProfile',
+          '--json',
+        ]);
+        expect(plan.exitCode, `R5.05: plan: ${plan.stderr}`).toBe(0);
+        expect(
+          parseJsonOutput<PlanDocument>(plan)
+            .operations.map((op) => op.label)
+            .slice(0, 3),
+          'R5.05: the table rename, then its keys renamed after the new table',
+        ).toEqual([
+          'Rename table "userProfile" to "UserProfile"',
+          'Rename primary key "userProfile_pkey" to "UserProfile_pkey" on "UserProfile"',
+          'Rename foreign key "userProfile_accountId_fkey" to "UserProfile_accountId_fkey" on "UserProfile"',
+        ]);
+
+        const apply = await runMigrate(ctx);
+        expect(apply.exitCode, `R5.06: migrate: ${apply.stderr}`).toBe(0);
+        const live = await sql(
+          db.connectionString,
+          `SELECT
+           (SELECT array_agg(id) FROM "public"."UserProfile") AS ids,
+           (SELECT array_agg(conname::text || '->' || confrelid::regclass::text ORDER BY conname)
+              FROM pg_constraint
+             WHERE conrelid = '"public"."UserProfile"'::regclass AND contype = 'f') AS foreign_keys`,
+        );
+        expect(live.rows[0], 'R5.07: rows kept, one foreign key to Member').toEqual({
+          ids: [1],
+          foreign_keys: ['profile_member_fk->"Member"'],
+        });
+        const verify = await runDbVerify(ctx, ['--schema-only']);
+        expect(verify.exitCode, `R5.08: db verify --schema-only: ${verify.stderr}`).toBe(0);
       },
       timeouts.spinUpPpgDev,
     );

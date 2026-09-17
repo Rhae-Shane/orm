@@ -208,4 +208,50 @@ describe('Postgres planner rename-table intents with table objects', () => {
       ]);
     });
   });
+
+  describe('constraints the next contract changes as well as names', () => {
+    it('renames the foreign key to the new table name, then replaces it when its target changes', async () => {
+      const memberTable = () => ({ member: postTable('account') });
+      expect(
+        await plannedSql(
+          contractOf(
+            'userProfile',
+            {
+              foreignKeys: (tableName) => [
+                {
+                  source: reference(tableName, ['accountId']),
+                  target: reference('account', ['id']),
+                },
+              ],
+            },
+            'from',
+            memberTable,
+          ),
+          contractOf(
+            'UserProfile',
+            {
+              foreignKeys: (tableName) => [
+                {
+                  source: reference(tableName, ['accountId']),
+                  target: reference('member', ['id']),
+                  name: 'profile_member_fk',
+                },
+              ],
+            },
+            'to',
+            memberTable,
+          ),
+        ),
+      ).toEqual([
+        RENAME_TABLE,
+        [
+          'ALTER TABLE "UserProfile" RENAME CONSTRAINT "userProfile_accountId_fkey" TO "UserProfile_accountId_fkey"',
+        ],
+        ['ALTER TABLE "UserProfile" DROP CONSTRAINT "UserProfile_accountId_fkey"'],
+        [
+          'ALTER TABLE "UserProfile"\nADD CONSTRAINT "profile_member_fk"\nFOREIGN KEY ("accountId")\nREFERENCES "member" ("id")',
+        ],
+      ]);
+    });
+  });
 });

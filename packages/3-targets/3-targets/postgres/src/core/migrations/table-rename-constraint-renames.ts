@@ -1,4 +1,5 @@
-import type { StorageTable } from '@internal/sql-contract/types';
+import type { DiffableNode } from '@internal/framework-components/control';
+import type { PostgresTableSchemaNode } from '../schema-ir/postgres-table-schema-node';
 import {
   defaultForeignKeyName,
   defaultPrimaryKeyName,
@@ -10,57 +11,67 @@ export interface TableRenameConstraintInput {
   readonly schemaName: string;
   readonly from: string;
   readonly to: string;
-  readonly previous: StorageTable;
-  readonly next: StorageTable;
+  /** The renamed table as the previous contract describes it once every stated rename is applied. */
+  readonly previous: PostgresTableSchemaNode;
+  readonly next: PostgresTableSchemaNode;
 }
 
-function sameColumns(left: readonly string[], right: readonly string[]): boolean {
-  return left.length === right.length && left.every((column, index) => column === right[index]);
+/** The constraint of the next table the diff pairs with `node` and finds unchanged, as the diff compares them. */
+function unchangedIn<TNode extends DiffableNode>(
+  node: TNode,
+  nextNodes: readonly TNode[],
+): TNode | undefined {
+  return nextNodes.find((next) => next.id === node.id && next.isEqualTo(node));
 }
 
 /**
- * The constraint renames that follow a table rename. A primary key, unique constraint or foreign key the previous contract left unnamed carries a name the planner derived from the old table name. It is renamed to the name the next contract gives it explicitly, or otherwise to the name the planner now derives from the new table name. A constraint the previous contract named keeps its name. Indexes and checks are not handled here: their wire names pair by content hash in the ordinary rename passes.
+ * The constraint renames that follow a table rename. A primary key, unique constraint or foreign key the previous contract left unnamed carries a name the planner derived from the old table name. When the next contract keeps the same constraint, it is renamed to the name the next contract gives it explicitly, or otherwise to the name the planner now derives from the new table name. When the constraint changed, it is renamed to the derived name, which is the name the diff's drop of it uses. A constraint the previous contract named keeps its name. Indexes and checks are not handled here: their wire names pair by content hash in the ordinary rename passes.
  */
 export function constraintRenamesForTableRename(
   input: TableRenameConstraintInput,
 ): readonly RenameConstraintCall[] {
   const { schemaName, from, to, previous, next } = input;
-  const renameIfChanged = (
+  const rename = (
     kind: 'primaryKey' | 'unique' | 'foreignKey',
     oldName: string,
-    newName: string,
-  ): readonly RenameConstraintCall[] =>
-    oldName === newName ? [] : [new RenameConstraintCall(schemaName, to, kind, oldName, newName)];
+    unchanged: { readonly name?: string } | undefined,
+    derivedName: string,
+  ): readonly RenameConstraintCall[] => {
+    const newName = unchanged?.name ?? derivedName;
+    return oldName === newName
+      ? []
+      : [new RenameConstraintCall(schemaName, to, kind, oldName, newName)];
+  };
 
   const primaryKey =
     previous.primaryKey !== undefined && previous.primaryKey.name === undefined
-      ? renameIfChanged(
+      ? rename(
           'primaryKey',
           defaultPrimaryKeyName(from),
-          next.primaryKey?.name ?? defaultPrimaryKeyName(to),
+          unchangedIn(previous.primaryKey, next.primaryKey === undefined ? [] : [next.primaryKey]),
+          defaultPrimaryKeyName(to),
         )
       : [];
 
   const uniques = previous.uniques
     .filter((unique) => unique.name === undefined)
     .flatMap((unique) =>
-      renameIfChanged(
+      rename(
         'unique',
         defaultUniqueName(from, unique.columns),
-        next.uniques.find((candidate) => sameColumns(candidate.columns, unique.columns))?.name ??
-          defaultUniqueName(to, unique.columns),
+        unchangedIn(unique, next.uniques),
+        defaultUniqueName(to, unique.columns),
       ),
     );
 
   const foreignKeys = previous.foreignKeys
     .filter((fk) => fk.name === undefined)
     .flatMap((fk) =>
-      renameIfChanged(
+      rename(
         'foreignKey',
-        defaultForeignKeyName(from, fk.source.columns),
-        next.foreignKeys.find((candidate) =>
-          sameColumns(candidate.source.columns, fk.source.columns),
-        )?.name ?? defaultForeignKeyName(to, fk.source.columns),
+        defaultForeignKeyName(from, fk.columns),
+        unchangedIn(fk, next.foreignKeys),
+        defaultForeignKeyName(to, fk.columns),
       ),
     );
 
