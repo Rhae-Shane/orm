@@ -400,6 +400,17 @@ export function buildRecreatePostchecks(
     }
   }
 
+  // The checks above only prove expected uniques exist, so removing the last
+  // one would leave the postcheck already true and the runner would skip the
+  // recreate. `origin = 'u'` counts UNIQUE constraints, not CREATE INDEX.
+  if (hasUniqueIssue) {
+    const expected = spec.uniques?.length ?? 0;
+    checks.push({
+      description: `verify "${tableName}" has exactly ${expected} unique constraints`,
+      sql: `SELECT (SELECT COUNT(*) FROM pragma_index_list('${t}') WHERE origin = 'u') = ${expected}`,
+    });
+  }
+
   if (hasFkIssue) {
     for (const fk of spec.foreignKeys ?? []) {
       const refTable = escapeLiteral(fk.references.table);
@@ -424,6 +435,11 @@ export function buildRecreatePostchecks(
           ` AND SUM(CASE WHEN (f."from", f."to") IN (${tuples}) THEN 1 ELSE 0 END) = ${colCount})`,
       });
     }
+    const expected = spec.foreignKeys?.length ?? 0;
+    checks.push({
+      description: `verify "${tableName}" has exactly ${expected} foreign keys`,
+      sql: `SELECT (SELECT COUNT(DISTINCT id) FROM pragma_foreign_key_list('${t}')) = ${expected}`,
+    });
   }
 
   return checks;
