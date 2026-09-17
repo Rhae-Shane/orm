@@ -646,25 +646,35 @@ function sqlLiteralTagEntry(usage: string): ControlDefaultLiteralTagEntry {
   return {
     usage,
     documentation: "Uses the SQL between the fences, verbatim, as the column's default expression.",
-    lower: ({ literal, context }) =>
-      /;|--|\/\*|\$\$|\bSELECT\b/i.test(literal.body)
-        ? {
-            ok: false as const,
-            diagnostic: {
-              code: 'PSL_INVALID_DEFAULT_SQL',
-              message:
-                'Default SQL must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.',
-              sourceId: context.sourceId,
-              span: literal.span,
-            },
-          }
-        : {
-            ok: true as const,
-            value: {
-              kind: 'storage' as const,
-              defaultValue: { kind: 'function' as const, expression: literal.body },
-            },
-          },
+    lower: ({ literal, context, registries }) => {
+      const reject = (message: string) => ({
+        ok: false as const,
+        diagnostic: {
+          code: 'PSL_INVALID_DEFAULT_SQL',
+          message,
+          sourceId: context.sourceId,
+          span: literal.span,
+        },
+      });
+      const namedFunction = /^([A-Za-z_][A-Za-z0-9_]*)\(\)$/.exec(literal.body.trim())?.[1];
+      if (namedFunction !== undefined && registries.defaultFunctionRegistry.has(namedFunction)) {
+        return reject(
+          `Write @default(${namedFunction}()) instead of sql\`${namedFunction}()\`; the named form is the one Prisma understands.`,
+        );
+      }
+      if (/;|--|\/\*|\$\$|\bSELECT\b/i.test(literal.body)) {
+        return reject(
+          'Default SQL must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.',
+        );
+      }
+      return {
+        ok: true as const,
+        value: {
+          kind: 'storage' as const,
+          defaultValue: { kind: 'function' as const, expression: literal.body },
+        },
+      };
+    },
   };
 }
 

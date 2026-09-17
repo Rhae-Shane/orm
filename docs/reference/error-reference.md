@@ -247,7 +247,7 @@ A model declares an empty unique constraint (a unique with no fields), raised du
 
 ### CONTRACT.DEFAULT_INVALID
 
-A field's default declaration is invalid: `defaultSql` is used on an enum field, a field declares both `default` and `executionDefaults`, or a field is nullable while carrying `executionDefaults`. Raised while authoring/building a SQL contract. Payload: `modelName`, `fieldName`, `reason`. Also raised by the Postgres adapter's DDL renderer when a hand-authored `col(...)` pairs an `autoincrement()` default with a type that isn't `SERIAL`/`BIGSERIAL`/`SMALLSERIAL` (or their `SERIAL4`/`SERIAL8`/`SERIAL2` aliases). Meta in that case: `nativeType`. Also raised by the TypeScript `sql` template tag when the body cannot be canonicalized, with the same message as the PSL diagnostics `PSL_TAGGED_LITERAL_INTERPOLATION`, `PSL_TAGGED_LITERAL_NUL`, and `PSL_TAGGED_LITERAL_TOO_LARGE` (meta: `reason`, `offset`) or fails the SQL body check (`Default SQL must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.`; meta: `reason: 'unsafe-sql'`, `expression`), and by both the Postgres and SQLite migration planners when a function default in the contract fails that same check at DDL time (meta: `expression`).
+A field's default declaration is invalid: `defaultSql` is used on an enum field, a field declares both `default` and `executionDefaults`, or a field is nullable while carrying `executionDefaults`. Raised while authoring/building a SQL contract. Payload: `modelName`, `fieldName`, `reason`. Also raised by the Postgres adapter's DDL renderer when a hand-authored `col(...)` pairs an `autoincrement()` default with a type that isn't `SERIAL`/`BIGSERIAL`/`SMALLSERIAL` (or their `SERIAL4`/`SERIAL8`/`SERIAL2` aliases). Meta in that case: `nativeType`. Also raised by the TypeScript `sql` template tag when the body cannot be canonicalized, with the same message as the PSL diagnostics `PSL_TAGGED_LITERAL_NUL` and `PSL_TAGGED_LITERAL_TOO_LARGE` (meta: `reason`, `offset`) or fails the SQL body check (`Default SQL must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.`; meta: `reason: 'unsafe-sql'`, `expression`), and by both the Postgres and SQLite migration planners when a function default in the contract fails that same check at DDL time (meta: `expression`).
 
 ### CONTRACT.DEFAULT_SQL_INTERPOLATION
 
@@ -571,10 +571,6 @@ Whitespace, a newline, or a comment sits between a tagged literal's tag and its 
 
 A `@default` tagged literal uses a tag no pack in the stack registered: `Unknown literal tag "<tag>". Known tags: <tags in registration order>.` Every SQL target registers `sql`; Postgres also registers `pg.sql` and SQLite `sqlite.sql`. Reported at the literal.
 
-### PSL_TAGGED_LITERAL_INTERPOLATION
-
-A tagged literal's body contains `${` after escape resolution: `Tagged literals do not support ${...} interpolation.` There is no escape for it; a body that needs those two characters cannot be written as a tagged literal. Reported at the literal.
-
 ### PSL_TAGGED_LITERAL_NUL
 
 A tagged literal's body contains a NUL character: `Tagged literals must not contain NUL characters.` Reported at the literal.
@@ -583,9 +579,13 @@ A tagged literal's body contains a NUL character: `Tagged literals must not cont
 
 A tagged literal's canonical body is larger than 65536 UTF-8 bytes: `Tagged literal exceeds 65536 bytes.` Reported at the literal.
 
+### PSL_LIST_AUTOINCREMENT_UNSUPPORTED
+
+A list column declares `@default(autoincrement())`: `Field "<Model>.<field>" is a list and cannot use autoincrement(); it is a Prisma marker for a sequence-backed scalar column, not SQL.` Every other storage default lowers on a list column. Reported at the attribute.
+
 ### PSL_INVALID_DEFAULT_SQL
 
-A `` @default(sql`...`) `` body fails the SQL family's body check: `Default SQL must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.` This is the rule the migration planners apply at DDL time, run at authoring time so it has a source span. Reported at the literal.
+A `` @default(sql`...`) `` body fails the SQL family's body check: `Default SQL must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.` (the rule the migration planners apply at DDL time, run at authoring time so it has a source span), or only spells a registered default function: `` Write @default(now()) instead of sql`now()`; the named form is the one Prisma understands. `` Reported at the literal.
 
 ## ORM
 

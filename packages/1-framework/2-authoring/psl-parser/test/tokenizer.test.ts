@@ -296,6 +296,20 @@ describe('template literals', () => {
     `);
   });
 
+  it('ends an unterminated template literal before the first line that opens with a closing brace', () => {
+    const source = '`abc\n  more\n  }\nnext';
+    assertLossless(source);
+    expect(collectAll(source).map((t) => t.kind)).toEqual([
+      'Invalid',
+      'Whitespace',
+      'RBrace',
+      'Newline',
+      'Ident',
+      'Eof',
+    ]);
+    expect(collectAll(source)[0]?.text).toBe('`abc\n  more\n');
+  });
+
   it('is lossless with a dotted tag and a quote fence beside it', () => {
     assertLossless('pg.sql`a` sql"b"');
   });

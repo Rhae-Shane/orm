@@ -215,7 +215,9 @@ function scanString(source: string, pos: number): Token | undefined {
 /**
  * A backtick fence may span lines. A backtick preceded by an odd number of
  * backslashes is escaped and does not close it. With no closing backtick the
- * rest of the source becomes one `Invalid` token, which the parser reports.
+ * text becomes one `Invalid` token, which the parser reports; it ends before
+ * the first later line whose first non-blank character is `}`, so the parser
+ * resumes at the block's closing brace, or at the end of the input.
  */
 function scanTemplateLiteral(source: string, pos: number): Token | undefined {
   if (source.charAt(pos) !== '`') return undefined;
@@ -231,7 +233,24 @@ function scanTemplateLiteral(source: string, pos: number): Token | undefined {
     }
     end++;
   }
-  return { kind: 'Invalid', text: source.slice(pos) };
+  return { kind: 'Invalid', text: source.slice(pos, unterminatedFenceEnd(source, pos + 1)) };
+}
+
+function unterminatedFenceEnd(source: string, from: number): number {
+  let lineStart = source.indexOf('\n', from);
+  while (lineStart !== -1) {
+    lineStart++;
+    let cursor = lineStart;
+    while (
+      cursor < source.length &&
+      (source.charAt(cursor) === ' ' || source.charAt(cursor) === '\t')
+    ) {
+      cursor++;
+    }
+    if (source.charAt(cursor) === '}') return lineStart;
+    lineStart = source.indexOf('\n', cursor);
+  }
+  return source.length;
 }
 
 /**

@@ -106,7 +106,7 @@
                 "createdAt": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "default": {
-                    "expression": "now()",
+                    "expression": "(now() + interval '1 hour')",
                     "kind": "function"
                   },
                   "nativeType": "timestamptz",
@@ -133,7 +133,7 @@
                 "id": {
                   "codecId": "pg/text@1",
                   "default": {
-                    "expression": "gen_random_uuid()",
+                    "expression": "md5(random()::text)",
                     "kind": "function"
                   },
                   "nativeType": "text",
@@ -171,7 +171,7 @@
         "id": "public"
       }
     },
-    "storageHash": "8869a26a6ca442350d2f94735fe3ad48209cf5ac231e881f161b1ef814ebfdae"
+    "storageHash": "50dd67500b63fc6a4ffd9c5adb2f70fff2f090fa5c9f459c400e67d87ee4189a"
   },
   "capabilities": {
     "postgres": {

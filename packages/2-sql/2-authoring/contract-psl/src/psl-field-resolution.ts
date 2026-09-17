@@ -11,6 +11,7 @@ import type {
   ControlMutationDefaultRegistry,
   MutationDefaultGeneratorDescriptor,
 } from '@internal/framework-components/control';
+import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
 import type {
   FieldSymbol,
   ModelSymbol,
@@ -43,6 +44,12 @@ import {
   interpretModelAttribute,
   sqlAttributeSpecs,
 } from './sql-attribute-specs';
+
+// A list column takes any storage default; `autoincrement()` is refused because it is a Prisma marker
+// for a sequence-backed scalar column, not SQL. Declared through the family-neutral
+// `ContributedPslDiagnosticCode` seam.
+export const PSL_LIST_AUTOINCREMENT_UNSUPPORTED: ContributedPslDiagnosticCode =
+  'PSL_LIST_AUTOINCREMENT_UNSUPPORTED';
 
 type LoweredFieldDefault = {
   readonly defaultValue?: AuthoredColumnDefault;
@@ -612,6 +619,19 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
           })
       : {};
     const loweredOnCreate = loweredDefault.executionDefaults?.onCreate;
+    if (
+      isListField &&
+      loweredDefault.defaultValue?.kind === 'function' &&
+      loweredDefault.defaultValue.expression === 'autoincrement()'
+    ) {
+      diagnostics.push({
+        code: PSL_LIST_AUTOINCREMENT_UNSUPPORTED,
+        message: `Field "${model.name}.${field.name}" is a list and cannot use autoincrement(); it is a Prisma marker for a sequence-backed scalar column, not SQL.`,
+        sourceId,
+        span: defaultAttribute?.span ?? field.span,
+      });
+      continue;
+    }
     if (isListField && loweredOnCreate) {
       const defaultExpression =
         defaultAttribute?.args.find((arg) => arg.kind === 'positional')?.value.trim() ??

@@ -47,13 +47,11 @@ describe('sql template tag', () => {
     );
   });
 
-  it('rejects a body containing ${ with the message PSL uses, and \\${ is no escape', () => {
-    expect(() => sql`\${x}`).toThrow(
-      expect.objectContaining({
-        code: 'CONTRACT.DEFAULT_INVALID',
-        message: 'Tagged literals do not support $' + '{...} interpolation.',
-      }),
-    );
+  it('passes a body containing a dollar-brace sequence through verbatim: only JavaScript interpolation is refused', () => {
+    // A literal `${x}` in source is JavaScript interpolation, so the raw text is handed in directly.
+    const raw = 'a $' + '{x} b';
+    const strings = Object.assign([raw], { raw: [raw] }) as unknown as TemplateStringsArray;
+    expect(sql(strings)).toEqual({ kind: 'function', expression: raw });
   });
 
   it('reads the raw text: JavaScript escapes are not interpreted', () => {
@@ -62,9 +60,9 @@ describe('sql template tag', () => {
     expect(sql`'C:\users'`).toEqual({ kind: 'function', expression: "'C:\\users'" });
   });
 
-  it('resolves exactly the three backtick escapes PSL resolves', () => {
+  it('resolves exactly the two backtick escapes PSL resolves', () => {
     expect(sql`\``).toEqual({ kind: 'function', expression: '`' });
-    expect(sql`\$1`).toEqual({ kind: 'function', expression: '$1' });
+    expect(sql`\$1`).toEqual({ kind: 'function', expression: '\\$1' });
     expect(sql`a\\b`).toEqual({ kind: 'function', expression: 'a\\b' });
   });
 

@@ -419,18 +419,21 @@ describe('postgresNativeAuthoringTypes', () => {
 });
 
 describe('createPostgresDefaultLiteralTagRegistry', () => {
-  const registry = createPostgresDefaultLiteralTagRegistry();
+  const tagRegistry = createPostgresDefaultLiteralTagRegistry();
+  const registry = createPostgresDefaultFunctionRegistry();
+  const registries = { defaultFunctionRegistry: registry, defaultLiteralTagRegistry: tagRegistry };
 
   it('registers sql and pg.sql, in that order', () => {
-    expect([...registry.keys()]).toEqual(['sql', 'pg.sql']);
-    expect(registry.get('sql')?.usage).toBe('sql`...`');
-    expect(registry.get('pg.sql')?.usage).toBe('pg.sql`...`');
+    expect([...tagRegistry.keys()]).toEqual(['sql', 'pg.sql']);
+    expect(tagRegistry.get('sql')?.usage).toBe('sql`...`');
+    expect(tagRegistry.get('pg.sql')?.usage).toBe('pg.sql`...`');
   });
 
   it('lowers a body verbatim as a function default', () => {
-    const result = registry.get('pg.sql')!.lower({
+    const result = tagRegistry.get('pg.sql')!.lower({
       literal: { tag: 'pg.sql', body: "'{}'::jsonb", span: stubSpan },
       context: stubContext,
+      registries,
     });
     expect(result).toEqual({
       ok: true,
@@ -443,5 +446,32 @@ describe('createPostgresDefaultLiteralTagRegistry', () => {
     if (registries === undefined)
       throw new Error('the adapter descriptor declares mutation defaults');
     expect([...registries.defaultLiteralTagRegistry.keys()]).toEqual(['sql', 'pg.sql']);
+  });
+
+  it.each([['now'], ['autoincrement'], ['gen_random_uuid']])(
+    'refuses sql`%s()`, which spells a registered function',
+    (name) => {
+      const result = tagRegistry.get('sql')!.lower({
+        literal: { tag: 'sql', body: `${name}()`, span: stubSpan },
+        context: stubContext,
+        registries,
+      });
+      expect(result).toMatchObject({
+        ok: false,
+        diagnostic: {
+          code: 'PSL_INVALID_DEFAULT_SQL',
+          message: `Write @default(${name}()) instead of sql\`${name}()\`; the named form is the one Prisma understands.`,
+        },
+      });
+    },
+  );
+
+  it("accepts sql`now() + interval '1 day'`", () => {
+    const result = tagRegistry.get('sql')!.lower({
+      literal: { tag: 'sql', body: "now() + interval '1 day'", span: stubSpan },
+      context: stubContext,
+      registries,
+    });
+    expect(result).toMatchObject({ ok: true });
   });
 });

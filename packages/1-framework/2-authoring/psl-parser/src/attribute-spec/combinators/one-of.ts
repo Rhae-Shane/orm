@@ -22,6 +22,7 @@ export function oneOf<Alts extends readonly [AnyArgType, ...AnyArgType[]]>(
     label,
     alternatives: alts,
     parse: (arg, ctx): Result<OutOf<Alts[number]>, readonly PslDiagnostic[]> => {
+      let specificFailure: readonly PslDiagnostic[] | undefined;
       for (const alt of alts) {
         const parse = blindCast<
           (arg: Parameters<typeof alt.parse>[0], ctx: ParseContext) => ReturnType<typeof alt.parse>,
@@ -37,12 +38,16 @@ export function oneOf<Alts extends readonly [AnyArgType, ...AnyArgType[]]>(
           );
         }
         // An alternative that recognised the argument's shape and refused it for its own reason
-        // (an unknown literal tag, an over-long body) beats the generic list.
-        if (result.failure.some((diagnostic) => diagnostic.code !== ATTRIBUTE_DIAGNOSTIC_CODE)) {
-          return notOk(result.failure);
+        // (an unknown literal tag, an over-long body) beats the generic list, but only once every
+        // alternative has had its turn.
+        if (
+          specificFailure === undefined &&
+          result.failure.some((diagnostic) => diagnostic.code !== ATTRIBUTE_DIAGNOSTIC_CODE)
+        ) {
+          specificFailure = result.failure;
         }
       }
-      return notOk([leafDiagnostic(ctx, arg, `Expected one of: ${label}`)]);
+      return notOk(specificFailure ?? [leafDiagnostic(ctx, arg, `Expected one of: ${label}`)]);
     },
   } satisfies OneOfArgType<Alts, ParseContext>;
 }

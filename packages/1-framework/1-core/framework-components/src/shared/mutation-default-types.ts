@@ -96,6 +96,8 @@ export interface ControlDefaultLiteralTagEntry {
   readonly lower: (input: {
     readonly literal: TaggedLiteralValue;
     readonly context: DefaultFunctionLoweringContext;
+    /** The stack's registries, so an entry can refuse a body that spells a registered function. */
+    readonly registries: ControlDefaultRegistries;
   }) => LoweredDefaultResult;
 }
 

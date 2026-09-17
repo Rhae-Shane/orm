@@ -9,8 +9,8 @@ import { contractError } from './contract-errors';
 
 /**
  * A raw SQL column default written as a template literal: `` sql`gen_random_uuid()` ``. The raw
- * text between the backticks is read the way PSL reads a backtick fence (`` \` ``, `\\`, and `\$`
- * are the only escapes), canonicalized the same way, and used verbatim as the default expression.
+ * text between the backticks is read the way PSL reads a backtick fence (`` \` `` and `\\` are the
+ * only escapes), canonicalized the same way, and used verbatim as the default expression.
  * Interpolation is not supported.
  */
 export function sql(strings: TemplateStringsArray, ...values: readonly never[]): ColumnDefault {

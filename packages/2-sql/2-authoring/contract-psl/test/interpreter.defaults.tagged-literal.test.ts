@@ -40,13 +40,13 @@ describe('interpretPslDocumentToSqlContract tagged literal defaults', () => {
   };
 
   it.each([
-    ['backtick fence', 'v String @default(sql`gen_random_uuid()`)'],
-    ['quote fence', 'v String @default(sql"gen_random_uuid()")'],
-    ['pg.sql tag', 'v String @default(pg.sql`gen_random_uuid()`)'],
+    ['backtick fence', 'v String @default(sql`md5(random()::text)`)'],
+    ['quote fence', 'v String @default(sql"md5(random()::text)")'],
+    ['pg.sql tag', 'v String @default(pg.sql`md5(random()::text)`)'],
   ])('lowers the %s to a function default with the canonical body', (_name, fieldLine) => {
     expect(columnDefault(fieldLine, 'v')).toEqual({
       kind: 'function',
-      expression: 'gen_random_uuid()',
+      expression: 'md5(random()::text)',
     });
   });
 
@@ -98,6 +98,16 @@ describe('interpretPslDocumentToSqlContract tagged literal defaults', () => {
         message:
           'Default SQL must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.',
         sourceId: 'schema.prisma',
+      }),
+    ]);
+  });
+
+  it('refuses a body that only spells a registered function, naming the form to write', () => {
+    expect(diagnostics('v DateTime @default(sql`now()`)')).toEqual([
+      expect.objectContaining({
+        code: 'PSL_INVALID_DEFAULT_SQL',
+        message:
+          'Write @default(now()) instead of sql`now()`; the named form is the one Prisma understands.',
       }),
     ]);
   });

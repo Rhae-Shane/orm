@@ -61,7 +61,7 @@ Direct imports expose the base structural helpers. Use this surface when you wan
 
 Built-in ID helpers from `@internal/ids` already return the generated-field spec accepted by `field.generated(...)`, so `field.generated(uuidv4())` is a valid structural DSL call.
 
-Storage defaults are values passed to `.default(...)`: a literal, `now()`, `autoincrement()`, `genRandomUuid()` (from the Postgres contract builder), or raw SQL written with the `sql` template tag, `` .default(sql`gen_random_uuid()`) ``. The `sql` body is canonicalized like PSL's `` @default(sql`...`) `` and used verbatim; interpolation is a type error. `.defaultSql('...')` still works but is deprecated and is removed in 8.0.0.
+Storage defaults are values passed to `.default(...)`: a literal, `now()`, `autoincrement()`, `genRandomUuid()` (from the Postgres contract builder), or raw SQL written with the `sql` template tag, `` .default(sql`(now() + interval '7 days')`) ``. The `sql` body is canonicalized like PSL's `` @default(sql`...`) `` and used verbatim; JavaScript interpolation is a type error. `.defaultSql('...')` still works but is deprecated and is removed in 8.0.0.
 
 ```typescript
 import { textColumn, timestamptzColumn } from '@internal/adapter-postgres/column-types';

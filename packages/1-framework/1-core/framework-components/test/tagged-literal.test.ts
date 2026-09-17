@@ -11,6 +11,11 @@ const MAX_BYTES = 65536;
 describe('canonicalizeTaggedLiteralBody', () => {
   it.each([
     ['single line unchanged', 'gen_random_uuid()', 'gen_random_uuid()'],
+    [
+      'a body containing a dollar-brace sequence passes through verbatim',
+      'a $' + '{x} b',
+      'a $' + '{x} b',
+    ],
     ['CRLF becomes LF', 'a\r\nb', 'a\nb'],
     ['lone CR becomes LF', 'a\rb', 'a\nb'],
     ['blank first line dropped', '\n  a', 'a'],
@@ -30,28 +35,8 @@ describe('canonicalizeTaggedLiteralBody', () => {
     expect(canonicalizeTaggedLiteralBody(input)).toEqual({ ok: true, body: expected });
   });
 
-  it('fails on ${ with the offset of the first occurrence', () => {
-    expect(canonicalizeTaggedLiteralBody('a $' + '{x} $' + '{y}')).toEqual({
-      ok: false,
-      reason: 'interpolation',
-      offset: 2,
-    });
-  });
-
-  it('checks for interpolation before line normalisation', () => {
-    expect(canonicalizeTaggedLiteralBody('\r\n$' + '{x}')).toEqual({
-      ok: false,
-      reason: 'interpolation',
-      offset: 2,
-    });
-  });
-
   it('fails on a NUL character with its offset', () => {
     expect(canonicalizeTaggedLiteralBody('ab\0c')).toEqual({ ok: false, reason: 'nul', offset: 2 });
-  });
-
-  it('reports interpolation before NUL', () => {
-    expect(canonicalizeTaggedLiteralBody('\0$' + '{')).toMatchObject({ reason: 'interpolation' });
   });
 
   it('accepts a body of exactly 65536 bytes', () => {
@@ -100,7 +85,7 @@ describe('resolveBacktickEscapes', () => {
   it.each([
     ['an escaped backtick', 'a\\`b', 'a`b'],
     ['an escaped backslash', 'a\\\\b', 'a\\b'],
-    ['an escaped dollar', '\\$1', '$1'],
+    ['a dollar kept as written', '\\$1', '\\$1'],
     ['any other backslash sequence kept as written', "E'\\n'", "E'\\n'"],
     ['a Windows path', "'C:\\users'", "'C:\\users'"],
     ['a trailing backslash', 'a\\', 'a\\'],
@@ -111,9 +96,6 @@ describe('resolveBacktickEscapes', () => {
 
 describe('describeTaggedLiteralFailure', () => {
   it('names each reason with the message the combinator reports', () => {
-    expect(describeTaggedLiteralFailure('interpolation')).toBe(
-      'Tagged literals do not support $' + '{...} interpolation.',
-    );
     expect(describeTaggedLiteralFailure('nul')).toBe(
       'Tagged literals must not contain NUL characters.',
     );

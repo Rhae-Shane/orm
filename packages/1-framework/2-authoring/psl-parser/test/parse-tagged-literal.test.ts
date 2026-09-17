@@ -75,9 +75,41 @@ describe('TaggedLiteral parsing', () => {
     expect(literal.body()).toBe('a\\b');
   });
 
-  it('resolves an escaped dollar sign', () => {
+  it('keeps a backslash before a dollar sign as written', () => {
     const { literal } = taggedDefault('sql`\\$1`');
-    expect(literal.body()).toBe('$1');
+    expect(literal.body()).toBe('\\$1');
+  });
+
+  it('passes a body containing a dollar-brace sequence through verbatim', () => {
+    const { result, literal } = taggedDefault('sql`a $' + '{x} b`');
+    expect(result.diagnostics).toEqual([]);
+    expect(literal.body()).toBe('a $' + '{x} b');
+  });
+
+  it('reads a single-quoted fence as a quote fence with the same body as the double-quoted one', () => {
+    const single = taggedDefault("sql'now()'");
+    expect(single.result.diagnostics).toEqual([]);
+    expect(single.literal.fence()).toBe('quote');
+    expect(single.literal.body()).toBe(taggedDefault('sql"now()"').literal.body());
+  });
+
+  it('resumes at the closing brace after an unterminated fence, so the next model still parses', () => {
+    const source =
+      'model A {\n  id String @default(sql`abc\n  more\n}\n\nmodel B {\n  id Int @id\n}\n';
+    const result = parse(source);
+    expect(result.diagnostics.map((d) => d.code)).toEqual(['PSL_UNTERMINATED_TEMPLATE_LITERAL']);
+    const models = [...result.document.declarations()].map((d) =>
+      ModelDeclarationAst.cast(d.syntax)?.name()?.name(),
+    );
+    expect(models).toEqual(['A', 'B']);
+    expect(printSyntax(result.document.syntax)).toBe(source);
+  });
+
+  it('swallows to the end of the input when no line starts with a closing brace', () => {
+    const source = 'model A {\n  id String @default(sql`abc\n  more\n';
+    const result = parse(source);
+    expect(result.diagnostics.map((d) => d.code)).toContain('PSL_UNTERMINATED_TEMPLATE_LITERAL');
+    expect(printSyntax(result.document.syntax)).toBe(source);
   });
 
   it('keeps every other backslash sequence as written', () => {
@@ -148,14 +180,6 @@ describe('TaggedLiteral parsing', () => {
     );
   });
 
-  it('resolves escapes before the interpolation check, so an escaped dollar still fails', () => {
-    const backtick = taggedDefault('sql`\\$' + '{x}`');
-    expect(backtick.literal.rawBody()).toBe('\\$' + '{x}');
-    expect(backtick.literal.body()).toBeUndefined();
-    const quote = taggedDefault('sql"$' + '{x}"');
-    expect(quote.literal.body()).toBeUndefined();
-  });
-
   it('reports a bare unterminated backtick with no tag at the opening backtick', () => {
     const source = 'model T {\n  id String @default(`abc\n}\n';
     const result = parse(source);
@@ -178,13 +202,6 @@ describe('TaggedLiteral parsing', () => {
   it('reports an unterminated backtick at the top level', () => {
     const result = parse('`oops');
     expect(result.diagnostics.map((d) => d.code)).toContain('PSL_UNTERMINATED_TEMPLATE_LITERAL');
-  });
-
-  it('leaves body() undefined when the body contains ${', () => {
-    const { result, literal } = taggedDefault('sql`$' + '{x}`');
-    expect(result.diagnostics).toEqual([]);
-    expect(literal.rawBody()).toBe('$' + '{x}');
-    expect(literal.body()).toBeUndefined();
   });
 
   it('round-trips the source through printSyntax', () => {

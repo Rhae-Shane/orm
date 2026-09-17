@@ -6,19 +6,15 @@ export type TaggedLiteralCanonicalization =
   | { readonly ok: true; readonly body: string }
   | {
       readonly ok: false;
-      readonly reason: 'interpolation' | 'nul' | 'too-large';
+      readonly reason: 'nul' | 'too-large';
       readonly offset: number;
     };
 
 export const TAGGED_LITERAL_MAX_BYTES = 65536;
 
 /** The message a tagged literal's canonicalization failure is reported with, in PSL and in TypeScript. */
-export function describeTaggedLiteralFailure(
-  reason: 'interpolation' | 'nul' | 'too-large',
-): string {
+export function describeTaggedLiteralFailure(reason: 'nul' | 'too-large'): string {
   switch (reason) {
-    case 'interpolation':
-      return 'Tagged literals do not support $' + '{...} interpolation.';
     case 'nul':
       return 'Tagged literals must not contain NUL characters.';
     case 'too-large':
@@ -26,12 +22,12 @@ export function describeTaggedLiteralFailure(
   }
 }
 
-const BACKTICK_ESCAPES: ReadonlySet<string> = new Set(['`', '\\', '$']);
+const BACKTICK_ESCAPES: ReadonlySet<string> = new Set(['`', '\\']);
 
 /**
  * Resolves the escapes a backtick fence understands, in PSL and in the TypeScript `sql` tag's raw
- * text: `` \` `` is a backtick, `\\` one backslash, `\$` a dollar sign. Every other backslash
- * sequence is kept as written, both characters, so a SQL body may contain `E'\n'` unchanged.
+ * text: `` \` `` is a backtick and `\\` one backslash. Every other backslash sequence is kept as
+ * written, both characters, so a SQL body may contain `E'\n'` unchanged.
  */
 export function resolveBacktickEscapes(raw: string): string {
   let out = '';
@@ -64,14 +60,10 @@ interface Line {
  * Turns the escape-resolved text of a tagged literal into its canonical body:
  * newlines become `\n`, a blank first and last line are dropped, common leading
  * whitespace is removed, internal blank lines become empty, and no trailing
- * newline is added. Fails on `${`, on a NUL character, or when the result is
- * larger than 65536 UTF-8 bytes.
+ * newline is added. Fails on a NUL character or when the result is larger than
+ * 65536 UTF-8 bytes.
  */
 export function canonicalizeTaggedLiteralBody(resolved: string): TaggedLiteralCanonicalization {
-  const interpolation = resolved.indexOf('${');
-  if (interpolation !== -1) {
-    return { ok: false, reason: 'interpolation', offset: interpolation };
-  }
   const nul = resolved.indexOf('\0');
   if (nul !== -1) {
     return { ok: false, reason: 'nul', offset: nul };
@@ -124,11 +116,11 @@ function offsetWhereBytesExceed(lines: readonly Line[], limit: number): number |
       bytes += 1;
       if (bytes > limit) return line.start;
     }
-    let column = 0;
+    let offsetInLine = 0;
     for (const char of line.text) {
       bytes += utf8Length(char.codePointAt(0) ?? 0);
-      if (bytes > limit) return line.start + column;
-      column += char.length;
+      if (bytes > limit) return line.start + offsetInLine;
+      offsetInLine += char.length;
     }
   }
   return undefined;

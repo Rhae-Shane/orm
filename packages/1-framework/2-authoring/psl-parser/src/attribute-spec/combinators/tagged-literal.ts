@@ -2,8 +2,7 @@ import type { TaggedLiteralValue } from '@internal/framework-components/control'
 import { describeTaggedLiteralFailure } from '@internal/framework-components/control';
 import type { PslDiagnostic, PslDiagnosticCode } from '@internal/framework-components/psl-ast';
 
-const CANONICALIZATION_CODES: Record<'interpolation' | 'nul' | 'too-large', PslDiagnosticCode> = {
-  interpolation: 'PSL_TAGGED_LITERAL_INTERPOLATION',
+const CANONICALIZATION_CODES: Record<'nul' | 'too-large', PslDiagnosticCode> = {
   nul: 'PSL_TAGGED_LITERAL_NUL',
   'too-large': 'PSL_TAGGED_LITERAL_TOO_LARGE',
 };

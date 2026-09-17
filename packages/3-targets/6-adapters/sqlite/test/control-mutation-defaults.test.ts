@@ -81,17 +81,20 @@ describe('createSqliteDefaultFunctionRegistry — dbgenerated canonicalization',
 });
 
 describe('createSqliteDefaultLiteralTagRegistry', () => {
-  const registry = createSqliteDefaultLiteralTagRegistry();
+  const tagRegistry = createSqliteDefaultLiteralTagRegistry();
+  const registry = createSqliteDefaultFunctionRegistry();
+  const registries = { defaultFunctionRegistry: registry, defaultLiteralTagRegistry: tagRegistry };
 
   it('registers sql and sqlite.sql, in that order', () => {
-    expect([...registry.keys()]).toEqual(['sql', 'sqlite.sql']);
-    expect(registry.get('sqlite.sql')?.usage).toBe('sqlite.sql`...`');
+    expect([...tagRegistry.keys()]).toEqual(['sql', 'sqlite.sql']);
+    expect(tagRegistry.get('sqlite.sql')?.usage).toBe('sqlite.sql`...`');
   });
 
   it('lowers sql`CURRENT_TIMESTAMP` verbatim, with no rewrite to now()', () => {
-    const result = registry.get('sql')!.lower({
+    const result = tagRegistry.get('sql')!.lower({
       literal: { tag: 'sql', body: 'CURRENT_TIMESTAMP', span: stubSpan },
       context: stubContext,
+      registries,
     });
     expect(result).toEqual({
       ok: true,
@@ -107,6 +110,33 @@ describe('createSqliteDefaultLiteralTagRegistry', () => {
     if (registries === undefined)
       throw new Error('the adapter descriptor declares mutation defaults');
     expect([...registries.defaultLiteralTagRegistry.keys()]).toEqual(['sql', 'sqlite.sql']);
+  });
+
+  it.each([['now'], ['autoincrement']])(
+    'refuses sql`%s()`, which spells a registered function',
+    (name) => {
+      const result = tagRegistry.get('sql')!.lower({
+        literal: { tag: 'sql', body: `${name}()`, span: stubSpan },
+        context: stubContext,
+        registries,
+      });
+      expect(result).toMatchObject({
+        ok: false,
+        diagnostic: {
+          code: 'PSL_INVALID_DEFAULT_SQL',
+          message: `Write @default(${name}()) instead of sql\`${name}()\`; the named form is the one Prisma understands.`,
+        },
+      });
+    },
+  );
+
+  it("accepts sql`now() + interval '1 day'`", () => {
+    const result = tagRegistry.get('sql')!.lower({
+      literal: { tag: 'sql', body: "now() + interval '1 day'", span: stubSpan },
+      context: stubContext,
+      registries,
+    });
+    expect(result).toMatchObject({ ok: true });
   });
 });
 

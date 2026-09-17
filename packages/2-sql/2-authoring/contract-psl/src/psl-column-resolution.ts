@@ -705,16 +705,16 @@ export function resolveFieldTypeDescriptor(input: {
 /** The attribute spec only accepts registered tags, so a missing entry is a wiring bug, not user input. */
 function lowerTaggedLiteral(
   literal: TaggedLiteralValue,
-  registry: ControlDefaultLiteralTagRegistry,
+  registries: ControlDefaultRegistries,
   context: DefaultFunctionLoweringContext,
 ): LoweredDefaultResult {
-  const entry = registry.get(literal.tag);
+  const entry = registries.defaultLiteralTagRegistry.get(literal.tag);
   if (entry === undefined) {
     throw new InternalError(
       `Default literal tag "${literal.tag}" was accepted by the attribute spec but has no registry entry`,
     );
   }
-  return entry.lower({ literal, context });
+  return entry.lower({ literal, context, registries });
 }
 
 export function lowerDefaultForField(input: {
@@ -784,7 +784,14 @@ export function lowerDefaultForField(input: {
     };
     const lowered =
       'tag' in value
-        ? lowerTaggedLiteral(value, input.defaultLiteralTagRegistry, context)
+        ? lowerTaggedLiteral(
+            value,
+            {
+              defaultFunctionRegistry: input.defaultFunctionRegistry,
+              defaultLiteralTagRegistry: input.defaultLiteralTagRegistry,
+            },
+            context,
+          )
         : lowerDefaultFunctionWithRegistry({
             call: value,
             registry: input.defaultFunctionRegistry,

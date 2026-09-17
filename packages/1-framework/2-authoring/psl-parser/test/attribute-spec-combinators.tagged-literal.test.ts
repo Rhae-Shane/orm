@@ -70,6 +70,17 @@ describe('oneOf with a tagged literal alternative', () => {
     }
   });
 
+  it('still tries later alternatives after a specific failure', () => {
+    const twoTagArms = oneOf(
+      taggedLiteral(['sql'], { documentation: 'Raw SQL.' }),
+      taggedLiteral(['pg.sql'], { documentation: 'Raw SQL.' }),
+    );
+    const { expr, ctx } = argOf('pg.sql`x`');
+    const result = twoTagArms.parse(expr, ctx);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value).toMatchObject({ tag: 'pg.sql', body: 'x' });
+  });
+
   it('keeps the generic list when no alternative fails with a specific code', () => {
     const { expr, ctx } = argOf('42');
     const result = type.parse(expr, ctx);
@@ -147,34 +158,11 @@ describe('taggedLiteral', () => {
     }
   });
 
-  it('reports interpolation at the literal', () => {
-    const { expr, ctx } = argOf('sql`$' + '{x}`');
+  it('passes a body containing a dollar-brace sequence through verbatim', () => {
+    const { expr, ctx } = argOf('sql`a $' + '{x} b`');
     const result = type.parse(expr, ctx);
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.failure).toEqual([
-        {
-          code: 'PSL_TAGGED_LITERAL_INTERPOLATION',
-          message: 'Tagged literals do not support $' + '{...} interpolation.',
-          sourceId: 'schema.prisma',
-          span: {
-            start: { offset: 3, line: 1, column: 4 },
-            end: { offset: 12, line: 1, column: 13 },
-          },
-        },
-      ]);
-    }
-  });
-
-  it('reports interpolation for an escaped dollar and for a quote fence', () => {
-    for (const source of ['sql`\\$' + '{x}`', 'sql"$' + '{x}"']) {
-      const { expr, ctx } = argOf(source);
-      const result = type.parse(expr, ctx);
-      expect(result.ok).toBe(false);
-      if (!result.ok) {
-        expect(result.failure[0]?.code).toBe('PSL_TAGGED_LITERAL_INTERPOLATION');
-      }
-    }
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.body).toBe('a $' + '{x} b');
   });
 
   it('reports a NUL character', () => {

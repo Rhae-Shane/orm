@@ -43,9 +43,19 @@ function expectDiagnosticForSchema(
 }
 
 describe('interpretPslDocumentToSqlContract list-column defaults', () => {
+  it('refuses autoincrement() on a list field, and only that storage function', () => {
+    expectDiagnosticForSchema(
+      'model Post {\n  id Int @id\n  tags Int[] @default(autoincrement())\n}\n',
+      {
+        code: 'PSL_LIST_AUTOINCREMENT_UNSUPPORTED',
+        message:
+          'Field "Post.tags" is a list and cannot use autoincrement(); it is a Prisma marker for a sequence-backed scalar column, not SQL.',
+      },
+    );
+  });
+
   it.each([
     ['now()', 'now()'],
-    ['autoincrement()', 'autoincrement()'],
     ["sql`'{}'::text[]`", "'{}'::text[]"],
   ])(
     'lowers the storage default %s on a list field with no diagnostic',

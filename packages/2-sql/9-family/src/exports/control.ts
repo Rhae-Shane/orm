@@ -91,7 +91,10 @@ export type {
   SqlPlanTargetDetails,
   StorageTypePlanResult,
 } from '../core/migrations/types';
-export { sqlDefaultLiteralTagEntry } from '../core/sql-default-literal-tag';
+export {
+  PSL_INVALID_DEFAULT_SQL,
+  sqlDefaultLiteralTagEntry,
+} from '../core/sql-default-literal-tag';
 export {
   TIMESTAMP_NOW_GENERATOR_ID,
   temporalAuthoringPresets,
