@@ -7,6 +7,7 @@ import type {
 import {
   assembleAuthoringContributions,
   assembleControlMutationDefaults,
+  type ControlDefaultLiteralTagRegistry,
   type ControlMutationDefaultRegistry,
 } from '@internal/framework-components/control';
 import {
@@ -197,6 +198,11 @@ interface ActualSqlBlockModule {
 
 interface ActualPostgresDefaultsModule {
   createPostgresDefaultFunctionRegistry(): ControlMutationDefaultRegistry;
+  createPostgresDefaultLiteralTagRegistry(): ControlDefaultLiteralTagRegistry;
+}
+
+interface ActualSqliteDefaultsModule {
+  createSqliteDefaultLiteralTagRegistry(): ControlDefaultLiteralTagRegistry;
 }
 
 interface ActualMongoAttributeModule {
@@ -1091,6 +1097,64 @@ describe('providePslCompletionItems', () => {
     expect(completionItemByLabel(snippetItems, 'dbgenerated').textEdit?.newText).toBe(
       `dbgenerated("${emptySnippetPlaceholder1}")`,
     );
+  }, 5_000);
+
+  it('offers each registered literal tag inside @default( through the SQL factory', async () => {
+    const stack = await actualSqlStack();
+    const [postgres, sqlite] = await Promise.all([
+      importFromPackageRoot<ActualPostgresDefaultsModule>(
+        '../../../3-targets/6-adapters/postgres/src/core/control-mutation-defaults.ts',
+      ),
+      importFromPackageRoot<ActualSqliteDefaultsModule>(
+        '../../../3-targets/6-adapters/sqlite/src/core/control-mutation-defaults.ts',
+      ),
+    ]);
+    const complete = (
+      defaultLiteralTagRegistry: ControlDefaultLiteralTagRegistry,
+      clientSupportsSnippets: boolean,
+    ) =>
+      completeWithActualStack('model Post { value String @default(|) }', stack, {
+        clientSupportsSnippets,
+        controlMutationDefaults: { ...controlMutationDefaults, defaultLiteralTagRegistry },
+      }).items.map((item) => ({
+        label: item.label,
+        detail: item.detail,
+        newText: item.textEdit?.newText,
+        insertTextFormat: item.insertTextFormat,
+      }));
+    const postgresTags = postgres.createPostgresDefaultLiteralTagRegistry();
+    const documentation = postgresTags.get('sql')?.documentation;
+    const value = (label: string) => ({
+      label,
+      detail: 'PSL argument value',
+      newText: label,
+      insertTextFormat: undefined,
+    });
+    const tag = (label: string, snippet: boolean) => ({
+      label,
+      detail: documentation,
+      newText: snippet ? `${label}\`$1\`` : label,
+      insertTextFormat: snippet ? InsertTextFormat.Snippet : undefined,
+    });
+
+    expect(complete(postgresTags, true)).toEqual([
+      value('true'),
+      value('false'),
+      tag('sql', true),
+      tag('pg.sql', true),
+    ]);
+    expect(complete(sqlite.createSqliteDefaultLiteralTagRegistry(), true)).toEqual([
+      value('true'),
+      value('false'),
+      tag('sql', true),
+      tag('sqlite.sql', true),
+    ]);
+    expect(complete(postgresTags, false)).toEqual([
+      value('true'),
+      value('false'),
+      tag('sql', false),
+      tag('pg.sql', false),
+    ]);
   }, 5_000);
 
   it('uses distinct local and referenced fields through actual SQL relation specs', async () => {
