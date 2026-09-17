@@ -22,3 +22,8 @@ The storage name of a model with no `@@map` is the model name. This was already 
 - Operator: the planner intervenes by throwing with mitigation instructions, never by renaming.
 - Operator: repo fixtures get `@@map` added rather than being regenerated.
 - Orchestrator, unchallenged: infer keeps re-casing snake_case tables to PascalCase model names with an explicit `@@map`; the guard lives in the planner, not in `db verify`, because verify already prints both names side by side.
+
+## Decision taken 2026-09-17: renames are stated in hand-written migrations
+
+Slice 2 first added a `--rename <from>=<to>` flag to `migration plan` and `migration new`. The documented design for stating renames is a planner hint in the contract source (`@hint(was: ...)`, Data Contract and Migration System subsystem docs, ADR 001), so the flag was a second, undocumented mechanism. The operator removed it. Until hints exist, a rename is stated with `this.renameTable(...)` in a migration created by `migration new`, which also computes the companion constraint and index renames from the migration's contracts.
+

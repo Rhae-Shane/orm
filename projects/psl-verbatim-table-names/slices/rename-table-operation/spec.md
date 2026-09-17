@@ -1,58 +1,46 @@
 # Slice spec — Rename-table migration operation
 
-**Project:** `projects/psl-verbatim-table-names/` · **Slice 2** · **Branch:** `psl-verbatim-rename-table` (from `main`)
+**Project:** `projects/psl-verbatim-table-names/` · **Slice 2** · **Branch:** `psl-verbatim-rename-table` · **PR:** https://github.com/prisma/orm/pull/30331
 
 ## At a glance
 
-Today a model whose table name changes plans as `DropTable` plus `CreateTable`, and the rows are gone. After this slice:
+Today a model whose table name changes plans as `DropTable` plus `CreateTable`, and the rows are gone. After this slice a user makes the rename its own schema change, runs `prisma migration new`, and writes one line in the generated migration:
 
-```bash
-prisma migration plan --rename userProfile=UserProfile
+```ts
+this.renameTable({ table: 'userProfile', to: 'UserProfile' })
 ```
 
-plans one `renameTable` operation followed by whatever else the diff needs, `migrate` runs `ALTER TABLE "userProfile" RENAME TO "UserProfile"`, and the rows survive. The `MIGRATION.TABLE_NAME_CASE_CHANGED` guard's second remedy points at this flag instead of a by-hand `ALTER TABLE`.
-
-`migration new` does not run the planner; it scaffolds an empty migration file for hand-authored operations. With the same flag it scaffolds a file whose body already holds one `this.renameTable({ from, to })` call per intent, so both commands accept the same grammar. Amended after the implementer checked the CLI: the first draft assumed `migration new` planned.
+`migrate` then renames the table and every constraint and index named after it, and the rows survive.
 
 ## Chosen design
 
-**Intent comes from the CLI, never from inference.** Tables have no content identity the way indexes and checks do (ADR 243), so the planner cannot tell a rename from a drop and a create. The operator states it: `--rename <from>=<to>`, repeatable, on `migration plan` (which feeds the planner) and on `migration new` (which scaffolds the operation into the hand-authored file). Either side may be schema-qualified, `auth.userProfile=UserProfile`; an unqualified name means the target's default namespace. Nothing is added to the schema; there is no attribute and no prompt.
+**A rename is stated in a hand-written migration, never inferred and never stated on the command line.** Tables have no content identity the way indexes and checks do (ADR 243), so the planner cannot tell a rename from a drop and a create. The documented long-term design is a planner hint in the contract source, `@hint(was: ...)` (Data Contract and Migration System subsystem docs, ADR 001); it is not implemented and is a follow-up outside this project. Until it exists, the way to state a rename is the one the migration system already offers for anything the planner cannot infer: a hand-written migration.
 
-**The flag name is family-neutral.** The flag is registered by the framework CLI, which serves every family, so it may not carry SQL vocabulary: the repo's framework-vocabulary check fails CI above its threshold, and its rule allows no suppression for a SQL-only concept. `--rename` renames what a model maps to, a table in SQL or a collection in Mongo. Mongo refuses it with `MIGRATION.RENAME_UNSUPPORTED` until it has a rename operation. SQL vocabulary (`renameTable`, `MIGRATION.TABLE_RENAME_*`) stays in the SQL family and target packages. Amended after review: the first draft named the flag `--rename-table`, which added twelve framework lines over the vocabulary threshold.
+**`this.renameTable` emits every rename the table needs.** The migration facade method reads the migration's start and end contracts and emits the table rename followed by a rename for each object on that table whose name is derived from the table name: unnamed primary keys, unique constraints and foreign keys on Postgres; indexes and check constraints whose derived prefix comes from the table name; default-named indexes on SQLite, dropped and recreated because SQLite cannot rename an index. A constraint takes the end contract's explicit name only when it is otherwise unchanged; otherwise it takes the name derived from the new table name. Explicitly named objects and foreign keys on other tables keep their names. On Postgres the method also carries the table's row-level security settings and policies to the new name where the contract refers to them by table name. If the start contract has no such table, or the end contract has no table under the new name, the method refuses with `MIGRATION.TABLE_RENAME_UNMATCHED`.
 
-**Every name derived from the table follows it.** Postgres names unnamed primary keys, unique constraints, foreign keys, indexes and check constraints after the table, and `ALTER TABLE ... RENAME TO` renames none of them. The planner therefore emits a companion rename for each such object owned by the renamed table, so a later plan's derived names match the database. Explicitly named objects, and foreign keys on other tables, keep their names. On SQLite, index names derived from the table are dropped and recreated, since SQLite cannot rename an index. `migration new --rename` scaffolds the same operations with the same code. Amended after review: the first draft renamed only the table, so the next migration touching a constraint failed.
+**The rename is its own schema change.** `migrate` verifies the database against the migration's end contract, so a hand-written migration that renames a table but omits other edits made in the same change fails loudly at `migrate`. The guide tells users to rename first, then make other edits and plan them.
 
-**Rename intents are applied to the previous schema before the diff runs.** Rather than pairing issues after the fact, the planner takes the previous state (the prior contract's schema IR, or the introspected live schema) and renames the stated tables in it, then runs the ordinary diff against the next contract, then prepends one `RenameTableCall` per intent to the operations. The differ therefore sees the table under its new name and plans any column, index or constraint changes on it normally, and the case-change guard never sees a drop and create pair for it. Existing index and check rename pairing continues to work on the renamed table, since it pairs by wire-name hash.
+**The operation.** `renameTable` on Postgres and SQLite: prechecks that the old table exists and the new one does not; postchecks that the new table exists and the old one is gone. Postgres qualifies by schema. SQLite folds only ASCII letters when comparing identifiers, so a rename that only changes ASCII case goes through a temporary name. Operation class `widening`. `RenameCheckConstraintCall` is generalised into `RenameConstraintCall` with a kind.
 
-**An intent that does not match is a planning failure**, reported through the planner's existing failure result as a conflict: `from` must exist in the previous state, `to` must not, and `to` must exist in the next contract. Silent acceptance of a stale flag would hide a mistake.
+**The guard's remedies.** `MIGRATION.TABLE_NAME_CASE_CHANGED` offers three ways out: add `@@map` to keep the old table; in a project with migration history, create a migration with `prisma migration new` and call `this.renameTable(...)` in it; in a project managed with `db update`, run the statements the target supplies by hand, then `db update` again. On SQLite `db update` drops an index before creating one whose name collides only in ASCII case.
 
-**The operation.** `renameTable` in the Postgres and SQLite operation sets, following the `renameCheckConstraint` precedent (PR #29894) end to end: op builder with precheck (`from` exists, `to` absent), execute (`ALTER TABLE ... RENAME TO ...`, schema-qualified on Postgres), postcheck; `RenameTableCall` in the op-factory call union with `renderTypeScript` and import requirements so a hand-written migration can call it; the migration facade method; the public op-factory export. Operation class `widening`, idempotency class per ADR 038 (effect-idempotent with equivalence check: pre-state compatible if `from` or `to` already holds the table). Under an `additive`-only policy the op is refused the same way other `widening` ops are, not degraded to drop and create.
-
-**Guard remedy.** `MIGRATION.TABLE_NAME_CASE_CHANGED` offers three ways out: add `@@map` to keep the old table; in a project with migration history, plan with `--rename "<from>=<to>"`; in a project managed with `db update`, rename the table by hand with the statements the target supplies, then run `db update` again, which renames or recreates the indexes named after the old table. The statements come from the target because SQLite cannot rename a table in one statement when only the case changes; it goes through a temporary name. On SQLite, `db update` drops an index before creating one whose name differs only in case, since SQLite compares index names without regard to case. The error reference and the upgrade fragments under `upgrade-instructions/pending/psl-verbatim-table-names/` describe the same three paths, plus the by-hand constraint renames on Postgres and the by-hand collection rename on Mongo, which refuses the flag. Amended after review: the first draft kept the by-hand sentence only for Mongo, and the fragments were not updated until review found them stale.
+**No CLI flag.** An earlier version of this slice added `--rename <from>=<to>` to `migration plan` and `migration new`. It was removed because it is a second, undocumented way to state a rename that the documented hint design will replace. Amended 2026-09-17 on the operator's decision.
 
 ## Scope
 
-**In:** op builder, call, facade, export, TypeScript rendering for Postgres and SQLite; the pre-diff rename application and the unmatched-intent conflict in the shared SQL family planner code, wired in both target planners; CLI flag parsing for both commands, threading into the planner on `migration plan` and into the scaffold on `migration new`; guard remedy text; error reference; fragment text; tests below.
+**In:** the operation and its call for Postgres and SQLite; the facade method computing companion renames from the migration's contracts; the SQLite identifier-collision helper, index drop-before-create ordering, and rebuild postchecks; the guard's three remedies with target-supplied by-hand statements; the error reference; the upgrade fragments under `upgrade-instructions/pending/psl-verbatim-table-names/` and `upgrade-instructions/pending/rename-constraint-call/`; removal of the flag and everything reachable only through it.
 
-**Out:** `db update` and `db init` (no flag; the guard still protects them); Mongo; any rename inference; renaming columns; a schema attribute.
+**Out:** planner hints; rename inference; column renames; MongoDB collection renames (users rename by hand).
 
 ## Tests, all red before their change
 
-- Op level, both targets: `renameTable` renders the expected SQL; precheck fails when `from` is missing or `to` exists; `renderTypeScript` round-trips through the migration file parser.
-- Planner, both targets: with one intent and otherwise identical tables, the plan is exactly one rename op; with an intent and an added column, the plan is the rename op followed by the add-column op on the new name; an intent whose `from` is absent, or whose `to` already exists, yields a failure conflict naming it; the case-change guard does not fire when the pair is covered by an intent and still fires when it is not; an `additive`-only policy refuses the rename as it refuses other widening ops.
-- CLI: `--rename` parses repeated and schema-qualified values, rejects a malformed value with a clear error, reaches the planner options on `migration plan`, and on `migration new` produces a migration file that round-trips through the loader and whose operation renders the expected SQL.
-- End to end, Postgres (PGlite) and SQLite, under `test/integration/test/cli-journeys/`: create a table with rows under the old name, change the model's table name, run `migration plan --rename` then `migrate`, and prove the rows are present under the new name and `db verify --schema-only` is clean.
-- Guard text: the existing guard tests pin the new remedy string.
+- Operation, both targets: rendered SQL, prechecks, postchecks, TypeScript rendering round-trip.
+- Facade, both targets: `this.renameTable` emits the table rename plus the companion renames for a table with an unnamed primary key, a unique constraint, a foreign key, an index and a check; a constraint that changed keeps the derived name; an explicitly named object is left alone; an unknown table refuses.
+- Guard, both targets: the three remedies and the target's by-hand statements.
+- Journeys under `test/integration/test/cli-journeys/`: Postgres and SQLite, `migration new` plus a hand-written `this.renameTable` on a table with rows, a unique constraint, a foreign key and an index (and row-level security and a policy on Postgres); after `migrate` the rows and objects are present, a plan with no schema change is empty, `db verify --schema-only` is clean, and a follow-up migration removing those objects applies. The SQLite `db update` by-hand path journey stays.
 
 ## Done conditions
 
-- Every test above is green; `pnpm test:packages`, `pnpm test:integration`, `pnpm test:e2e`, `pnpm lint`, `pnpm lint:deps`, `pnpm lint:casts` (delta 0), `pnpm fixtures:check`, `pnpm check:error-reference` pass on the final tree.
-- `pnpm check:upgrade-coverage --mode pr --prev origin/main --head HEAD` passes; if it demands a fragment for the app audience (the flag is additive, so probably not), write a truthful one.
-- The project DoD line "a model rename in PSL plans as a single rename-table operation on Postgres and SQLite, and the rows survive" is met by the end-to-end test.
-
-## Dispatch plan
-
-1. Red tests: op-level, planner, CLI parsing, and the two journey tests, committed alone with their red logs.
-2. The operation and its wiring in both targets, plus TypeScript rendering; op-level tests green.
-3. Pre-diff rename application, unmatched-intent conflict, guard interaction, CLI flag threading; planner and CLI tests green.
-4. Journeys green, guard remedy and docs and fragments updated, full gate, push (`git push -u bot psl-verbatim-rename-table`). The orchestrator opens the PR.
+- Every test above is green; all repository checks pass one at a time, including `lint:framework-vocabulary` at or below main's count and the checks only CI runs.
+- No `--rename` flag, `CLI.INVALID_RENAME_FLAG`, or rename-intent code reachable only through the flag remains.
+- The project DoD line "a model rename in PSL keeps its rows on Postgres and SQLite" is met by the journeys.
