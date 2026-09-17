@@ -44,13 +44,13 @@ The canonicalized body is the expression. Nothing rewrites it at authoring time,
 
 Both targets run their introspection parser over the expression in the contract before comparing it to the expression the database reports, in planning and in verification alike, so the two are compared in the same form and a second plan after applying a raw default plans nothing. The comparison is only a comparison: DDL renders the authored expression (D4). The comparison logic itself is not changed in this project; see [`deferred.md`](deferred.md) item 1.
 
-### D6. Named storage functions cover the common cases
+### D6. Named defaults are Prisma concepts; database functions are raw SQL
 
-Postgres registers `gen_random_uuid()` as a storage default function, after `now()` in registry order. No other named function is added in this project. `now()` and `autoincrement()` already exist on both targets.
+No named default function is added. `now()` and `autoincrement()` stay named because they work on every SQL target and the planners treat them specially. A database function such as `gen_random_uuid()` is written as `` @default(sql`gen_random_uuid()`) ``. (Amended 2026-09-17 after Serhii's review. The first version registered `gen_random_uuid()` as a named Postgres function. That name read like Prisma's own `uuid()`, which generates the value client-side before the insert, while `gen_random_uuid()` makes the database generate it, and nothing in either name showed the difference.)
 
 ### D7. TypeScript gets the same forms
 
-The SQL family contract builder exports `sql` (template tag), `now()`, and `autoincrement()`. The Postgres contract builder additionally exports `genRandomUuid()`. All return a function-kind default accepted by `.default()`. `.defaultSql()` stays, marked `@deprecated` with a message naming the replacement, and is deleted at 8.0.0 GA. Every `.defaultSql(...)` call inside this repository is rewritten to the new forms.
+The SQL family contract builder exports `sql` (template tag), `now()`, and `autoincrement()`. All return a function-kind default accepted by `.default()`. `.defaultSql()` stays, marked `@deprecated` with a message naming the replacement, and is deleted at 8.0.0 GA. Every `.defaultSql(...)` call inside this repository is rewritten to the new forms.
 
 ### D8. A list column takes storage defaults, except `autoincrement()`
 
@@ -86,7 +86,7 @@ Slice A implements completion of registered tags inside `@default(`, because the
 - Content-addressing raw SQL defaults (deferred, D1).
 - Migrating index expressions, check constraint bodies, and RLS predicates from plain strings to tagged literals (deferred).
 - `encodeDdl` and `decodeDdl` (deferred, D11).
-- New named storage functions beyond `gen_random_uuid()`.
+- New named storage default functions.
 - Any change to Mongo authoring. Mongo codecs implement the new methods; nothing calls them yet.
 
 ## Cross-cutting requirements
@@ -105,7 +105,7 @@ Entities affected: `ColumnDefault` (unchanged shape, new producers). `Codec` int
 
 ## Adapter-impact
 
-- Postgres adapter: registry gains `gen_random_uuid()` and the tag registry; loses `dbgenerated`.
+- Postgres adapter: registry gains the tag registry; loses `dbgenerated`.
 - SQLite adapter: registry gains the tag registry; loses `dbgenerated` and the `NOW_SYNONYMS` rewrite.
 - Postgres target: infer prints the new forms; codecs implement PSL methods.
 - SQLite target: verify-side default resolution hook; codecs implement PSL methods.
@@ -157,5 +157,7 @@ Conclusions from the shaping discussion on 2026-09-16, with reasons, assumptions
 **Empty Prisma 7 `dbgenerated()` means no default.** Why: the contract states whether a column has a default; the migration and runtime systems act on that; extra validation in the reader is a special case. Alternative rejected: the current diagnostic on required fields.
 
 **List columns take storage defaults, except `autoincrement()`.** Why: the interpreter cannot know any function's return type, for lists or for anything else, so refusing storage functions on lists alone was a special case. Client-side generators are refused because a generator produces one value; `autoincrement()` is refused because it is a Prisma marker, not SQL, and the Postgres planner would silently render a scalar `SERIAL` column. Alternative rejected: the previous rule from the infer round-trip project, which kept the refusal to move a type error from DDL time to authoring time; the operator prefers the database to report it.
+
+**No named `gen_random_uuid()`.** Why: Serhii pointed out that `uuid()` (client-side generator) and a named `gen_random_uuid()` (database default) both read as "make a UUID" with the difference hidden. A Postgres function name dressed as a Prisma function also contradicts ADR 129's rule that raw SQL looks raw. Alternative rejected: keeping the named function for the Supabase contract's ten uses; `` sql`gen_random_uuid()` `` lowers to the same contract.
 
 **Persona cross-pollination.** Scope was settled under the product lens first (remove, replace, deadline is "before GA", tooling is a hand-off). Shape under the architect lens (two independent pieces meeting at the removal step). Buildability under the principal-engineer lens is in the slice specs.

@@ -14,7 +14,6 @@ model T {
   expires   DateTime @default(sql"(now() + '00:03:00'::interval)")
   createdAt DateTime @default(pg.sql`CURRENT_TIMESTAMP`)
   tags      String[] @default(sql`'{}'::text[]`)
-  ident     String   @default(gen_random_uuid())
 }
 ```
 
@@ -24,7 +23,6 @@ const T = model('T', {
     id: field.column(textColumn).default(sql`gen_random_uuid()`).id(),
     createdAt: field.column(timestamptzTemporalColumn).default(now()),
     seq: field.column(int4Column).default(autoincrement()),
-    ident: field.column(textColumn).default(genRandomUuid()),
   },
 });
 ```
@@ -35,6 +33,7 @@ Every one of those emits, migrates onto a dev database, verifies clean, and `con
 
 These supersede the sections below where they differ.
 
+- A8 is withdrawn (project spec D6, amended): Postgres registers no named `gen_random_uuid()` and TypeScript has no `genRandomUuid()`. Write `` sql`gen_random_uuid()` ``. `contract infer` prints that default as on main until slice C.
 - A body that is exactly `now()` or `autoincrement()` is refused in PSL and TypeScript with a hint to write the named function (shared `reservedSqlDefaultBody` beside `checkSqlDefaultBody`). Any other body passes verbatim.
 - `autoincrement()` on a list column is refused (`PSL_LIST_AUTOINCREMENT_UNSUPPORTED`); other storage defaults on lists lower (project spec D8).
 - A PSL tagged literal has no interpolation rule; the backtick fence has two escapes, `` \` `` and `\\`.

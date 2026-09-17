@@ -13,7 +13,7 @@
 - Postgres [`control-mutation-defaults.ts`](../../../../packages/3-targets/6-adapters/postgres/src/core/control-mutation-defaults.ts): delete `dbgeneratedSig`, `lowerDbgenerated`, and the registry entry.
 - SQLite [`control-mutation-defaults.ts`](../../../../packages/3-targets/6-adapters/sqlite/src/core/control-mutation-defaults.ts): delete `dbgeneratedSig`, `lowerDbgenerated`, `NOW_SYNONYMS`, and the registry entry. The introspection-side rule in `sqlite/src/core/default-normalizer.ts` that reads `CURRENT_TIMESTAMP` and `datetime('now')` as `now()` stays, and its comment is rewritten to say it exists so a named `now()` default verifies against the database's text (slice A's `sqliteResolveDefault` applies it to both sides).
 - Test fixture registry [`contract-psl/test/fixtures.ts`](../../../../packages/2-sql/2-authoring/contract-psl/test/fixtures.ts): delete the entry.
-- Registry-order test expectation becomes `['autoincrement', 'now', 'gen_random_uuid', 'uuid', 'cuid', 'ulid', 'nanoid']`.
+- Registry-order test expectation becomes `['autoincrement', 'now', 'uuid', 'cuid', 'ulid', 'nanoid']`.
 - Language-server completion tests: `dbgenerated` removed from the expected list and snippet tests.
 - Adapter registry tests: the `dbgenerated` lowering, empty-argument, and verbatim-preservation cases are deleted; the SQLite `now()` canonicalization suite is deleted.
 
@@ -54,7 +54,7 @@ Files: [`9-family/src/core/psl-contract-infer/default-mapping.ts`](../../../../p
 
 | Lines | Before | After |
 |---|---|---|
-| 88, 158, 445, 459, 544, 571, 587, 657, 675, 697 | `@default(dbgenerated("gen_random_uuid()"))` | `@default(gen_random_uuid())` |
+| 88, 158, 445, 459, 544, 571, 587, 657, 675, 697 | `@default(dbgenerated("gen_random_uuid()"))` | `` @default(sql`gen_random_uuid()`) `` |
 | 167, 168, 576 | `@default(dbgenerated("'{}'::jsonb"))` | `@default("{}")` |
 | 466 | `@default(dbgenerated("'[]'::jsonb"))` | `@default("[]")` |
 | 118 | `@default(dbgenerated("'confidential'::auth.oauth_client_type"))` | `@default(confidential)` |
@@ -91,14 +91,14 @@ Content, both audiences:
 
 | You wrote | Write instead |
 |---|---|
-| `@default(dbgenerated("gen_random_uuid()"))` | `@default(gen_random_uuid())` |
+| `@default(dbgenerated("gen_random_uuid()"))` | `` @default(sql`gen_random_uuid()`) `` |
 | `@default(dbgenerated("now()"))`, `@default(dbgenerated("CURRENT_TIMESTAMP"))` on Postgres | `@default(now())` |
 | `@default(dbgenerated("'<json>'::jsonb"))` on a JSON column | `@default("<json>")` |
 | `@default(dbgenerated("'<member>'::<enum type>"))` on an enum column | `@default(<member>)` |
 | `@default(dbgenerated("<anything else>"))` | `@default(sql\`<anything else>\`)` |
 | `.defaultSql('now()')` | `.default(now())` |
 | `.defaultSql('autoincrement()')` | `.default(autoincrement())` |
-| `.defaultSql('gen_random_uuid()')` | `.default(genRandomUuid())` |
+| `.defaultSql('gen_random_uuid()')` | `` .default(sql`gen_random_uuid()`) `` |
 | `.defaultSql('<anything else>')` | `.default(sql\`<anything else>\`)` |
 
 - Detection: `grep -rn "dbgenerated(" prisma/` and `grep -rn "defaultSql(" prisma/`.
@@ -162,3 +162,7 @@ File: `projects/remove-dbgenerated/editor-tooling-brief.md`. Contents:
 ## Repository rules that apply
 
 `CLAUDE.md`; `.agents/rules/running-tests.mdc`; `.agents/rules/git-staging.mdc`; `.agents/rules/no-backward-compatibility.mdc` (no shim that keeps `dbgenerated` parsing); `.agents/rules/doc-maintenance.mdc`; `.agents/rules/fix-the-class-not-the-instance.mdc`; `.agents/rules/cli-test-fixture-cleanup.mdc`; the `record-upgrade-instructions` skill; `drive/calibration/failure-modes.md` F12 (exhaustive doc sweep); `drive/calibration/dod.md` § Project-DoD "Artefact-format changes load the previous format".
+
+## Amendment 2026-09-17: no named `gen_random_uuid()`
+
+Project spec D6 is amended: `gen_random_uuid()` is not a named function. Everywhere this slice says `@default(gen_random_uuid())`, `genRandomUuid()`, or a `default-gen-random-uuid` parity pair, read `` @default(sql`gen_random_uuid()`) ``, `` .default(sql`gen_random_uuid()`) ``, and a pair that uses those forms. `contract infer` prints a live `gen_random_uuid()` default through the general `sql` fallback; there is no special entry for it. In C5 the ten `gen_random_uuid()` rows become `` @default(sql`gen_random_uuid()`) ``.
