@@ -165,13 +165,47 @@ describe('Postgres planner rename-table intents with table objects', () => {
       expect(await planRename(spec)).toEqual([RENAME_TABLE]);
     });
 
-    it('keeps the old name of an unnamed unique that the next contract names explicitly', async () => {
+    it('plans nothing more for an unnamed unique the next contract names with its current name', async () => {
       expect(
         await planRename(
           { uniques: [{ columns: ['email'] }] },
           { uniques: [{ columns: ['email'], name: 'userProfile_email_key' }] },
         ),
       ).toEqual([RENAME_TABLE]);
+    });
+
+    it('renames unnamed constraints to the explicit names the next contract gives them', async () => {
+      expect(
+        await planRename(
+          {
+            primaryKey: { columns: ['id'] },
+            uniques: [{ columns: ['email'] }],
+            foreignKeys: (tableName) => [
+              { source: reference(tableName, ['accountId']), target: reference('account', ['id']) },
+            ],
+          },
+          {
+            primaryKey: { columns: ['id'], name: 'profile_pk' },
+            uniques: [{ columns: ['email'], name: 'profile_email_unique' }],
+            foreignKeys: (tableName) => [
+              {
+                source: reference(tableName, ['accountId']),
+                target: reference('account', ['id']),
+                name: 'profile_account_fk',
+              },
+            ],
+          },
+        ),
+      ).toEqual([
+        RENAME_TABLE,
+        ['ALTER TABLE "UserProfile" RENAME CONSTRAINT "userProfile_pkey" TO "profile_pk"'],
+        [
+          'ALTER TABLE "UserProfile" RENAME CONSTRAINT "userProfile_email_key" TO "profile_email_unique"',
+        ],
+        [
+          'ALTER TABLE "UserProfile" RENAME CONSTRAINT "userProfile_accountId_fkey" TO "profile_account_fk"',
+        ],
+      ]);
     });
   });
 });
