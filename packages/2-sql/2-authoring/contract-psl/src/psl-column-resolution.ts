@@ -25,6 +25,7 @@ import {
 import type { AnyCodecDescriptor, CodecLookup } from '@internal/framework-components/codec';
 import type {
   ControlDefaultLiteralTagRegistry,
+  ControlDefaultRegistries,
   ControlMutationDefaultRegistry,
   DefaultFunctionLoweringContext,
   LoweredDefaultResult,
