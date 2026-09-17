@@ -111,6 +111,7 @@ describe('applyTableRenameIntents', () => {
     });
 
     const result = applyTableRenameIntents({
+      renameTableReferences: undefined,
       fromContract,
       toContract,
       intents: [rename('userProfile', 'UserProfile')],
@@ -147,6 +148,7 @@ describe('applyTableRenameIntents', () => {
     });
 
     const result = applyTableRenameIntents({
+      renameTableReferences: undefined,
       fromContract,
       toContract,
       intents: [rename('userProfile', 'UserProfile')],
@@ -173,6 +175,7 @@ describe('applyTableRenameIntents', () => {
     const toContract = contractOf({ auth: { UserProfile: table() }, app: { post: table() } });
 
     const result = applyTableRenameIntents({
+      renameTableReferences: undefined,
       fromContract,
       toContract,
       intents: [rename('userProfile', 'UserProfile')],
@@ -197,6 +200,7 @@ describe('applyTableRenameIntents', () => {
     });
 
     const result = applyTableRenameIntents({
+      renameTableReferences: undefined,
       fromContract,
       toContract,
       intents: [
@@ -215,10 +219,47 @@ describe('applyTableRenameIntents', () => {
     expect(tablesOf(result.value.contract, 'app')).toEqual(['userProfile']);
   });
 
+  it('lets the target rename its own references to each renamed table in that table namespace', () => {
+    const fromContract = contractOf({
+      auth: { userProfile: table(), account: table() },
+      app: { userProfile: table() },
+    });
+    const toContract = contractOf({
+      auth: { UserProfile: table(), account: table() },
+      app: { userProfile: table() },
+    });
+    const calls: string[] = [];
+
+    const result = applyTableRenameIntents({
+      fromContract,
+      toContract,
+      intents: [
+        { from: { namespaceId: 'auth', name: 'userProfile' }, to: { name: 'UserProfile' } },
+      ],
+      renameTableReferences: (entries, applied) => {
+        calls.push(`${applied.namespaceId}:${applied.from}>${applied.to}`);
+        return { ...entries, marker: { [applied.to]: { tableName: applied.to } } };
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(calls).toEqual(['auth:userProfile>UserProfile']);
+    expect(result.value.contract.storage.namespaces['auth']?.entries['marker']).toEqual({
+      UserProfile: { tableName: 'UserProfile' },
+    });
+    expect(result.value.contract.storage.namespaces['app']?.entries['marker']).toBeUndefined();
+  });
+
   it('returns nothing to do when there are no intents', () => {
     const fromContract = contractOf({ [UNBOUND_NAMESPACE_ID]: { userProfile: table() } });
 
-    const result = applyTableRenameIntents({ fromContract, toContract: fromContract, intents: [] });
+    const result = applyTableRenameIntents({
+      fromContract,
+      toContract: fromContract,
+      intents: [],
+      renameTableReferences: undefined,
+    });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -235,7 +276,12 @@ describe('applyTableRenameIntents', () => {
     });
 
     function conflictsFor(intents: readonly StorageEntityRename[]) {
-      const result = applyTableRenameIntents({ fromContract, toContract, intents });
+      const result = applyTableRenameIntents({
+        fromContract,
+        toContract,
+        intents,
+        renameTableReferences: undefined,
+      });
       expect(result.ok).toBe(false);
       return result.ok ? [] : result.failure;
     }
@@ -305,6 +351,7 @@ describe('applyTableRenameIntents', () => {
         app: { userProfile: table() },
       });
       const result = applyTableRenameIntents({
+        renameTableReferences: undefined,
         fromContract: ambiguousFrom,
         toContract: ambiguousTo,
         intents: [rename('userProfile', 'UserProfile')],
@@ -317,6 +364,7 @@ describe('applyTableRenameIntents', () => {
 
     it('rejects intents without a prior contract to apply them to, with its own code', () => {
       const result = applyTableRenameIntents({
+        renameTableReferences: undefined,
         fromContract: null,
         toContract,
         intents: [rename('userProfile', 'UserProfile')],
@@ -340,6 +388,7 @@ describe('applyTableRenameIntents', () => {
 
       function conflictsBetween(intents: readonly StorageEntityRename[]) {
         const result = applyTableRenameIntents({
+          renameTableReferences: undefined,
           fromContract: authFrom,
           toContract: authTo,
           intents,

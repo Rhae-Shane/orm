@@ -169,6 +169,7 @@ export class SqliteMigrationPlanner
             fromContract: options.fromContract,
             toContract: options.contract,
             intents,
+            renameTableReferences: undefined,
           });
     if (applied !== undefined && !applied.ok) {
       return plannerFailure(applied.failure);

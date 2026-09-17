@@ -68,6 +68,7 @@ import {
 import { TypeScriptRenderablePostgresMigration } from './planner-produced-postgres-migration';
 import { postgresPlannerStrategies } from './planner-strategies';
 import { postgresContractToSchema } from './postgres-contract-to-schema';
+import { renameRlsReferences } from './rename-rls-references';
 import { resolveDdlSchemaForNamespaceStorage } from './resolve-ddl-schema';
 import { verifyPostgresNamespacePresence } from './verify-postgres-namespaces';
 
@@ -224,6 +225,7 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
             fromContract: options.fromContract,
             toContract: options.contract,
             intents,
+            renameTableReferences: renameRlsReferences,
           });
     if (applied !== undefined && !applied.ok) {
       return plannerFailure(applied.failure);

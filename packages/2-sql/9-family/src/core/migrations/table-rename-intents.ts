@@ -29,10 +29,19 @@ export interface ResolvedTableRename {
   readonly to: string;
 }
 
+/**
+ * Renames a target's own references to a renamed table inside one namespace's entries: entity kinds the family does not know, such as a target's row-level-security markers, that name a table.
+ */
+export type RenameTableReferences = (
+  entries: SqlNamespaceEntries,
+  rename: ResolvedTableRename,
+) => SqlNamespaceEntries;
+
 export interface ApplyTableRenameIntentsInput {
   readonly fromContract: Contract<SqlStorage> | null;
   readonly toContract: Contract<SqlStorage>;
   readonly intents: readonly TableRenameIntent[];
+  readonly renameTableReferences: RenameTableReferences | undefined;
 }
 
 export interface AppliedTableRenames {
@@ -203,6 +212,7 @@ function withEntries(namespace: SqlNamespaceBase, entries: SqlNamespaceEntries):
 function renameTablesInNamespace(
   namespace: SqlNamespace,
   renames: readonly ResolvedTableRename[],
+  renameTableReferences: RenameTableReferences | undefined,
 ): SqlNamespace {
   const own = renames.filter((rename) => rename.namespaceId === namespace.id);
   const tables = Object.entries(namespace.entries.table ?? {}).map(([name, table]) => {
@@ -217,20 +227,27 @@ function renameTablesInNamespace(
       `applyTableRenameIntents: namespace "${namespace.id}" is not a materialized SQL namespace`,
     );
   }
-  return withEntries(namespace, {
+  const renamedTables: SqlNamespaceEntries = {
     ...namespace.entries,
     table: Object.fromEntries(tables),
-  });
+  };
+  return withEntries(
+    namespace,
+    renameTableReferences === undefined
+      ? renamedTables
+      : own.reduce(renameTableReferences, renamedTables),
+  );
 }
 
 function renameTablesInContract(
   contract: Contract<SqlStorage>,
   renames: readonly ResolvedTableRename[],
+  renameTableReferences: RenameTableReferences | undefined,
 ): Contract<SqlStorage> {
   const namespaces = Object.fromEntries(
     Object.entries(contract.storage.namespaces).map(([id, namespace]) => [
       id,
-      renameTablesInNamespace(namespace, renames),
+      renameTablesInNamespace(namespace, renames, renameTableReferences),
     ]),
   );
   const materialized: Record<string, SqlNamespaceBase> = {};
@@ -265,6 +282,8 @@ function renameTablesInContract(
  * the FK still pairs with the next contract's. Index, unique, check and
  * primary-key names are carried unchanged: the differ pairs those by hash or
  * by columns, and their renames are planned by the existing rename passes.
+ * Target entity kinds that name a table are renamed by the target's
+ * `renameTableReferences`, once per rename in their namespace.
  */
 export function applyTableRenameIntents(
   input: ApplyTableRenameIntentsInput,
@@ -322,5 +341,8 @@ export function applyTableRenameIntents(
     }
   }
   if (conflicts.length > 0) return notOk(conflicts);
-  return ok({ contract: renameTablesInContract(fromContract, renames), renames });
+  return ok({
+    contract: renameTablesInContract(fromContract, renames, input.renameTableReferences),
+    renames,
+  });
 }
