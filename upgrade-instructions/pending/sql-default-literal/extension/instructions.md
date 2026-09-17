@@ -7,7 +7,7 @@ changes:
     detection:
       glob: "**/*.{ts,mts,cts}"
       matches:
-        - '\\.defaultSql\\('
+        - '\.defaultSql\('
   - id: control-mutation-defaults-require-literal-tag-registry
     summary: |
       `ControlMutationDefaults.defaultLiteralTagRegistry` is required on every pack's

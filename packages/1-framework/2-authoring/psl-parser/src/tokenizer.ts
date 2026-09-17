@@ -223,20 +223,26 @@ function scanString(source: string, pos: number): Token | undefined {
 }
 
 function unterminatedBacktickStringEnd(source: string, from: number): number {
-  let lineStart = source.indexOf('\n', from);
-  while (lineStart !== -1) {
-    lineStart++;
+  let lineStart = nextLineStart(source, from);
+  while (lineStart !== undefined) {
     let cursor = lineStart;
-    while (
-      cursor < source.length &&
-      (source.charAt(cursor) === ' ' || source.charAt(cursor) === '\t')
-    ) {
+    while (source.charAt(cursor) === ' ' || source.charAt(cursor) === '\t') {
       cursor++;
     }
     if (source.charAt(cursor) === '}') return lineStart;
-    lineStart = source.indexOf('\n', cursor);
+    lineStart = nextLineStart(source, cursor);
   }
   return source.length;
+}
+
+/** The offset just past the next `\r\n`, `\r`, or `\n` at or after `from`. */
+function nextLineStart(source: string, from: number): number | undefined {
+  for (let index = from; index < source.length; index++) {
+    const c = source.charAt(index);
+    if (c === '\n') return index + 1;
+    if (c === '\r') return source.charAt(index + 1) === '\n' ? index + 2 : index + 1;
+  }
+  return undefined;
 }
 
 /**

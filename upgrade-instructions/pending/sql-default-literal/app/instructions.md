@@ -7,7 +7,7 @@ changes:
     detection:
       glob: "**/*.{ts,mts,cts}"
       matches:
-        - '\\.defaultSql\\('
+        - '\.defaultSql\('
   - id: psl-raw-sql-default-is-a-tagged-literal
     summary: |
       In PSL, a raw SQL column default is written as a tagged literal, ``@default(sql`...`)`` or

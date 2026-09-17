@@ -303,6 +303,23 @@ describe('backtick strings', () => {
     expect(collectAll(source)[0]?.text).toBe('`abc\n  more\n');
   });
 
+  it.each([
+    ['CR', '\r'],
+    ['CRLF', '\r\n'],
+  ])('recognises %s line breaks when ending an unterminated backtick string', (_name, eol) => {
+    const source = `\`abc${eol}  more${eol}  }${eol}next`;
+    assertLossless(source);
+    expect(collectAll(source).map((t) => t.kind)).toEqual([
+      'StringLiteral',
+      'Whitespace',
+      'RBrace',
+      'Newline',
+      'Ident',
+      'Eof',
+    ]);
+    expect(collectAll(source)[0]?.text).toBe(`\`abc${eol}  more${eol}`);
+  });
+
   it('still ends an unterminated double- or single-quoted string at the newline', () => {
     expect(collectAll('"abc\n}').map((t) => t.kind)).toEqual([
       'StringLiteral',
