@@ -43,7 +43,7 @@ Fence         := TemplateLiteral | StringLiteral
 
 - The fence follows the tag directly. Whitespace, a newline, or a comment between them is `PSL_TAGGED_LITERAL_FENCE_EXPECTED`.
 - A `TemplateLiteral` is a backtick fence. It may span lines. Inside it, `` \` `` is a backtick, `\\` is one backslash, and `\$` is a dollar sign. Every other backslash sequence is kept as written, both characters, so `E'\n'` reaches the database unchanged. An unclosed backtick fence is `PSL_UNTERMINATED_TEMPLATE_LITERAL`, reported at the opening backtick.
-- A `StringLiteral` fence is an ordinary PSL string literal with the ordinary PSL string escapes. It exists for a body that contains many backticks.
+- A `StringLiteral` fence is an ordinary PSL string literal, in double or single quotes, with the ordinary PSL string escapes. It exists for a body that contains many backticks.
 - A tagged literal is an expression and may appear wherever an expression may appear. An attribute accepts it only where its argument specification says so; everywhere else it is refused with that attribute's usual diagnostic.
 
 ## The canonical body
@@ -85,7 +85,7 @@ A tag no pack registered is `PSL_UNKNOWN_DEFAULT_LITERAL_TAG`, and the message l
 
 ## What a tag lowers to
 
-The registering pack's `lower` function receives the tag, the canonical body, and the literal's source span, and returns the same result shape a default function returns. For the `sql` tag that is a storage default, `{ kind: 'function', expression: <body> }`. The body is used as written: the framework does not rewrite it, the contract stores it, and the planner renders it inside `DEFAULT (...)`. The only check is the one the planners already apply before rendering any function default, run at authoring time so the diagnostic has a span: a body containing `;`, a SQL comment marker, `$$`, or the word `SELECT` is `PSL_INVALID_DEFAULT_SQL`. An empty body passes and the database reports the error.
+The registering pack's `lower` function receives the tag, the canonical body, and the literal's source span, and returns the same result shape a default function returns. For the `sql` tag that is a storage default, `{ kind: 'function', expression: <body> }`. The body is used as written: the framework does not rewrite it, the contract stores it, and the planner renders it inside `DEFAULT (...)`. The only check is the one the planners already apply before rendering any function default, run at authoring time so the diagnostic has a span: a body containing `;`, a SQL comment marker, `$$`, or the word `SELECT` is `PSL_INVALID_DEFAULT_SQL`. An empty body passes and the database reports the error. A body that is exactly a registered default function's call, such as `now()` or `autoincrement()`, is refused with a hint to write the named form, because those names are Prisma's own markers and the planners render them specially.
 
 Verification compares a raw default the way it compares any function default. Each target runs its own introspection parser over the authored expression and over the expression the database reports, then compares the two normalised forms, so a body the database reprints differently from how it was written still verifies clean.
 
