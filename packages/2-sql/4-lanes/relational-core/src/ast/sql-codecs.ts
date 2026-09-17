@@ -27,6 +27,7 @@ import {
   pslLiteralReadsError,
   voidParamsSchema,
 } from '@internal/framework-components/codec';
+import { structuredError } from '@internal/utils/structured-error';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { type as arktype } from 'arktype';
 import {
@@ -164,7 +165,13 @@ export class SqlFloatCodec extends CodecImpl<
     return sqlFloatDecodeJson(json);
   }
   encodePsl(value: number): PslLiteral {
-    if (!Number.isFinite(value)) throw new Error(`${this.id} writes a finite number; got ${value}`);
+    if (!Number.isFinite(value)) {
+      throw structuredError(
+        'RUNTIME.ENCODE_FAILED',
+        `${this.id} application value must be a finite number, got ${value}`,
+        { meta: { codec: this.id } },
+      );
+    }
     return encodeNumberPsl(value);
   }
   decodePsl(literal: PslLiteral): number {
