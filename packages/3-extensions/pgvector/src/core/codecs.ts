@@ -20,6 +20,7 @@ import {
   type ColumnHelperForStrict,
   column,
   integerLiteralTypesUpTo,
+  isNumeralText,
   type LiteralTypeDeclaration,
 } from '@internal/framework-components/codec';
 import type { ExtractCodecTypes, ProjectionExpr } from '@internal/sql-relational-core/ast';
@@ -51,9 +52,6 @@ const vectorParamsSchema = arktype({
 }) satisfies StandardSchemaV1<VectorParams>;
 
 const PG_VECTOR_NATIVE_TYPE = 'vector';
-
-/** The shape of a whole-number or `decimal` literal default's element, which a vector default is written as. */
-const NUMERAL_TEXT = /^-?\d+(?:\.\d+)?$/;
 
 function parseVector(value: string): number[] {
   if (!value.startsWith('[') || !value.endsWith(']')) {
@@ -151,7 +149,7 @@ export class PgVectorCodec extends CodecImpl<
       });
     }
     const value = json.map((element) =>
-      typeof element === 'string' && NUMERAL_TEXT.test(element) ? Number(element) : element,
+      typeof element === 'string' && isNumeralText(element) ? Number(element) : element,
     );
     this.assertVector(value, 'RUNTIME.DECODE_FAILED');
     return value;

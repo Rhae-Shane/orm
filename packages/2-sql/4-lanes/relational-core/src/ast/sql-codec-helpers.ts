@@ -5,6 +5,7 @@
  */
 
 import type { JsonValue } from '@internal/contract/types';
+import { isNumeralText } from '@internal/framework-components/codec';
 import { structuredError } from '@internal/utils/structured-error';
 
 export const SQL_CHAR_CODEC_ID = 'sql/char@1' as const;
@@ -66,11 +67,9 @@ export const sqlFloatEncodeJson = (value: number): JsonValue => {
   return value;
 };
 
-const NUMERAL_TEXT = /^-?\d+(?:\.\d+)?$/;
-
 /** Also reads the numeral text a `decimal` or whole-number literal default carries; a non-finite value stays refused. */
 export const sqlFloatDecodeJson = (json: JsonValue): number => {
-  if (typeof json === 'string' && NUMERAL_TEXT.test(json)) return Number(json);
+  if (typeof json === 'string' && isNumeralText(json)) return Number(json);
   if (typeof json !== 'number' || !Number.isFinite(json)) {
     throw structuredError(
       'RUNTIME.DECODE_FAILED',

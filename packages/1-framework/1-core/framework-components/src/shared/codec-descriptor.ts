@@ -77,8 +77,8 @@ export abstract class CodecDescriptorImpl<TParams = void> implements CodecDescri
   abstract readonly traits: readonly CodecTrait[];
   abstract readonly targetTypes: readonly string[];
 
-  /** Optional literal types this codec's columns accept. See {@link CodecDescriptor.literalTypes}. Declared mutable so a descriptor that adapts another can carry the adapted codec's declaration over in its constructor. */
-  literalTypes?: readonly LiteralTypeDeclaration[] | undefined;
+  /** Optional literal types this codec's columns accept. See {@link CodecDescriptor.literalTypes}. */
+  readonly literalTypes?: readonly LiteralTypeDeclaration[] | undefined;
 
   abstract readonly paramsSchema: StandardSchemaV1<TParams>;
 

@@ -40,6 +40,8 @@ export {
   describeDeclarations,
   integerLiteralTypesUpTo,
   isCompatible,
+  isNonFiniteText,
+  isNumeralText,
   readLiteral,
 } from '../shared/literal-types';
 export type { WrittenLiteralText } from '../shared/literal-types-write';

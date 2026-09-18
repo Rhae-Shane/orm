@@ -19,6 +19,7 @@ import {
   type ColumnHelperForStrict,
   column,
   integerLiteralTypesUpTo,
+  isNumeralText,
   type LiteralTypeDeclaration,
   renderTsLiteral,
   voidParamsSchema,
@@ -145,8 +146,6 @@ const UPPERCASE_HEX = /^(?:[0-9A-F]{2})*$/;
  * `9.0e+999`, which reads back as `Infinity` rather than failing. A real is
  * therefore carried only where it is finite.
  */
-const NUMERAL_TEXT = /^-?\d+(?:\.\d+)?$/;
-
 /** A whole number within the range a JS number holds exactly, read from a JSON number or the digit text an `i64` literal default carries. */
 const safeWholeNumber = (codecId: string, json: JsonValue): number => {
   const text = typeof json === 'number' ? String(json) : json;
@@ -381,7 +380,7 @@ export class SqliteRealCodec extends CodecImpl<
     return finiteReal(value, 'RUNTIME.ENCODE_FAILED');
   }
   decodeJson(json: JsonValue): number {
-    if (typeof json === 'string' && NUMERAL_TEXT.test(json)) return Number(json);
+    if (typeof json === 'string' && isNumeralText(json)) return Number(json);
     if (typeof json !== 'number') {
       throw sqliteError(
         'RUNTIME.DECODE_FAILED',

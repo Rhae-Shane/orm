@@ -3,6 +3,8 @@ import {
   describeDeclarations,
   integerLiteralTypesUpTo,
   isCompatible,
+  isNonFiniteText,
+  isNumeralText,
   type Literal,
   type LiteralTypeDeclaration,
   readLiteral,
@@ -196,5 +198,36 @@ describe('integerLiteralTypesUpTo', () => {
     ['bigint', ['i8', 'i16', 'i32', 'i64', 'bigint']],
   ] as const)('%s', (name, expected) => {
     expect(integerLiteralTypesUpTo(name)).toEqual(expected);
+  });
+});
+
+describe('isNumeralText', () => {
+  it.each(['0', '-0', '007', '9223372036854775808', '1.50', '-007.50'])(
+    'accepts %o, which classifies as a literal type',
+    (text) => {
+      expect(isNumeralText(text)).toBe(true);
+      expect(readLiteral(number(text)).ok).toBe(true);
+    },
+  );
+
+  it.each(['NaN', 'Infinity', '-Infinity', '1e3', '+1', '1.', '', 'nonsense', '1,5'])(
+    'refuses %o',
+    (text) => {
+      expect(isNumeralText(text)).toBe(false);
+    },
+  );
+});
+
+describe('isNonFiniteText', () => {
+  it.each(['NaN', 'Infinity', '-Infinity'])(
+    'accepts %o, which reads as a float literal',
+    (text) => {
+      expect(isNonFiniteText(text)).toBe(true);
+      expect(readOk(number(text))).toEqual({ type: 'float', value: text });
+    },
+  );
+
+  it.each(['nan', 'infinity', '42', '1.5', ''])('refuses %o', (text) => {
+    expect(isNonFiniteText(text)).toBe(false);
   });
 });

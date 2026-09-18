@@ -66,6 +66,20 @@ const INTEGER_TEXT = /^-?\d+$/;
 const DECIMAL_TEXT = /^-?\d+\.\d+$/;
 const FLOAT_WORDS: ReadonlySet<string> = new Set(['NaN', 'Infinity', '-Infinity']);
 
+/**
+ * Whether `text` is a whole number or a decimal as a contract source writes one. A codec whose
+ * stored shape differs from a literal type's uses this to recognise the text a `decimal`, `i64` or
+ * `bigint` literal default carries, instead of restating the accepted syntax.
+ */
+export function isNumeralText(text: string): boolean {
+  return INTEGER_TEXT.test(text) || DECIMAL_TEXT.test(text);
+}
+
+/** Whether `text` is one of the three words a `float` literal is written as. */
+export function isNonFiniteText(text: string): boolean {
+  return FLOAT_WORDS.has(text);
+}
+
 const INTEGER_LIMITS = [
   { name: 'i8', min: -128n, max: 127n },
   { name: 'i16', min: -32768n, max: 32767n },

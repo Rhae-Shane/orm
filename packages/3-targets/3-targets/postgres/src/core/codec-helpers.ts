@@ -9,6 +9,7 @@
  */
 
 import type { JsonValue } from '@internal/contract/types';
+import { isNonFiniteText, isNumeralText } from '@internal/framework-components/codec';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { type as arktype } from 'arktype';
 import { postgresError } from './errors';
@@ -148,9 +149,6 @@ export const pgInt8Decode = (wire: string | number | bigint): bigint =>
 export const pgUnboundedIntDecode = (wire: string | number | bigint): bigint =>
   decimalIntegerDecode('pg/unboundedint@1', wire);
 
-const NON_FINITE_TEXT = /^(?:NaN|-?Infinity)$/;
-const NUMERAL_TEXT = /^-?\d+(?:\.\d+)?$/;
-
 /**
  * Neither JSON nor a SQL number literal has a form for `NaN` or the infinities; PostgreSQL reads
  * and writes them as the text `NaN`, `Infinity`, `-Infinity`, so the float codecs carry them as
@@ -164,7 +162,7 @@ export const pgFloatEncodeJson = (value: number): JsonValue => pgFloatEncode(val
 /** Also reads the numeral text a `decimal` or whole-number literal default carries. */
 export const pgFloatDecodeJson = (codecId: string, json: JsonValue): number => {
   if (typeof json === 'number') return json;
-  if (typeof json === 'string' && (NON_FINITE_TEXT.test(json) || NUMERAL_TEXT.test(json))) {
+  if (typeof json === 'string' && (isNonFiniteText(json) || isNumeralText(json))) {
     return Number(json);
   }
   throw postgresError(
