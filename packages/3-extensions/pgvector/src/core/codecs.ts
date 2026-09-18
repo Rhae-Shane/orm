@@ -19,6 +19,8 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
+  integerLiteralTypesUpTo,
+  type LiteralTypeDeclaration,
 } from '@internal/framework-components/codec';
 import type { ExtractCodecTypes, ProjectionExpr } from '@internal/sql-relational-core/ast';
 import { CastExpr, FunctionCallExpr } from '@internal/sql-relational-core/ast';
@@ -172,6 +174,9 @@ const jsonArrayFromVectorElements = (expression: ProjectionExpr): ProjectionExpr
   ]);
 
 export class PgVectorDescriptor extends PostgresCodecDescriptor<VectorParams> {
+  override readonly literalTypes: readonly LiteralTypeDeclaration[] = [
+    { list: [...integerLiteralTypesUpTo('i64'), 'bigint', 'decimal'] },
+  ];
   protected override nativeType(): string {
     return PG_VECTOR_NATIVE_TYPE;
   }

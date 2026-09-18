@@ -18,6 +18,8 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
+  integerLiteralTypesUpTo,
+  type LiteralTypeDeclaration,
   renderTsLiteral,
   voidParamsSchema,
 } from '@internal/framework-components/codec';
@@ -276,6 +278,7 @@ export class SqliteTextCodec extends CodecImpl<
 }
 
 export class SqliteTextDescriptor extends SqliteCodecDescriptor<void> {
+  override readonly literalTypes: readonly LiteralTypeDeclaration[] = ['string'];
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return expression;
   }
@@ -317,6 +320,8 @@ export class SqliteIntegerCodec extends CodecImpl<
 }
 
 export class SqliteIntegerDescriptor extends SqliteCodecDescriptor<void> {
+  override readonly literalTypes: readonly LiteralTypeDeclaration[] =
+    integerLiteralTypesUpTo('i64');
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return expression;
   }
@@ -367,6 +372,11 @@ export class SqliteRealCodec extends CodecImpl<
 }
 
 export class SqliteRealDescriptor extends SqliteCodecDescriptor<void> {
+  override readonly literalTypes: readonly LiteralTypeDeclaration[] = [
+    ...integerLiteralTypesUpTo('i64'),
+    'bigint',
+    'decimal',
+  ];
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return expression;
   }
@@ -415,6 +425,7 @@ export class SqliteBlobCodec extends CodecImpl<
 }
 
 export class SqliteBlobDescriptor extends SqliteCodecDescriptor<void> {
+  override readonly literalTypes: readonly LiteralTypeDeclaration[] = ['string'];
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return hexJsonProjection(expression);
   }
@@ -475,6 +486,7 @@ export class SqliteDatetimeCodec extends CodecImpl<
 }
 
 export class SqliteDatetimeDescriptor extends SqliteCodecDescriptor<void> {
+  override readonly literalTypes: readonly LiteralTypeDeclaration[] = ['string'];
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return expression;
   }
@@ -516,6 +528,7 @@ export class SqliteJsonCodec extends CodecImpl<
 }
 
 export class SqliteJsonDescriptor extends SqliteCodecDescriptor<void> {
+  override readonly literalTypes: readonly LiteralTypeDeclaration[] = ['json'];
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return jsonDocumentRetag(expression);
   }
@@ -587,6 +600,8 @@ export class SqliteBigintCodec extends CodecImpl<
 }
 
 export class SqliteBigintDescriptor extends SqliteCodecDescriptor<void> {
+  override readonly literalTypes: readonly LiteralTypeDeclaration[] =
+    integerLiteralTypesUpTo('i64');
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return decimalTextJsonProjection(expression);
   }
@@ -657,6 +672,8 @@ export class SqliteBigintNumberCodec extends CodecImpl<
 }
 
 export class SqliteBigintNumberDescriptor extends SqliteCodecDescriptor<void> {
+  override readonly literalTypes: readonly LiteralTypeDeclaration[] =
+    integerLiteralTypesUpTo('i64');
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return integerJsonProjection(expression);
   }
