@@ -1,6 +1,6 @@
 # ADR 253 — Literal types for column defaults
 
-Status: **Proposed**
+Status: **Accepted**
 
 ## Decision
 
@@ -58,19 +58,22 @@ A single `number` literal type would have to be converted per codec, which puts 
 
 A literal type defines what its value is, how a written literal is read into that value, and how a stored value is written back. It is defined in the framework, so a codec descriptor in any family can name it.
 
-| Literal type | Value it produces | Named by |
-|---|---|---|
-| `string` | The text, with escapes resolved | Text, uuid, bit and varbit, enum-backed text, bytes as base64, geometry as hex, intervals, timestamps and dates as their text form |
-| `boolean` | `true` or `false` | Boolean codecs |
-| `int` | A JSON number, whole. A fraction is refused | `pg/int4@1`, `pg/int2@1`, `pg/int8number@1`, `sqlite/integer@1`, `sql/int@1` |
-| `float` | A JSON number, or the text `NaN`, `Infinity`, or `-Infinity` | `pg/float4@1`, `pg/float8@1`, `sqlite/real@1`, `sql/float@1` |
-| `bigint` | The digits as text, so every digit survives | `pg/int8@1`, `pg/unboundedint@1`, `sqlite/bigint@1` |
-| `decimal` | Decimal text. Trailing zeros are kept, leading zeros and the sign of zero are removed | `pg/numeric@1` |
-| `json` | A JSON value | `pg/json@1`, `pg/jsonb@1`, `sqlite/json@1`, `pg/vector@1`, `arktype/json@1` |
+| Literal type | Written as | Value it produces | Named by |
+|---|---|---|---|
+| `string` | A string scalar | The text, with escapes resolved | Text, uuid, inet, bit and varbit, bytes as base64, geometry as hex, intervals, timestamps and dates as their text form |
+| `boolean` | `true` / `false` | `true` or `false` | Boolean codecs |
+| `i8` | A whole number in [-128, 127] | A JSON number | Every integer codec |
+| `i16` | A whole number in [-32768, 32767] not already `i8` | A JSON number | `pg/int2@1` and wider |
+| `i32` | A whole number in the signed 32-bit range not already smaller | A JSON number | `pg/int4@1`, `pg/int@1`, `sql/int@1` and wider |
+| `i64` | A whole number in the signed 64-bit range not already smaller | The digits as text, because a JSON number rounds past 2^53 | `pg/int8@1`, `pg/int8number@1`, `sqlite/integer@1`, `sqlite/bigint@1`, `sqlite/bigintnumber@1` and wider |
+| `bigint` | Any larger whole number | The digits as text | `pg/unboundedint@1`, and every codec over `numeric` or a float |
+| `decimal` | A number with a fraction | Decimal text. Trailing zeros are kept, leading zeros and the sign of zero are removed | `pg/numeric@1`, `pg/float4@1`, `pg/float8@1`, `pg/float@1`, `sql/float@1`, `sqlite/real@1` |
+| `float` | `NaN`, `Infinity`, `-Infinity` | That text | `pg/numeric@1`, `pg/float4@1`, `pg/float8@1` |
+| `json` | A `json` tag body | The parsed JSON value | `pg/json@1`, `pg/jsonb@1`, `sqlite/json@1`, `arktype/json@1` |
+
+A declaration may also name **a list of element types**, `{ list: [...] }`, which is how a column that is not a list takes a PSL list: `pg/vector@1` names a list of the whole-number and `decimal` types, so a vector column takes `@default([0.1, 0.2, 0.3])`.
 
 Two rules keep the values faithful. A number is never converted to a JavaScript number unless its literal type says so, because converting `9007199254740993` rounds it and converting `1.50` drops the trailing zero a `numeric` column keeps. And a `json` literal's body is parsed as JSON once, by the literal type, so codecs receive the JSON value rather than text they must parse.
-
-`sqlite/real@1` and `sql/float@1` refuse `NaN` and the infinities, as they already do for JSON values. The `float` literal type carries them, and those codecs reject them when they decode.
 
 ## Writing a literal in PSL
 
@@ -94,13 +97,23 @@ class PgJsonbDescriptor extends PostgresCodecDescriptor<void> {
 }
 
 class PgInt4Descriptor extends PostgresCodecDescriptor<void> {
-  override readonly literalTypes = ['int'] as const;
+  override readonly literalTypes = integerLiteralTypesUpTo('i32');
+}
+
+class PgVectorDescriptor extends PostgresCodecDescriptor<VectorParams> {
+  override readonly literalTypes = [
+    { list: [...integerLiteralTypesUpTo('i64'), 'bigint', 'decimal'] },
+  ] as const;
 }
 ```
 
+`integerLiteralTypesUpTo(name)` gives the chain from `i8` up to and including `name`, so a descriptor does not spell it out.
+
 The declaration is optional. A codec that names no literal type accepts no literal defaults, and its columns take raw SQL defaults only.
 
-The codec instance keeps the checks that depend on column parameters. The interpreter passes the literal type's value to the codec's existing `decodeJson`, so a `vector(3)` column given a four-element `json` literal is refused there, with the vector codec's own message.
+**A codec converts between the shapes it names and its own stored form, inside its existing `decodeJson`.** The literal type fixes the shape of the value it produces, and a codec that stores a different shape is the one that knows how to convert: `pg/int8@1` stores digit text and names `i8` to `i64`, so its `decodeJson` accepts a whole JSON number as well as the text. No codec gains a method, and no contract source branches per codec.
+
+The codec instance keeps the checks that depend on column parameters. The interpreter builds the codec from the descriptor with the column's own `typeParams` and passes the literal type's value to `decodeJson`, so a `vector(3)` column given two elements is refused there, with the vector codec's own message.
 
 ## Reading a default
 
@@ -121,10 +134,13 @@ Other text-based contract sources follow the same steps from their own syntax. T
 
 1. The target reads the database's default into the codec's JSON form.
 2. The printer takes the literal type the column's codec declares and asks it to write that value.
-3. A literal type with a plain scalar prints as that scalar. Any other prints as a tagged literal with the tag that writes it.
-4. When the codec names no literal type, or the literal type cannot write the value, the printer writes the database's expression as a `sql` tagged literal. Infer never drops a default.
+3. A literal type with a plain scalar prints as that scalar. Any other prints as a tagged literal with the tag that writes it. A `json` body always uses the backtick fence, escaping backslashes and backticks: a quote-fenced tagged literal resolves the full PSL string escapes, so switching fences would change what a body containing `\n` reads back as.
+4. **The printer passes what it wrote back through the column's codec's `decodeJson`** before printing it. A literal type says what a value is written as, not that the codec accepts every value of that shape — the temporal codecs name `string` but refuse `infinity`, which PostgreSQL stores and reports verbatim.
+5. When the codec names no literal type, the literal type cannot write the value, or the codec does not read it back, the printer writes the database's expression as a raw SQL default instead. Infer never drops a default.
 
 A printed schema therefore reads back to the same contract, because printing and reading pass through the same literal type.
+
+The printer needs the codec bound to each PSL type name it prints. That binding lives in the adapter's authoring type namespaces, which sit above the target package the printer is in, so the target restates it for the type names it prints and a test in the adapter fails if the two disagree — the same shape as any other restated invariant, with the check that keeps it honest.
 
 ## Responsibilities
 
@@ -138,23 +154,28 @@ A printed schema therefore reads back to the same contract, because printing and
 | Codec instance | `decodeJson` checks that depend on column parameters |
 | Contract | The JSON form, unchanged from [ADR 184](ADR%20184%20-%20Codec-owned%20value%20serialization.md) |
 
-## Open question: how a plain scalar picks its literal type
+## How a plain scalar picks its literal type
 
-**Not settled, and this ADR is not implemented for the numeric literal types until it is.**
+**Settled: from the number itself, never from the column.**
 
-A PSL number scalar is written the same way everywhere, but under this design the literal type it produces depends on the column: `42` is an `int` literal on an `Int` column, a `bigint` literal on a `BigInt` column, and a `decimal` literal on a `Decimal` column. The column's codec decides, by what it declares, and that declaration is also the compatibility statement.
+A written number's literal type comes from its own size and precision. `42` is an `i8` on every column, `100000000000000099` an `i64`, `1.50` a `decimal`, `NaN` a `float`. The whole-number types are cut by width — `i8`, `i16`, `i32`, `i64`, then `bigint` for anything larger — and a number takes the smallest type that holds it, decided by comparing its digits as a `BigInt`, so no classification passes through a JavaScript number.
 
-That follows from cutting the literal types where the stored representations are cut, but it means one syntax does not name one literal type. Three answers are open: accept it as written here; give each numeric literal type a tag so a written literal always names its own type; or return to a single `number` literal type whose conversion each codec owns, at the cost described above.
+One syntax then names one literal type, the compatibility check is a lookup with no trial decoding, and a value too large for its column is reported as an incompatibility before anything is decoded: `Int @default(100000000000000099)` says `pg/int4@1 is not compatible with an i64 literal; it accepts i8, i16, i32 literals`.
+
+This is why a codec names a *chain* of types rather than one: `pg/int4@1` names `i8` to `i32`, `pg/int8@1` names `i8` to `i64`. The cost is that a codec whose stored shape differs from a named type's shape converts between them, which the section above makes its job.
 
 ## Settled details
 
 - **The declaration is optional**, and Mongo codecs name nothing, because no Mongo contract source reads defaults from text.
 - **A JSON column is not compatible with a `string` literal.** `Jsonb @default("{}")` is an error that asks for `` json`{}` ``. The reader for the earlier Prisma schema language turns that language's quoted JSON into a `json` literal itself.
 - **A decimal column is not compatible with a `string` literal.** `Decimal @default("1.50")` is an error, and the default is written `1.50`.
-- **`NaN`, `Infinity`, and `-Infinity` are `float` literals**, because the PSL tokenizer reads them as numbers. The integer literal types refuse them.
+- **`NaN`, `Infinity`, and `-Infinity` are `float` literals**, because the PSL tokenizer reads them as numbers, and they are written and printed bare — a quoted `"NaN"` is a `string` literal, which no numeric codec accepts. The integer literal types refuse them.
+- **`sqlite/real@1`, `sql/float@1` and `pg/float@1` do not name `float`**, because their `decodeJson` refuses non-finite values. `Real @default(NaN)` on SQLite is therefore an incompatibility reported at the attribute, not a decode failure at emit.
 - **JSON null is a value.** `` Json @default(json`null`) `` stores JSON null.
 - **Enum columns are unchanged.** Their default is a bare member name, and enum codecs name no literal types.
-- **List columns keep PSL's list syntax.** Each element is a literal checked against the element codec's declaration, so `` Jsonb[] @default([json`{}`, json`[]`]) `` is valid and `Int[] @default([1, "x"])` is refused at its second element.
+- **List columns keep PSL's list syntax.** Each element is a literal checked against the element codec's declaration, so `` Jsonb[] @default([json`{}`, json`[]`]) `` is valid and `Int[] @default([1, "x"])` is refused, naming the second element.
+- **A list literal on a scalar column needs a `{ list }` declaration.** `` Jsonb @default([1, 2]) `` is an incompatibility, because `pg/jsonb@1` names only `json`; the JSON array is written `` json`[1, 2]` ``. A vector column accepts one because `pg/vector@1` names a list of element types.
+- **A diagnostic inside a list names the failing element in its message** (`Field "N.scores" at element 2: ...`) and is reported at the `@default(...)` attribute, because the attribute-spec layer carries no span for a string, number or boolean argument.
 - **Diagnostics.** A literal whose type the codec does not declare is `PSL_DEFAULT_LITERAL_TYPE_INCOMPATIBLE`. Text a literal type cannot read, and a value a codec refuses, are `PSL_INVALID_DEFAULT_LITERAL` with the reason. A `json` body that is not valid JSON is `PSL_INVALID_JSON_LITERAL`. Each diagnostic points at the literal.
 
 ## Alternatives considered
