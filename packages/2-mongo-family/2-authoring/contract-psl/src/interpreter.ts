@@ -220,6 +220,7 @@ function resolveFieldMappings(input: {
     const mapped =
       (mapNode
         ? interpretFieldAttribute({
+            symbols: specContext.symbols,
             node: mapNode,
             spec: mongoAttributeSpecs.field.map({ ...specContext, field }),
             model,
@@ -245,6 +246,7 @@ function resolveCollectionName(input: {
   const mapNode = findModelAttributeNode(model, 'map');
   const name = mapNode
     ? interpretModelAttribute({
+        symbols: specContext.symbols,
         node: mapNode,
         spec: mongoAttributeSpecs.model.map(specContext),
         model,
@@ -296,6 +298,7 @@ function collectPolymorphismDeclarations(
     const discNode = findModelAttributeNode(model, 'discriminator');
     if (discNode) {
       const parsed = interpretModelAttribute({
+        symbols: specContext.symbols,
         node: discNode,
         spec: mongoAttributeSpecs.model.discriminator(specContext),
         model,
@@ -325,8 +328,9 @@ function collectPolymorphismDeclarations(
     const baseNode = findModelAttributeNode(model, 'base');
     if (baseNode) {
       const parsed = interpretModelAttribute({
+        symbols: specContext.symbols,
         node: baseNode,
-        spec: mongoAttributeSpecs.model.base(specContext),
+        spec: mongoAttributeSpecs.model.base(),
         model,
         sourceFile,
         sourceId,
@@ -885,6 +889,7 @@ function collectIndexes(
     const uniqueNode = findFieldAttributeNode(field, 'unique');
     if (!uniqueNode) continue;
     const unique = interpretFieldAttribute({
+      symbols: specContext.symbols,
       node: uniqueNode,
       spec: mongoAttributeSpecs.field.unique({ ...specContext, field }),
       model: pslModel,
@@ -920,6 +925,7 @@ function collectIndexes(
     let index: MongoIndex | undefined;
     if (attr.name === 'textIndex') {
       const parsed = interpretModelAttribute({
+        symbols: specContext.symbols,
         node,
         spec: mongoAttributeSpecs.model.textIndex(specContext),
         model: pslModel,
@@ -942,6 +948,7 @@ function collectIndexes(
     } else {
       const unique = attr.name === 'unique';
       const parsed = interpretModelAttribute({
+        symbols: specContext.symbols,
         node,
         spec: unique
           ? mongoAttributeSpecs.model.unique(specContext)
@@ -1197,6 +1204,7 @@ export function interpretPslDocumentToMongoContract(
         const relationNode = findFieldAttributeNode(field, 'relation');
         const relation = relationNode
           ? interpretFieldAttribute({
+              symbols: specContext.symbols,
               node: relationNode,
               spec: mongoAttributeSpecs.field.relation({ ...specContext, field }),
               model: pslModel,
@@ -1287,6 +1295,7 @@ export function interpretPslDocumentToMongoContract(
         if (!idNode) return false;
         return (
           interpretFieldAttribute({
+            symbols: specContext.symbols,
             node: idNode,
             spec: mongoAttributeSpecs.field.id({ ...specContext, field }),
             model: pslModel,

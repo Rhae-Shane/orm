@@ -99,11 +99,9 @@ export type {
 export type {
   DeclarationFor,
   EntityDeclaration,
-  EntityResolver,
   EntitySelector,
   ResolvedEntityReference,
 } from '../entity-reference';
-export { createEntityResolver } from '../entity-reference';
 export { findBlockDescriptor, validateExtensionBlockFromSymbol } from '../extension-block';
 export {
   keywordPslSpan,

@@ -1,6 +1,6 @@
 import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
 import type { PslExtensionBlock, PslSpan } from '@internal/framework-components/psl-ast';
-import { reconstructExtensionBlock } from './block-reconstruction';
+import { interpretBlockAttributes, reconstructExtensionBlock } from './block-reconstruction';
 import { findBlockDescriptor } from './extension-block';
 import type { ParseDiagnostic } from './parse';
 import {
@@ -207,6 +207,14 @@ export function buildSymbolTable(options: BuildSymbolTableOptions): SymbolTableR
   const table: SymbolTable = {
     topLevel: { namespaces, namedTypes, blocks, models, compositeTypes },
   };
+  for (const scope of [table.topLevel, ...Object.values(namespaces)]) {
+    for (const block of Object.values(scope.blocks)) {
+      const descriptor = findBlockDescriptor(pslBlockDescriptors, block.keyword);
+      if (descriptor !== undefined) {
+        interpretBlockAttributes(block, descriptor, sourceFile, table, diagnostics);
+      }
+    }
+  }
   return { table, diagnostics };
 }
 

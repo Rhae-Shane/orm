@@ -11,11 +11,11 @@ import type {
   InferAttr,
   ModelAttributeCtx,
   ModelSymbol,
+  SymbolTable,
   TypedFuncCall,
 } from '@internal/psl-parser';
 import {
   bool,
-  createEntityResolver,
   entityRef,
   fieldAttribute,
   fieldRef,
@@ -56,6 +56,7 @@ export function findFieldAttributeNode(
 }
 
 function buildModelAttributeCtx(input: {
+  readonly symbols: SymbolTable;
   readonly selfModel: ModelSymbol;
   readonly sourceFile: SourceFile;
   readonly sourceId: string;
@@ -64,10 +65,12 @@ function buildModelAttributeCtx(input: {
     sourceId: input.sourceId,
     sourceFile: input.sourceFile,
     selfModel: input.selfModel,
+    symbols: input.symbols,
   };
 }
 
 function buildFieldAttributeCtx(input: {
+  readonly symbols: SymbolTable;
   readonly selfModel: ModelSymbol;
   readonly field: FieldSymbol;
   readonly sourceFile: SourceFile;
@@ -80,6 +83,7 @@ function buildFieldAttributeCtx(input: {
     selfModel: input.selfModel,
     resolveReferencedModel: input.resolveReferencedModel ?? (() => undefined),
     field: input.field,
+    symbols: input.symbols,
   };
 }
 
@@ -87,6 +91,7 @@ function buildFieldAttributeCtx(input: {
 // failures into `diagnostics`. Returns the typed value, or `undefined` on
 // failure so the caller can apply its own default/absence handling.
 export function interpretModelAttribute<Out>(input: {
+  readonly symbols: SymbolTable;
   readonly node: ModelAttributeAst;
   readonly spec: AttributeSpec<Out, ModelAttributeCtx>;
   readonly model: ModelSymbol;
@@ -98,6 +103,7 @@ export function interpretModelAttribute<Out>(input: {
     input.node,
     input.spec,
     buildModelAttributeCtx({
+      symbols: input.symbols,
       selfModel: input.model,
       sourceFile: input.sourceFile,
       sourceId: input.sourceId,
@@ -114,6 +120,7 @@ export function interpretModelAttribute<Out>(input: {
 // failures into `diagnostics`. Returns the typed value, or `undefined` on
 // failure so the caller can apply its own default/absence handling.
 export function interpretFieldAttribute<Out>(input: {
+  readonly symbols: SymbolTable;
   readonly node: FieldAttributeAst;
   readonly spec: AttributeSpec<Out, FieldAttributeCtx>;
   readonly model: ModelSymbol;
@@ -127,6 +134,7 @@ export function interpretFieldAttribute<Out>(input: {
     input.node,
     input.spec,
     buildFieldAttributeCtx({
+      symbols: input.symbols,
       selfModel: input.model,
       field: input.field,
       sourceFile: input.sourceFile,
@@ -192,14 +200,13 @@ export const discriminatorModelSpec = modelAttribute('discriminator', {
     { key: 'field', type: fieldRef(), documentation: 'The discriminator field on this model.' },
   ],
 });
-export function baseModelSpec(ctx: AttributeSpecContext) {
-  const resolve = createEntityResolver({ symbols: ctx.symbols, owner: ctx.model });
+export function baseModelSpec() {
   return modelAttribute('base', {
     documentation: 'Declares this model as a variant of a base model.',
     positional: [
       {
         key: 'base',
-        type: entityRef({ kind: 'model' }, resolve),
+        type: entityRef({ kind: 'model' }),
         documentation: 'The base model to inherit from.',
       },
       {

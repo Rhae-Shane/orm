@@ -14,12 +14,10 @@ import {
   record,
   str,
 } from '../src/exports';
-import { Cursor, parse, parseAttribute } from '../src/parse';
+import { parse } from '../src/parse';
 import { buildSymbolTable } from '../src/symbol-table';
-import { FieldAttributeAst } from '../src/syntax/ast/attributes';
 import type { ExpressionAst } from '../src/syntax/ast/expressions';
 import type { SyntaxNode } from '../src/syntax/red';
-import { createSyntaxTree } from '../src/syntax/red';
 
 class ForeignCopyOfAnAstNode {
   readonly syntax: SyntaxNode;
@@ -29,19 +27,19 @@ class ForeignCopyOfAnAstNode {
 }
 
 function foreignArg(source: string): { arg: ExpressionAst; ctx: ModelAttributeCtx } {
-  const cursor = new Cursor(`@demo(${source})`);
-  const node = FieldAttributeAst.cast(createSyntaxTree(parseAttribute(cursor)));
-  const value = Array.from(node?.argList()?.args() ?? [])[0]?.value();
-  if (value === undefined) throw new Error('expected one argument');
-  const { document, sourceFile } = parse('model M {\n  id Int @id\n}\n');
+  const { document, sourceFile } = parse(`model M {\n  id Int @demo(${source})\n}\n`);
   const { table } = buildSymbolTable({ document, sourceFile, pslBlockDescriptors: {} });
   const selfModel = table.topLevel.models['M'];
   if (selfModel === undefined) throw new Error('expected model M');
+  const node = selfModel.fields['id']?.node.attributes()[Symbol.iterator]().next().value;
+  const value = node?.argList()?.args()[Symbol.iterator]().next().value?.value();
+  if (value === undefined) throw new Error('expected one argument');
   return {
     arg: new ForeignCopyOfAnAstNode(value.syntax) as unknown as ExpressionAst,
     ctx: {
       sourceId: 'schema.prisma',
-      sourceFile: cursor.sourceFile,
+      sourceFile,
+      symbols: table,
       selfModel,
     },
   };
@@ -77,9 +75,9 @@ describe('combinators dispatch on syntax kind, not on AST class identity', () =>
   it('entityRef accepts a node from another module copy and preserves identity', () => {
     const { arg, ctx } = foreignArg('M');
     const reference = { declaration: ctx.selfModel, namespace: undefined };
-    const result = entityRef({ kind: 'model' }, () => reference).parse(arg, ctx);
+    const result = entityRef({ kind: 'model' }).parse(arg, ctx);
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toBe(reference);
+    if (result.ok) expect(result.value).toEqual(reference);
   });
 
   it('funcCall accepts a node from another module copy', () => {

@@ -39,7 +39,6 @@ import type {
 } from '@internal/framework-components/components';
 import type {
   ControlDefaultLiteralTagRegistry,
-  ControlDefaultRegistries,
   ControlMutationDefaultRegistry,
   ControlMutationDefaults,
   MutationDefaultGeneratorDescriptor,
@@ -935,6 +934,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         node,
         spec: sqlAttributeSpecs.model.control(),
         model,
+        symbols: input.symbolTable,
         sourceFile: input.sourceFile,
         sourceId,
         diagnostics,
@@ -973,6 +973,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         node,
         spec: sqlAttributeSpecs.model.id(),
         model,
+        symbols: input.symbolTable,
         sourceFile: input.sourceFile,
         sourceId,
         diagnostics,
@@ -1019,6 +1020,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         node,
         spec: sqlAttributeSpecs.model.unique(),
         model,
+        symbols: input.symbolTable,
         sourceFile: input.sourceFile,
         sourceId,
         diagnostics,
@@ -1053,6 +1055,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         node,
         spec: sqlAttributeSpecs.model.index(),
         model,
+        symbols: input.symbolTable,
         sourceFile: input.sourceFile,
         sourceId,
         diagnostics,
@@ -1114,6 +1117,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         node,
         spec: sqlAttributeSpecs.model.check(),
         model,
+        symbols: input.symbolTable,
         sourceFile: input.sourceFile,
         sourceId,
         diagnostics,
@@ -1161,6 +1165,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
           },
         }),
         model,
+        symbols: input.symbolTable,
         sourceFile: input.sourceFile,
         sourceId,
         diagnostics,
@@ -1708,7 +1713,6 @@ type BaseDeclaration = {
 function collectPolymorphismDeclarations(
   identities: ReadonlyMap<ModelSymbol, ModelIdentity>,
   symbols: SymbolTable,
-  controlMutationDefaults: ControlDefaultRegistries,
   sourceFile: SourceFile,
   sourceId: string,
   diagnostics: ContractSourceDiagnostic[],
@@ -1724,6 +1728,7 @@ function collectPolymorphismDeclarations(
     if (discriminatorNode !== undefined) {
       const parsed = interpretModelAttribute({
         node: discriminatorNode,
+        symbols,
         spec: sqlAttributeSpecs.model.discriminator(),
         model,
         sourceFile,
@@ -1750,7 +1755,8 @@ function collectPolymorphismDeclarations(
     if (baseNode !== undefined) {
       const parsed = interpretModelAttribute({
         node: baseNode,
-        spec: sqlAttributeSpecs.model.base({ symbols, model, controlMutationDefaults }),
+        symbols,
+        spec: sqlAttributeSpecs.model.base(),
         model,
         sourceFile,
         sourceId,
@@ -2303,6 +2309,7 @@ export function interpretPslDocumentToSqlContract(
   // `modelMappingsByCoordinate` further down; this call discards its own
   // diagnostics so nothing is reported twice.
   const earlyModelMappingsByCoordinate = buildModelMappings(
+    input.symbolTable,
     modelEntries,
     defaultNamespaceId,
     [],
@@ -2443,6 +2450,7 @@ export function interpretPslDocumentToSqlContract(
   const storageTypes = { ...namedTypeResult.storageTypes };
 
   const modelMappingsByCoordinate = buildModelMappings(
+    input.symbolTable,
     modelEntries,
     defaultNamespaceId,
     diagnostics,
@@ -2587,7 +2595,6 @@ export function interpretPslDocumentToSqlContract(
   const { discriminatorDeclarations, baseDeclarations } = collectPolymorphismDeclarations(
     modelIdentities,
     input.symbolTable,
-    { defaultFunctionRegistry, defaultLiteralTagRegistry },
     sourceFile,
     sourceId,
     diagnostics,
