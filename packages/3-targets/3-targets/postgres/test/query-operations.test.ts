@@ -3,7 +3,14 @@ import { LiteralExpr, OperationExpr, ParamRef } from '@internal/sql-relational-c
 import { describe, expect, it } from 'vitest';
 import postgresTargetDescriptor from '../src/exports/runtime';
 
-const TEXT_COLUMN = ParamRef.of('body', { codec: { codecId: 'pg/text@1' } });
+const TEXT_COLUMN_AST = ParamRef.of('body', { codec: { codecId: 'pg/text@1' } });
+
+// Stands in for a contract-bound text column: the operations take an
+// Expression on `self` and read its AST, not a bare AST node.
+const TEXT_COLUMN = {
+  returnType: { codecId: 'pg/text@1', nullable: false },
+  buildAst: () => TEXT_COLUMN_AST,
+};
 
 function operations() {
   return postgresTargetDescriptor.queryOperations?.() ?? {};
@@ -74,8 +81,8 @@ describe('postgres target query operations', () => {
       const withDefault = buildOpAst(method, TEXT_COLUMN, 'prisma').args[1];
       const withGerman = buildOpAst(method, TEXT_COLUMN, 'prisma', 'german').args[1];
 
+      expect(withDefault?.kind).toBe('literal');
       expect(withDefault).toBeInstanceOf(LiteralExpr);
-      expect(withDefault.kind).toBe('literal');
       expect((withDefault as LiteralExpr).value).toBe('english');
       expect((withGerman as LiteralExpr).value).toBe('german');
     });
