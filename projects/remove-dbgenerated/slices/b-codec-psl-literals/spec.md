@@ -22,7 +22,7 @@ model Account {
   scores   Int[]      @default([1, 2])
   docs     Jsonb[]    @default([json`{}`, json`[]`])
   embed    pgvector.Vector(3) @default([0.1, 0.2, 0.3])
-  expires  DateTime   @default(sql`now() + interval '3 days'`)
+  expires  DateTime   @default(sql`(now() + '3 days'::interval)`)
 }
 ```
 
@@ -68,6 +68,10 @@ These supersede the sections below where they differ.
 - **The printer falls back when the codec would refuse what it wrote.** Before printing a literal, the Postgres printer passes the written value back through the column codec's `decodeJson`; a refusal (for example a temporal `infinity` sentinel, which `decodeTemporalText` rejects) takes the raw-default fallback as on `main`. Infer never prints a schema that emit cannot read. (Dispatch 5 review.)
 - **The Postgres printer restates the type-name-to-codec binding** in `psl-infer/infer-default-codec.ts`, because the emit-side binding lives in the adapter, which depends on the target. Two tests keep it honest: one in the adapter asserts entry-by-entry agreement with the authoring type tables, one in the target asserts every printed type name is covered. (Dispatch 5.)
 - **Temporal defaults print as string literals** (`Date @default("2024-01-01")`) rather than `dbgenerated`; verify compares them through `parseTemporal` on both sides and the planner renders them quoted, so the round trip holds. The upgrade instructions mention the changed infer output. (Dispatch 5.)
+
+- **A column's codec is materialised with the column's `typeParams` wherever a default passes through it**: the interpreter (B4), the contract builder's `encodeJson` re-encode, and the Postgres DDL renderer. The last two used the param-less representative and so could not encode or render a `vector(3)` default. (Dispatch 6.)
+- **The e2e journey's raw SQL default is written in the form Postgres reports** (`(now() + '3 days'::interval)`), because strict verification compares raw expressions; the Outcome snippet is updated. Pre-existing raw-SQL behaviour, not a literal-type matter. (Dispatch 6.)
+- **The TypeScript builder cannot express a `BigInt` default beyond 2^53 or a non-finite `Float` default**, so those two forms are covered by the e2e journey and not by the parity pair. Recorded as a follow-up in the plan's open items. (Dispatch 6.)
 
 ## Corrections to the brief
 

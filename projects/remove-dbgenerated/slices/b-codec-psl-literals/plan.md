@@ -14,3 +14,6 @@ Spec: [`spec.md`](spec.md). One implementer and one reviewer, resumed across eve
 
 Open items:
 - Element-level spans for list-literal diagnostics need the parser argument types to carry spans; handed to the editor-tooling brief (project D14), not this slice.
+- The TypeScript contract builder's `.default()` cannot take a `bigint` or a non-finite number; PSL is the only surface for `BigInt` defaults beyond 2^53 and `Float @default(NaN)`. Follow-up outside this slice.
+- `useDevDatabase` in `test/integration` passes its timeout as `beforeAll`'s third argument, which vitest ignores, so journeys flake at 5 s on a loaded machine. Follow-up outside this slice.
+- The Prisma 7 fixture updater (`UPDATE_PRISMA7_FIXTURES=1`) writes golden JSON in a different format from the committed files. Follow-up outside this slice.
