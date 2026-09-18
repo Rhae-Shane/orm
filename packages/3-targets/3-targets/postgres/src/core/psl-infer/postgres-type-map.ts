@@ -60,6 +60,7 @@ const PARAMETERIZED_NATIVE_TYPES: Record<string, string> = {
 export const PRINTED_PSL_TYPE_NAMES: ReadonlySet<string> = new Set([
   ...Object.values(POSTGRES_TO_PSL),
   ...Object.values(PRESERVED_NATIVE_TYPES),
+  ...Object.values(PARAMETERIZED_NATIVE_TYPES),
 ]);
 
 const PARAMETERIZED_TYPE_PATTERN = /^(.+?)\((.+)\)$/;

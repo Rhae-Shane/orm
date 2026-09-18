@@ -110,6 +110,25 @@ describe('printPsl writes each default as the literal its codec reads back', () 
     ).toEqual({ docs: '@default([json`{}`, json`[]`])' });
   });
 
+  it.each([
+    ['infinity', "'infinity'::timestamp without time zone"],
+    ['-infinity', "'-infinity'::timestamp without time zone"],
+  ])(
+    'falls back to the raw expression for the temporal sentinel %s, which its codec refuses',
+    (_name, rawDefault) => {
+      const printed = printedDefaults([introspected('stamp', 'timestamp', rawDefault)])['stamp'];
+      expect(printed).toMatch(/^@default\(dbgenerated\(/);
+    },
+  );
+
+  it('prints an ordinary temporal default as the string its codec reads', () => {
+    expect(
+      printedDefaults([
+        introspected('stamp', 'timestamp', "'2024-01-01 00:00:00'::timestamp without time zone"),
+      ]),
+    ).toEqual({ stamp: '@default("2024-01-01 00:00:00")' });
+  });
+
   it('falls back to the raw expression for a codec that names no literal type', () => {
     expect(printedDefaults([introspected('area', 'geometry', "'POINT(0 0)'::geometry")])).toEqual(
       {},

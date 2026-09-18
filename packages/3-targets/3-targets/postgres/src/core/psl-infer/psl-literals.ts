@@ -1,5 +1,6 @@
 import { type ColumnDefault, isColumnDefault } from '@internal/contract/types';
 import type { PslPrinterOptions } from '@internal/family-sql/psl-infer';
+import { escapePslString } from '@internal/framework-components/codec';
 import type {
   PslAttribute,
   PslAttributeArgument,
@@ -56,14 +57,6 @@ export function positionalArg(value: string): PslAttributeArgument {
 
 export function namedArg(name: string, value: string): PslAttributeArgument {
   return { kind: 'named', name, value, span: SYNTHETIC_SPAN };
-}
-
-export function escapePslString(value: string): string {
-  return value
-    .replace(/\\/g, '\\\\')
-    .replace(/"/g, '\\"')
-    .replace(/\n/g, '\\n')
-    .replace(/\r/g, '\\r');
 }
 
 /**

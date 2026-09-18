@@ -1,4 +1,4 @@
-import type { ColumnDefault } from '@internal/contract/types';
+import type { ColumnDefault, ColumnDefaultLiteralInputValue } from '@internal/contract/types';
 import type {
   DefaultMappingOptions,
   PslPrinterOptions,
@@ -6,6 +6,7 @@ import type {
   RelationField,
 } from '@internal/family-sql/psl-infer';
 import { mapDefault, toFieldName, toModelName } from '@internal/family-sql/psl-infer';
+import { escapePslString } from '@internal/framework-components/codec';
 import type {
   PslAttributeArgument,
   PslField,
@@ -22,7 +23,7 @@ import {
 import type { SqlColumnIR, SqlTableIR } from '@internal/sql-schema-ir/types';
 import { ifDefined } from '@internal/utils/defined';
 import { postgresRenderCheckExpressions } from '../check-expressions';
-import { literalTypesForPrintedType } from './infer-default-codec';
+import { literalTypesForPrintedType, printedDefaultReadsBack } from './infer-default-codec';
 import { buildDanglingForeignKeyWarning, type DanglingForeignKeyInfo } from './infer-foreign-keys';
 import {
   buildCheckAttribute,
@@ -38,7 +39,6 @@ import {
   buildAttribute,
   buildMapAttribute,
   buildSimpleConstraintFieldAttribute,
-  escapePslString,
   namedArg,
   parseColumnDefault,
   parseDefaultAttributeString,
@@ -278,11 +278,18 @@ function buildScalarField(
     attributes.push(buildSimpleConstraintFieldAttribute('id', singlePkConstraintName));
   }
 
-  const defaultAttribute = inferDefaultAttribute(column, rawDefaultParser, {
-    ...defaultMapping,
-    literalTypes: literalTypesForPrintedType(resolution.pslType.name, enumPslName !== undefined),
-    list: column.many === true,
-  });
+  const isEnumColumn = enumPslName !== undefined;
+  const defaultAttribute = inferDefaultAttribute(
+    column,
+    rawDefaultParser,
+    {
+      ...defaultMapping,
+      literalTypes: literalTypesForPrintedType(resolution.pslType.name, isEnumColumn),
+      list: column.many === true,
+    },
+    (value) =>
+      printedDefaultReadsBack(value, resolution.pslType.name, isEnumColumn, column.many === true),
+  );
   if (defaultAttribute !== undefined) {
     attributes.push(parseDefaultAttributeString(defaultAttribute));
   }
@@ -342,6 +349,7 @@ function inferDefaultAttribute(
   column: SqlColumnIR,
   rawDefaultParser: PslPrinterOptions['parseRawDefault'],
   defaultMapping: DefaultMappingOptions,
+  readsBack: (value: ColumnDefaultLiteralInputValue) => boolean,
 ): string | undefined {
   if (
     column.default === undefined &&
@@ -360,7 +368,7 @@ function inferDefaultAttribute(
     // SQL text read against the element type only yields a function, which
     // the interpreter rejects on a list column.
     return Array.isArray(column.resolvedDefault.value)
-      ? literalOrRawAttribute(column.resolvedDefault, column, defaultMapping)
+      ? literalOrRawAttribute(column.resolvedDefault, column, defaultMapping, readsBack)
       : undefined;
   }
   const parsed = parseColumnDefault(column.default, column.nativeType, rawDefaultParser);
@@ -368,18 +376,25 @@ function inferDefaultAttribute(
     return undefined;
   }
   if (parsed.kind === 'literal') {
-    return literalOrRawAttribute(parsed, column, defaultMapping);
+    return literalOrRawAttribute(parsed, column, defaultMapping, readsBack);
   }
   return mappedAttribute(parsed, defaultMapping);
 }
 
-/** A literal no named literal type writes has no PSL literal, so the raw database default prints instead. */
+/**
+ * A literal no named literal type writes, or that the column's codec does not read back, has no PSL
+ * literal, so the raw database default prints instead.
+ */
 function literalOrRawAttribute(
   columnDefault: ColumnDefault,
   column: SqlColumnIR,
   defaultMapping: DefaultMappingOptions,
+  readsBack: (value: ColumnDefaultLiteralInputValue) => boolean,
 ): string | undefined {
-  const result = mapDefault(columnDefault, defaultMapping);
+  const result =
+    columnDefault.kind === 'literal' && !readsBack(columnDefault.value)
+      ? { comment: '' }
+      : mapDefault(columnDefault, defaultMapping);
   if ('attribute' in result) return result.attribute;
   return typeof column.default === 'string'
     ? mappedAttribute({ kind: 'function', expression: column.default }, defaultMapping)

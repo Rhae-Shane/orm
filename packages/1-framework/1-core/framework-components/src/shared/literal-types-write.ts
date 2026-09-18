@@ -36,7 +36,8 @@ function plainNumeral(value: number): string {
   return `${sign}${digits.slice(0, point)}.${digits.slice(point)}`;
 }
 
-function escapePslString(value: string): string {
+/** A string as PSL source writes it, with the escapes its string decoder resolves. */
+export function escapePslString(value: string): string {
   return value
     .replace(/\\/g, '\\\\')
     .replace(/"/g, '\\"')
