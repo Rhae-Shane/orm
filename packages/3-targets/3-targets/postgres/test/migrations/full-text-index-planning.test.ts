@@ -14,6 +14,7 @@ import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
+import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
 import {
   postgresAuthoringEntityTypes,
@@ -71,7 +72,10 @@ function authoredContract(): Contract<SqlStorage> {
   });
   expect(result.ok).toBe(true);
   if (!result.ok) throw new Error('PSL interpretation failed');
-  return result.value;
+  return blindCast<
+    Contract<SqlStorage>,
+    'the interpreter returns the framework Contract supertype; a Postgres schema is SQL storage'
+  >(result.value);
 }
 
 /** The table exists with no indexes, so only the index is left to plan. */
