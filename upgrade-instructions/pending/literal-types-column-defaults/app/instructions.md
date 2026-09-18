@@ -42,7 +42,7 @@ changes:
     detection:
       glob: "**/*.{ts,mts,cts}"
       matches:
-        - "\\.default\\('-?\\d+(\\.\\d+)?'\\)"
+        - "\\.default\\(['\"]-?\\d+(\\.\\d+)?['\"]\\)"
 ---
 
 ## `json-column-default-is-a-json-tag`
@@ -55,7 +55,15 @@ A column default is now a literal of a type, and the column's codec names the ty
 | `meta Jsonb @default("{\"plan\":\"free\"}")` | ``meta Jsonb @default(json`{ "plan": "free" }`)`` |
 | `docs Jsonb[] @default(["{}"])` | ``docs Jsonb[] @default([json`{}`])`` |
 
-The body inside the tag is the JSON document itself, so it needs none of the escaping a PSL string needed. A backtick body resolves only `` \` `` and `\\`; every other backslash is kept, so `` json`{ "re": "\\d+" }` `` is the JSON text `{ "re": "\d+" }`. A body that is not a JSON document is `PSL_INVALID_JSON_LITERAL`.
+The body inside the tag is the JSON document itself, so it needs none of the escaping a PSL string needed. A backtick body resolves `` \` `` and `\\` and nothing else, so `` json`{ "plan": "free" }` `` needs no escaping at all.
+
+A backslash has to survive twice — the backtick fence, then JSON — so a JSON string that needs one backslash is written with four:
+
+| In the schema | After the fence | JSON reads |
+| --- | --- | --- |
+| ``json`{ "re": "\\\\d+" }` `` | `{ "re": "\\d+" }` | the string `\d+` |
+
+Two backslashes are not enough: the fence turns them into one, and `\d` is not a JSON escape, so the body is refused with `PSL_INVALID_JSON_LITERAL` — as is any other body that is not a JSON document.
 
 `` @default(json`null`) `` stores the JSON value null, as `@default("null")` did.
 

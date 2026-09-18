@@ -20,11 +20,11 @@ model Account {
 
 Reading that model:
 
-- `"anonymous"`, `9007199254740993`, `1.50`, and `true` are plain PSL scalars. They write a `string` literal, a `bigint` literal, a `decimal` literal, and a `boolean` literal.
+- `"anonymous"`, `9007199254740993`, `1.50`, and `true` are plain PSL scalars. They write a `string` literal, an `i64` literal (the smallest whole-number type that holds those digits), a `decimal` literal, and a `boolean` literal.
 - `` json`...` `` is a tagged literal, the syntax [ADR 129](ADR%20129%20-%20Template-Tagged%20Literals%20for%20Extensions.md) defines: a tag followed by a string. The tag `json` names the literal type, and the string holds the JSON document. In backticks it needs no escaping and may span several lines.
 - `` sql`now() + interval '3 days'` `` is also a tagged literal, but `sql` does not name a literal type. It writes a raw SQL expression, which becomes a function default the database evaluates. No codec is consulted.
 
-Each literal type produces exactly the value shape the codecs that name it already accept in `decodeJson`, so a codec needs no new methods. Writing `` @default(json`{}`) `` on an `Int` column is an error that says `pg/int4@1` is compatible with `int` literals.
+Each literal type fixes the value shape it produces, and a codec that stores a different shape converts inside the `decodeJson` it already has, so a codec needs no new methods. Writing `` @default(json`{}`) `` on an `Int` column is an error: `pg/int4@1 is not compatible with a json literal; it accepts i8, i16, i32 literals`.
 
 This ADR replaces the PSL half of [ADR 184](ADR%20184%20-%20Codec-owned%20value%20serialization.md), which sketched `encodePsl` and `decodePsl` methods on codecs. The JSON half of ADR 184 is unchanged.
 
@@ -52,7 +52,7 @@ The contract stores a literal default in the column codec's JSON form ([ADR 184]
 | `BigInt` | `pg/int8@1` | `9007199254740993` | `"9007199254740993"` |
 | `Decimal` | `pg/numeric@1` | `1.50` | `"1.50"` |
 
-A single `number` literal type would have to be converted per codec, which puts conversion code on every numeric codec. Instead the literal types are cut where those representations are cut: `int`, `bigint`, and `decimal` are separate literal types, each producing what its codecs already accept. The declaration is then a list of names, and the rules for whole numbers, decimal canonicalisation, and digit preservation are written once, in the literal type, rather than once per codec.
+A single `number` literal type would have to be converted per codec, which puts conversion code on every numeric codec. Instead the literal types are cut where those representations are cut, and the whole-number types are cut again by width — `i8`, `i16`, `i32`, `i64`, then `bigint` — so that a number too large for its column is a type the column does not accept rather than a value it fails to decode. The declaration is then a list of names, and the rules for whole numbers, decimal canonicalisation, and digit preservation are written once, in the literal type, rather than once per codec.
 
 ## The literal types
 
@@ -89,7 +89,7 @@ The syntax tree keeps exactly what the author wrote. The formatter and the langu
 
 ## Codecs declare compatible literal types
 
-A codec descriptor names the literal types its columns are compatible with. This is static metadata, next to `traits` and `targetTypes` on `CodecDescriptor`: it depends only on the codec id, never on a particular column's parameters. It carries no functions, because the literal type produces the value the codec's `decodeJson` already accepts.
+A codec descriptor names the literal types its columns are compatible with. This is static metadata, next to `traits` and `targetTypes` on `CodecDescriptor`: it depends only on the codec id, never on a particular column's parameters. It carries no functions — a declaration is a list of names, and turning a named type's value into the codec's own form is work `decodeJson` already does.
 
 ```ts
 class PgJsonbDescriptor extends PostgresCodecDescriptor<void> {
@@ -120,10 +120,10 @@ The codec instance keeps the checks that depend on column parameters. The interp
 Each step has one owner.
 
 1. **PSL parser.** Parses the `@default(...)` argument into a scalar or a tagged literal node, recording the source span.
-2. **Interpreter.** Determines the literal's type: a tagged literal takes the type its tag writes; a plain scalar takes the type the column's codec declares for that scalar, which the open question below concerns. A `sql` tagged literal becomes a function default and stops here.
-3. **Compatibility.** If the literal's type is not one the column's codec declares, the interpreter reports an error at the literal naming the codec and its compatible literal types.
-4. **Literal type.** The literal type reads the written text into its value, refusing text it cannot read, such as a fraction written for an `int` literal.
-5. **Codec instance.** `decodeJson` checks the value against the column. A value it refuses is reported at the literal with the codec's message.
+2. **Interpreter.** Turns the node into a written literal, independent of the source language: the text of a string, the digits of a number as written, a boolean, the body of a tag, or a list of those. A `sql` tagged literal becomes a function default and stops here.
+3. **Literal types.** Reading the written literal gives its type and its value together: a number's type comes from its own size and precision, a tag's from the type its tag names. Text no literal type reads — a number with an exponent, a `json` body that is not a JSON document — is refused here.
+4. **Compatibility.** If the literal's type is not one the column's codec declares, the interpreter reports an error naming the codec, the literal's type, and the types the codec accepts. Nothing has been decoded.
+5. **Codec instance.** `decodeJson` converts the literal type's value into the codec's own form and checks it against the column. A value it refuses is reported with the codec's message.
 6. **Contract.** The default is stored as `{ kind: 'literal', value }` in the codec's JSON form, like every literal default.
 
 Other text-based contract sources follow the same steps from their own syntax. The reader for the earlier Prisma schema language ([ADR 252](ADR%20252%20-%20An%20earlier%20Prisma%20version's%20schema%20is%20a%20contract%20source.md)) turns that language's defaults into literals of a type and checks them against the same declarations. The TypeScript contract builder is not a text source: `.default(value)` passes a value of the codec's own type, and TypeScript's types do the compatibility check.
@@ -149,9 +149,9 @@ The printer needs the codec bound to each PSL type name it prints. That binding 
 | PSL parser | Scalars and tagged literal nodes, spans, canonicalisation of tagged bodies |
 | Tag registry | Which literal type each tag writes; which tag writes raw SQL |
 | Literal types | The value each literal holds, reading a written literal into it, and writing a stored value back |
-| Interpreter and other text sources | Mapping their syntax to literals; reporting incompatibility at the literal |
+| Interpreter and other text sources | Mapping their syntax to written literals; wording the refusals in their own diagnostics |
 | Codec descriptor | The names of the compatible literal types |
-| Codec instance | `decodeJson` checks that depend on column parameters |
+| Codec instance | `decodeJson`: converting each named type's value shape into the codec's own form, and the checks that depend on column parameters |
 | Contract | The JSON form, unchanged from [ADR 184](ADR%20184%20-%20Codec-owned%20value%20serialization.md) |
 
 ## How a plain scalar picks its literal type
@@ -190,7 +190,7 @@ Rejected. The input to every codec becomes the PSL tokenizer's view of the sourc
 
 A single `number` literal type carries the digits as text, and each numeric codec declares a read function to its own JSON form and a write function back.
 
-Rejected, and reconsidered in the open question above. Every numeric codec carries conversion code that duplicates what its `decodeJson` already does, and the rules for whole numbers, decimal canonicalisation, and digit preservation are written once per codec instead of once per literal type.
+Rejected. Every numeric codec carries conversion code that duplicates what its `decodeJson` already does, and the rules for whole numbers, decimal canonicalisation, and digit preservation are written once per codec instead of once per literal type.
 
 ### Codecs receive the raw argument text
 
