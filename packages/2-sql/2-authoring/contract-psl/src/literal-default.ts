@@ -18,7 +18,6 @@ import {
   readLiteral,
   type WrittenLiteral,
 } from '@internal/framework-components/codec';
-import type { SourceDiagnostic, SourceSpan } from '@internal/framework-components/control';
 import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
 import type { AuthoredColumnDefaultLiteralValue } from '@internal/sql-contract-ts/contract-builder';
 import { blindCast } from '@internal/utils/casts';
@@ -54,7 +53,7 @@ function codecRefTypeParams(
 
 export type LiteralDefaultResult =
   | { readonly ok: true; readonly value: AuthoredColumnDefaultLiteralValue }
-  | { readonly ok: false; readonly diagnostic: SourceDiagnostic };
+  | { readonly ok: false; readonly code: string; readonly message: string };
 
 /**
  * Why a literal default was refused, in parts, so each contract source words its own diagnostic:
@@ -252,33 +251,36 @@ export function readLiteralDefault(input: {
   return { ok: true, value: decoded };
 }
 
-/** {@link readLiteralDefault} worded as a PSL diagnostic. */
+/** {@link readLiteralDefault} worded as a PSL diagnostic's code and message; the caller adds the provenance. */
 export function lowerLiteralDefault(input: {
   readonly written: WrittenLiteral;
   readonly isList: boolean;
   readonly column: LiteralDefaultColumn;
   readonly codecLookup: CodecLookup | undefined;
   readonly fieldPath: string;
-  readonly sourceId: string;
-  readonly span: SourceSpan;
 }): LiteralDefaultResult {
   const read = readLiteralDefault(input);
   if (read.ok) return read;
   const { refusal } = read;
   const where = `Field "${input.fieldPath}"${at(refusal.elementIndex)}`;
-  const diagnostic = (code: string, message: string): LiteralDefaultResult => ({
-    ok: false,
-    diagnostic: { code, message, sourceId: input.sourceId, span: input.span },
-  });
   switch (refusal.kind) {
     case 'unreadable':
-      return diagnostic(REFUSAL_CODES[refusal.reason], `${where}: ${refusal.message}`);
+      return {
+        ok: false,
+        code: REFUSAL_CODES[refusal.reason],
+        message: `${where}: ${refusal.message}`,
+      };
     case 'incompatible':
-      return diagnostic(
-        PSL_DEFAULT_LITERAL_TYPE_INCOMPATIBLE,
-        `${where}: ${refusal.codecId} is not compatible with ${describeLiteralType(refusal.literalType)}; it accepts ${refusal.accepts}`,
-      );
+      return {
+        ok: false,
+        code: PSL_DEFAULT_LITERAL_TYPE_INCOMPATIBLE,
+        message: `${where}: ${refusal.codecId} is not compatible with ${describeLiteralType(refusal.literalType)}; it accepts ${refusal.accepts}`,
+      };
     case 'undecodable':
-      return diagnostic(PSL_INVALID_DEFAULT_LITERAL, `${where}: ${refusal.message}`);
+      return {
+        ok: false,
+        code: PSL_INVALID_DEFAULT_LITERAL,
+        message: `${where}: ${refusal.message}`,
+      };
   }
 }

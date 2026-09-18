@@ -1,4 +1,3 @@
-import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import type {
   ColumnDefault,
   ExecutionMutationDefaultPhases,
@@ -33,10 +32,7 @@ import {
   type DefaultFunctionLoweringContext,
   describeTaggedLiteralFailure,
   isDefaultLiteralTagLoweringEntry,
-  type LoweredDefaultResult,
   type MutationDefaultGeneratorDescriptor,
-  type SourceDiagnostic,
-  type SourceSpan,
 } from '@internal/framework-components/control';
 import type {
   FieldSymbol,
@@ -47,16 +43,25 @@ import type {
   ResolvedTypeConstructorCall,
   SymbolTable,
 } from '@internal/psl-parser';
-import type { SourceFile } from '@internal/psl-parser/syntax';
+import {
+  type DiagnosticSource,
+  diagnosticSource,
+  type PslDiagnosticCollector,
+} from '@internal/psl-parser';
+import type { PslSources } from '@internal/psl-parser/syntax';
 import type { AuthoredColumnDefault } from '@internal/sql-contract-ts/contract-builder';
 import { InternalError } from '@internal/utils/internal-error';
 import { contractError } from './contract-errors';
-import { lowerDefaultFunctionWithRegistry } from './default-function-registry';
+import {
+  type LoweredPslDefaultResult,
+  lowerDefaultFunctionWithRegistry,
+} from './default-function-registry';
 import {
   lowerLiteralDefault,
   PSL_INVALID_DEFAULT_LITERAL,
   writtenLiteralForTagBody,
 } from './literal-default';
+
 import { mapPslHelperArgs } from './psl-authoring-arguments';
 import {
   fieldSpecContext,
@@ -206,15 +211,14 @@ export function checkUncomposedNamespace(
 export function reportUncomposedNamespace(input: {
   readonly subjectLabel: string;
   readonly namespace: string;
-  readonly sourceId: string;
+  readonly source: DiagnosticSource;
   readonly span: PslSpan;
-  readonly diagnostics: ContractSourceDiagnostic[];
+  readonly diagnostics: PslDiagnosticCollector;
 }): void {
   input.diagnostics.push({
     code: 'PSL_EXTENSION_NAMESPACE_NOT_COMPOSED',
     message: `${input.subjectLabel} uses unrecognized namespace "${input.namespace}". Add extension pack "${input.namespace}" to extensions in prisma.config.ts.`,
-    sourceId: input.sourceId,
-    span: input.span,
+    ...input.source.at(input.span),
     data: { namespace: input.namespace, suggestedPack: input.namespace },
   });
 }
@@ -226,15 +230,14 @@ export function reportUnknownFieldPreset(input: {
   readonly entityLabel: string;
   readonly namespace: string;
   readonly helperPath: string;
-  readonly sourceId: string;
+  readonly source: DiagnosticSource;
   readonly span: PslSpan;
-  readonly diagnostics: ContractSourceDiagnostic[];
+  readonly diagnostics: PslDiagnosticCollector;
 }): void {
   input.diagnostics.push({
     code: 'PSL_UNKNOWN_FIELD_PRESET',
     message: `${input.entityLabel} references unknown field preset "${input.helperPath}". Check the spelling against the available presets in the "${input.namespace}" namespace.`,
-    sourceId: input.sourceId,
-    span: input.span,
+    ...input.source.at(input.span),
     data: { namespace: input.namespace, helperPath: input.helperPath },
   });
 }
@@ -242,8 +245,8 @@ export function reportUnknownFieldPreset(input: {
 export function instantiatePslTypeConstructor(input: {
   readonly call: ResolvedTypeConstructorCall;
   readonly descriptor: AuthoringTypeConstructorDescriptor;
-  readonly diagnostics: ContractSourceDiagnostic[];
-  readonly sourceId: string;
+  readonly diagnostics: PslDiagnosticCollector;
+  readonly source: DiagnosticSource;
   readonly entityLabel: string;
 }):
   | {
@@ -259,7 +262,7 @@ export function instantiatePslTypeConstructor(input: {
     helperLabel: `constructor "${helperPath}"`,
     span: input.call.span,
     diagnostics: input.diagnostics,
-    sourceId: input.sourceId,
+    source: input.source,
     entityLabel: input.entityLabel,
   });
   if (!args) {
@@ -274,16 +277,15 @@ export function instantiatePslTypeConstructor(input: {
     input.diagnostics.push({
       code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
       message: `${input.entityLabel} constructor "${helperPath}" ${message}`,
-      sourceId: input.sourceId,
-      span: input.call.span,
+      ...input.source.at(input.call.span),
     });
     return undefined;
   }
 }
 
 function pushUnsupportedTypeConstructorDiagnostic(input: {
-  readonly diagnostics: ContractSourceDiagnostic[];
-  readonly sourceId: string;
+  readonly diagnostics: PslDiagnosticCollector;
+  readonly source: DiagnosticSource;
   readonly span: PslSpan;
   readonly code: 'PSL_UNSUPPORTED_FIELD_TYPE' | 'PSL_UNSUPPORTED_NAMED_TYPE_CONSTRUCTOR';
   readonly message: string;
@@ -291,8 +293,7 @@ function pushUnsupportedTypeConstructorDiagnostic(input: {
   input.diagnostics.push({
     code: input.code,
     message: input.message,
-    sourceId: input.sourceId,
-    span: input.span,
+    ...input.source.at(input.span),
   });
   return undefined;
 }
@@ -303,8 +304,8 @@ export function resolvePslTypeConstructorDescriptor(input: {
   readonly composedExtensions: ReadonlySet<string>;
   readonly familyId: string;
   readonly targetId: string;
-  readonly diagnostics: ContractSourceDiagnostic[];
-  readonly sourceId: string;
+  readonly diagnostics: PslDiagnosticCollector;
+  readonly source: DiagnosticSource;
   readonly unsupportedCode: 'PSL_UNSUPPORTED_FIELD_TYPE' | 'PSL_UNSUPPORTED_NAMED_TYPE_CONSTRUCTOR';
   readonly unsupportedMessage: string;
 }): AuthoringTypeConstructorDescriptor | undefined {
@@ -326,7 +327,7 @@ export function resolvePslTypeConstructorDescriptor(input: {
     reportUncomposedNamespace({
       subjectLabel: `Type constructor "${input.call.path.join('.')}"`,
       namespace: uncomposedNamespace,
-      sourceId: input.sourceId,
+      source: input.source,
       span: input.call.span,
       diagnostics: input.diagnostics,
     });
@@ -335,7 +336,7 @@ export function resolvePslTypeConstructorDescriptor(input: {
 
   return pushUnsupportedTypeConstructorDiagnostic({
     diagnostics: input.diagnostics,
-    sourceId: input.sourceId,
+    source: input.source,
     span: input.call.span,
     code: input.unsupportedCode,
     message: input.unsupportedMessage,
@@ -350,8 +351,8 @@ export function resolvePslTypeConstructorDescriptor(input: {
 export function instantiateFieldPreset(input: {
   readonly call: ResolvedTypeConstructorCall;
   readonly descriptor: AuthoringFieldPresetDescriptor;
-  readonly diagnostics: ContractSourceDiagnostic[];
-  readonly sourceId: string;
+  readonly diagnostics: PslDiagnosticCollector;
+  readonly source: DiagnosticSource;
   readonly entityLabel: string;
 }):
   | {
@@ -370,7 +371,7 @@ export function instantiateFieldPreset(input: {
     helperLabel: `preset "${helperPath}"`,
     span: input.call.span,
     diagnostics: input.diagnostics,
-    sourceId: input.sourceId,
+    source: input.source,
     entityLabel: input.entityLabel,
   });
   if (!args) {
@@ -401,8 +402,7 @@ export function instantiateFieldPreset(input: {
     input.diagnostics.push({
       code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
       message: `${input.entityLabel} preset "${helperPath}" ${message}`,
-      sourceId: input.sourceId,
-      span: input.call.span,
+      ...input.source.at(input.call.span),
     });
     return undefined;
   }
@@ -458,8 +458,8 @@ function resolveEntityRefTypeConstructorCall(input: {
     | Readonly<Record<string, Readonly<Record<string, unknown>>>>
     | undefined;
   readonly codecLookup: CodecLookup | undefined;
-  readonly diagnostics: ContractSourceDiagnostic[];
-  readonly sourceId: string;
+  readonly diagnostics: PslDiagnosticCollector;
+  readonly source: DiagnosticSource;
   readonly entityLabel: string;
 }): ResolveFieldTypeResult {
   const entityRefArg = input.descriptor.entityRefArg;
@@ -476,8 +476,7 @@ function resolveEntityRefTypeConstructorCall(input: {
     input.diagnostics.push({
       code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
       message: `${input.entityLabel} type constructor "${helperPath}" expects exactly one positional argument naming the referenced entity`,
-      sourceId: input.sourceId,
-      span: input.call.span,
+      ...input.source.at(input.call.span),
     });
     return { ok: false, alreadyReported: true };
   }
@@ -486,8 +485,7 @@ function resolveEntityRefTypeConstructorCall(input: {
     input.diagnostics.push({
       code: 'PSL_UNKNOWN_ENTITY_REF',
       message: `${input.entityLabel} type constructor "${helperPath}(${ref})" does not resolve — no entity named "${ref}" was found in namespace "${input.namespaceId ?? '(unspecified)'}"`,
-      sourceId: input.sourceId,
-      span: input.call.span,
+      ...input.source.at(input.call.span),
     });
     return { ok: false, alreadyReported: true };
   };
@@ -517,8 +515,7 @@ function resolveEntityRefTypeConstructorCall(input: {
     input.diagnostics.push({
       code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
       message: `${input.entityLabel} type constructor "${helperPath}(${ref})" resolves to a value-set-typed entity, but the field has no resolvable namespace to scope the value-set ref to`,
-      sourceId: input.sourceId,
-      span: input.call.span,
+      ...input.source.at(input.call.span),
     });
     return { ok: false, alreadyReported: true };
   }
@@ -572,8 +569,8 @@ export function resolveFieldTypeDescriptor(input: {
   readonly composedExtensions: ReadonlySet<string>;
   readonly familyId: string;
   readonly targetId: string;
-  readonly diagnostics: ContractSourceDiagnostic[];
-  readonly sourceId: string;
+  readonly diagnostics: PslDiagnosticCollector;
+  readonly sources: PslSources;
   readonly entityLabel: string;
   /**
    * The field's namespace id — required to build a `valueSet` ref (`{
@@ -598,6 +595,7 @@ export function resolveFieldTypeDescriptor(input: {
    */
   readonly codecLookup?: CodecLookup;
 }): ResolveFieldTypeResult {
+  const source = diagnosticSource(input.sources, input.field.node.syntax);
   // Avoid cascading unsupported-type diagnostics after invalid qualification.
   if (input.field.malformedType) {
     return { ok: false, alreadyReported: true };
@@ -613,7 +611,7 @@ export function resolveFieldTypeDescriptor(input: {
         call: input.field.typeConstructor,
         descriptor: presetDescriptor,
         diagnostics: input.diagnostics,
-        sourceId: input.sourceId,
+        source,
         entityLabel: input.entityLabel,
       });
       if (!instantiated) {
@@ -647,7 +645,7 @@ export function resolveFieldTypeDescriptor(input: {
         namespaceExtensionEntities: input.namespaceExtensionEntities,
         codecLookup: input.codecLookup,
         diagnostics: input.diagnostics,
-        sourceId: input.sourceId,
+        source,
         entityLabel: input.entityLabel,
       });
     }
@@ -661,7 +659,7 @@ export function resolveFieldTypeDescriptor(input: {
         entityLabel: input.entityLabel,
         namespace: namespacePrefix,
         helperPath,
-        sourceId: input.sourceId,
+        source,
         span: input.field.typeConstructor.span,
         diagnostics: input.diagnostics,
       });
@@ -677,7 +675,7 @@ export function resolveFieldTypeDescriptor(input: {
         familyId: input.familyId,
         targetId: input.targetId,
         diagnostics: input.diagnostics,
-        sourceId: input.sourceId,
+        source,
         unsupportedCode: 'PSL_UNSUPPORTED_FIELD_TYPE',
         unsupportedMessage: `${input.entityLabel} type constructor "${helperPath}" is not supported in SQL PSL provider v1`,
       });
@@ -689,7 +687,7 @@ export function resolveFieldTypeDescriptor(input: {
       call: input.field.typeConstructor,
       descriptor,
       diagnostics: input.diagnostics,
-      sourceId: input.sourceId,
+      source,
       entityLabel: input.entityLabel,
     });
     if (!instantiated) {
@@ -717,17 +715,23 @@ const TAGGED_LITERAL_CANONICALIZATION_CODES = {
 
 /** A tag naming a literal type yields the written literal its body is; every other tag lowers itself. */
 type TaggedLiteralLowering =
-  | LoweredDefaultResult
+  | LoweredPslDefaultResult
   | { readonly ok: true; readonly written: WrittenLiteral };
 
 function lowerTaggedLiteral(
   literal: ParsedTaggedLiteral,
   registry: ControlDefaultLiteralTagRegistry,
   context: DefaultFunctionLoweringContext,
+  source: DiagnosticSource,
 ): TaggedLiteralLowering {
-  const reject = (code: string, message: string): LoweredDefaultResult => ({
+  const reject = (code: string, message: string): LoweredPslDefaultResult => ({
     ok: false,
-    diagnostic: { code, message, sourceId: context.sourceId, span: literal.span },
+    kind: 'owned',
+    diagnostic: {
+      code,
+      message,
+      ...source.at(literal.span),
+    },
   });
   const entry = registry.get(literal.tag);
   if (entry === undefined) {
@@ -749,10 +753,11 @@ function lowerTaggedLiteral(
       written: writtenLiteralForTagBody(entry.literalType, canonicalization.body),
     };
   }
-  return entry.lower({
+  const result = entry.lower({
     literal: { tag: literal.tag, body: canonicalization.body, span: literal.span },
     context,
   });
+  return result.ok ? result : { ...result, kind: 'external' };
 }
 
 export function lowerDefaultForField(input: {
@@ -761,21 +766,20 @@ export function lowerDefaultForField(input: {
   readonly field: FieldSymbol;
   readonly model: ModelSymbol;
   readonly symbolTable: SymbolTable;
-  readonly sourceFile: SourceFile;
+  readonly sources: PslSources;
   readonly columnDescriptor: ColumnDescriptor;
   readonly generatorDescriptorById: ReadonlyMap<string, MutationDefaultGeneratorDescriptor>;
-  readonly sourceId: string;
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
   readonly defaultLiteralTagRegistry: ControlDefaultLiteralTagRegistry;
   readonly codecLookup: CodecLookup | undefined;
-  readonly defaultAttributeSpan: SourceSpan;
-  readonly diagnostics: ContractSourceDiagnostic[];
+  readonly diagnostics: PslDiagnosticCollector;
 }): {
   readonly defaultValue?: AuthoredColumnDefault;
   readonly executionDefaults?: ExecutionMutationDefaultPhases;
 } {
   const node = findFieldAttributeNode(input.field, 'default');
   if (node === undefined) return {};
+  const source = diagnosticSource(input.sources, node.syntax);
   const spec = sqlAttributeSpecs.field.default(
     fieldSpecContext({
       symbols: input.symbolTable,
@@ -792,14 +796,13 @@ export function lowerDefaultForField(input: {
     spec,
     model: input.model,
     field: input.field,
-    sourceFile: input.sourceFile,
-    sourceId: input.sourceId,
+    sources: input.sources,
     diagnostics: input.diagnostics,
   });
   if (interpreted === undefined) return {};
   const value = interpreted.value;
   const context: DefaultFunctionLoweringContext = {
-    sourceId: input.sourceId,
+    sourceId: input.sources.sourceFileFor(node.syntax).filename,
     modelName: input.modelName,
     fieldName: input.fieldName,
     columnCodecId: input.columnDescriptor.codecId,
@@ -811,11 +814,13 @@ export function lowerDefaultForField(input: {
       column: input.columnDescriptor,
       codecLookup: input.codecLookup,
       fieldPath: `${input.modelName}.${input.fieldName}`,
-      sourceId: input.sourceId,
-      span: input.defaultAttributeSpan,
     });
     if (!lowered.ok) {
-      input.diagnostics.push(lowered.diagnostic);
+      input.diagnostics.push({
+        code: lowered.code,
+        message: lowered.message,
+        ...source.at(),
+      });
       return {};
     }
     return { defaultValue: { kind: 'literal' as const, value: lowered.value } };
@@ -823,22 +828,23 @@ export function lowerDefaultForField(input: {
 
   const writtenElement = (
     element: string | boolean | NumLiteral | ParsedTaggedLiteral,
-  ): WrittenLiteral | { readonly ok: false; readonly diagnostic: SourceDiagnostic } => {
+  ): WrittenLiteral | { readonly ok: false } => {
     if (typeof element === 'string') return { kind: 'string', text: element };
     if (typeof element === 'boolean') return { kind: 'boolean', value: element };
     if ('text' in element) return { kind: 'number', text: element.text };
-    const lowered = lowerTaggedLiteral(element, input.defaultLiteralTagRegistry, context);
-    if (!lowered.ok) return { ok: false, diagnostic: lowered.diagnostic };
+    const lowered = lowerTaggedLiteral(element, input.defaultLiteralTagRegistry, context, source);
+    if (!lowered.ok) {
+      if (lowered.kind === 'owned') input.diagnostics.push(lowered.diagnostic);
+      else input.diagnostics.pushExternal(lowered.diagnostic);
+      return { ok: false };
+    }
     if (!('written' in lowered)) {
-      return {
-        ok: false,
-        diagnostic: {
-          code: PSL_INVALID_DEFAULT_LITERAL,
-          message: `Literal tag "${element.tag}" produces a default of its own and cannot be an element of a list literal.`,
-          sourceId: input.sourceId,
-          span: element.span,
-        },
-      };
+      input.diagnostics.push({
+        code: PSL_INVALID_DEFAULT_LITERAL,
+        message: `Literal tag "${element.tag}" produces a default of its own and cannot be an element of a list literal.`,
+        ...source.at(element.span),
+      });
+      return { ok: false };
     }
     return lowered.written;
   };
@@ -847,10 +853,7 @@ export function lowerDefaultForField(input: {
     const elements: WrittenLiteral[] = [];
     for (const element of value) {
       const written = writtenElement(element);
-      if ('ok' in written) {
-        input.diagnostics.push(written.diagnostic);
-        return {};
-      }
+      if ('ok' in written) return {};
       elements.push(written);
     }
     return readAsLiteral({ kind: 'list', elements });
@@ -871,15 +874,17 @@ export function lowerDefaultForField(input: {
 
   const lowered =
     'tag' in value
-      ? lowerTaggedLiteral(value, input.defaultLiteralTagRegistry, context)
+      ? lowerTaggedLiteral(value, input.defaultLiteralTagRegistry, context, source)
       : lowerDefaultFunctionWithRegistry({
           call: value,
           registry: input.defaultFunctionRegistry,
           context,
+          source,
         });
 
   if (!lowered.ok) {
-    input.diagnostics.push(lowered.diagnostic);
+    if (lowered.kind === 'owned') input.diagnostics.push(lowered.diagnostic);
+    else input.diagnostics.pushExternal(lowered.diagnostic);
     return {};
   }
 
@@ -894,8 +899,7 @@ export function lowerDefaultForField(input: {
     input.diagnostics.push({
       code: 'PSL_INVALID_DEFAULT_APPLICABILITY',
       message: `Default generator "${lowered.value.generated.id}" is not available in the composed mutation default registry.`,
-      sourceId: input.sourceId,
-      span: value.span,
+      ...source.at(value.span),
     });
     return {};
   }
@@ -905,8 +909,7 @@ export function lowerDefaultForField(input: {
     input.diagnostics.push({
       code: 'PSL_INVALID_DEFAULT_APPLICABILITY',
       message: `Default generator "${generatorDescriptor.id}" is not applicable to "@default(...)" lowering. Use the corresponding field preset (e.g. \`temporal.${generatorDescriptor.id === 'timestampNow' ? 'updatedAt' : generatorDescriptor.id}()\`) instead.`,
-      sourceId: input.sourceId,
-      span: value.span,
+      ...source.at(value.span),
     });
     return {};
   }
@@ -915,8 +918,7 @@ export function lowerDefaultForField(input: {
     input.diagnostics.push({
       code: 'PSL_INVALID_DEFAULT_APPLICABILITY',
       message: `Default generator "${generatorDescriptor.id}" is not applicable to "${input.modelName}.${input.fieldName}" with codecId "${input.columnDescriptor.codecId}".`,
-      sourceId: input.sourceId,
-      span: value.span,
+      ...source.at(value.span),
     });
     return {};
   }

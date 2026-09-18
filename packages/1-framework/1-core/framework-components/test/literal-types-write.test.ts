@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { integerLiteralTypesUpTo, type LiteralTypeDeclaration } from '../src/shared/literal-types';
 import { writeLiteral } from '../src/shared/literal-types-write';
-import { resolveBacktickEscapes } from '../src/shared/tagged-literal';
+import { resolvePslBacktickEscapes } from '../src/shared/tagged-literal';
 
 const integers = integerLiteralTypesUpTo('i64');
 
@@ -80,7 +80,7 @@ describe('writeLiteral', () => {
       const written = writeLiteral(value, ['json']);
       if (written === undefined) throw new Error('expected a json literal');
       const body = written.text.slice('json`'.length, -1);
-      expect(JSON.parse(resolveBacktickEscapes(body))).toEqual(value);
+      expect(JSON.parse(resolvePslBacktickEscapes(body))).toEqual(value);
     });
   });
 

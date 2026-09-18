@@ -128,16 +128,16 @@ function roundTrippedDefaults(columns: readonly SqlColumnIRInput[]) {
       },
     }),
   );
-  const { document, sourceFile } = parse(printed);
-  const { table: symbolTable } = buildSymbolTable({
-    document,
-    sourceFile,
+  const { document, sources } = parse(printed, 'schema.prisma');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
   const emitted = interpretPslDocumentToSqlContract({
+    document,
     symbolTable,
-    sourceFile,
-    sourceId: 'schema.prisma',
+    sources,
     capabilities: { sql: { scalarList: true } },
     target,
     scalarColumnDescriptors: collectScalarTypeConstructors(authoringTypes),
