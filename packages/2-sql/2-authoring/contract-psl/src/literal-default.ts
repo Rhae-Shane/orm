@@ -68,7 +68,13 @@ export function writtenLiteralForTagBody(
       return { kind: 'string', text };
     case 'boolean':
       return { kind: 'boolean', value: text === 'true' };
-    default:
+    case 'i8':
+    case 'i16':
+    case 'i32':
+    case 'i64':
+    case 'bigint':
+    case 'decimal':
+    case 'float':
       return { kind: 'number', text };
   }
 }
@@ -77,6 +83,11 @@ const REFUSAL_CODES = {
   'invalid-json': PSL_INVALID_JSON_LITERAL,
   'invalid-number': PSL_INVALID_DEFAULT_LITERAL,
 } as const;
+
+/** Where in a list literal a diagnostic is about, for a message: ` at element 2`. */
+function at(elementIndex: number | undefined): string {
+  return elementIndex === undefined ? '' : ` at element ${elementIndex + 1}`;
+}
 
 const VOWEL = /^[aeiou]/;
 
@@ -117,8 +128,10 @@ export function lowerLiteralDefault(input: {
 
   const read = readLiteral(input.written);
   if (!read.ok) {
-    const at = read.elementIndex === undefined ? '' : ` at element ${read.elementIndex + 1}`;
-    return reject(REFUSAL_CODES[read.reason], `Field "${input.fieldPath}"${at}: ${read.message}`);
+    return reject(
+      REFUSAL_CODES[read.reason],
+      `Field "${input.fieldPath}"${at(read.elementIndex)}: ${read.message}`,
+    );
   }
 
   const descriptorFor = input.codecLookup?.descriptorFor;
@@ -136,10 +149,10 @@ export function lowerLiteralDefault(input: {
 
   const declared = descriptor.literalTypes ?? [];
   const declarations = input.isList ? scalarDeclarations(declared) : declared;
-  const incompatible = (name: string): LiteralDefaultResult =>
+  const incompatible = (name: string, elementIndex?: number): LiteralDefaultResult =>
     reject(
       PSL_DEFAULT_LITERAL_TYPE_INCOMPATIBLE,
-      `Field "${input.fieldPath}": ${input.column.codecId} is not compatible with ${article(name)} ${name} literal; it accepts ${describeDeclarations(declarations)}`,
+      `Field "${input.fieldPath}"${at(elementIndex)}: ${input.column.codecId} is not compatible with ${article(name)} ${name} literal; it accepts ${describeDeclarations(declarations)}`,
     );
 
   const typeParams = codecRefTypeParams(input.column.typeParams);
@@ -158,10 +171,9 @@ export function lowerLiteralDefault(input: {
         >(codec.decodeJson(value)),
       };
     } catch (error) {
-      const at = elementIndex === undefined ? '' : ` at element ${elementIndex + 1}`;
       return reject(
         PSL_INVALID_DEFAULT_LITERAL,
-        `Field "${input.fieldPath}"${at}: ${error instanceof Error ? error.message : String(error)}`,
+        `Field "${input.fieldPath}"${at(elementIndex)}: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   };
@@ -172,18 +184,26 @@ export function lowerLiteralDefault(input: {
     return decode(blindCast<JsonValue, 'a literal value is JSON'>(read.literal.value));
   }
 
-  const listType = read.literal.type;
-  if (typeof listType === 'string') {
+  if (input.written.kind !== 'list') {
     throw new InternalError(
-      `Field "${input.fieldPath}": a list column's default was read as a ${listType} literal rather than a list.`,
+      `Field "${input.fieldPath}": a list column's default was read as a ${input.written.kind} literal rather than a list.`,
     );
   }
-  const unaccepted = listType.list.find((name) => !declarations.includes(name));
-  if (unaccepted !== undefined) return incompatible(unaccepted);
 
   const decoded: AuthoredColumnDefaultLiteralValue[] = [];
-  for (const [elementIndex, value] of read.literal.value.entries()) {
-    const result = decode(value, elementIndex);
+  for (const [elementIndex, written] of input.written.elements.entries()) {
+    // Each element is read on its own so its own type and position are both in hand; the whole-list
+    // read above has already refused anything unreadable.
+    const element = readLiteral(written);
+    if (!element.ok || typeof element.literal.type !== 'string') {
+      throw new InternalError(
+        `Field "${input.fieldPath}": element ${elementIndex + 1} read differently on its own than as part of the list literal.`,
+      );
+    }
+    if (!isCompatible(element.literal, declarations)) {
+      return incompatible(element.literal.type, elementIndex);
+    }
+    const result = decode(element.literal.value, elementIndex);
     if (!result.ok) return result;
     decoded.push(result.value);
   }

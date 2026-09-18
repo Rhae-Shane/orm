@@ -150,7 +150,7 @@ describe('literal defaults the codec refuses', () => {
     [
       'a string element in a list of ints',
       'scores Int[] @default([1, "x"])',
-      'N.scores": pg/int4@1 is not compatible with a string literal;',
+      'N.scores" at element 2: pg/int4@1 is not compatible with a string literal; it accepts i8, i16, i32 literals',
     ],
     [
       'a list literal on a jsonb column',

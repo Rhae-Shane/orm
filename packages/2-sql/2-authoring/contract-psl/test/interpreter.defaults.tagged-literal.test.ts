@@ -85,7 +85,7 @@ describe('interpretPslDocumentToSqlContract tagged literal defaults', () => {
       {
         code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
         message:
-          'Expected one of: string | number | boolean | autoincrement() | now() | uuid() | cuid() | ulid() | nanoid() | dbgenerated() | sql`...` | string | number | boolean | sql`...`[]',
+          'Expected one of: string | number | boolean | autoincrement() | now() | uuid() | cuid() | ulid() | nanoid() | dbgenerated() | sql`...` | json`...` | list of (string | number | boolean | sql`...` | json`...`)',
         sourceId: 'schema.prisma',
         span: lineThreeSpan(21, 'gen_random_uuid()'.length),
       },
@@ -207,5 +207,17 @@ describe('interpretPslDocumentToSqlContract tagged literal defaults', () => {
         }),
       ]);
     });
+  });
+
+  it('refuses a lowering tag as an element of a list literal, at the element', () => {
+    expect(diagnostics('v Jsonb[] @default([json`{}`, sql`md5(x)`])')).toEqual([
+      expect.objectContaining({
+        code: 'PSL_INVALID_DEFAULT_LITERAL',
+        message:
+          'Literal tag "sql" produces a default of its own and cannot be an element of a list literal.',
+        sourceId: 'schema.prisma',
+        span: lineThreeSpan(33, 11),
+      }),
+    ]);
   });
 });
