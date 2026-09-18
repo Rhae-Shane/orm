@@ -64,9 +64,28 @@ const AUTH_NATIVE_ENUMS = [
 
 const STORAGE_NATIVE_ENUMS = ['buckettype'];
 
+const NAMED_TYPES = [
+  'CreatedAt',
+  'EmailChangeConfirmStatus',
+  'Hash',
+  'Id',
+  'IpAddress',
+  'IpAddress2',
+  'Name',
+  'Parent',
+  'Payload',
+];
+
+/** Every `CHECK` the reference fixture declares on an `auth` or `storage` table. */
+const CHECK_CONSTRAINT_COUNT = 43;
+
+type ContractJsonTable = {
+  checks?: readonly { name: string }[];
+};
+
 type ContractJsonNamespace = {
   entries: {
-    table?: Record<string, unknown>;
+    table?: Record<string, ContractJsonTable>;
     native_enum?: Record<string, unknown>;
     role?: Record<string, { control: string }>;
   };
@@ -74,6 +93,7 @@ type ContractJsonNamespace = {
 
 type ContractJsonStorage = {
   namespaces: Record<string, ContractJsonNamespace>;
+  types?: Record<string, unknown>;
 };
 
 describe('contract completeness — auth/storage table, native enum, and role sets', () => {
@@ -100,6 +120,19 @@ describe('contract completeness — auth/storage table, native enum, and role se
     expect(Object.keys(storageNs?.entries.native_enum ?? {}).sort()).toEqual(
       [...STORAGE_NATIVE_ENUMS].sort(),
     );
+  });
+
+  it('declares the nine curated named types', () => {
+    expect(Object.keys(storage.types ?? {}).sort()).toEqual([...NAMED_TYPES].sort());
+  });
+
+  it('declares every auth/storage check constraint', () => {
+    const names = [auth, storageNs].flatMap((namespace) =>
+      Object.values(namespace?.entries.table ?? {}).flatMap((table) =>
+        (table.checks ?? []).map((check) => check.name),
+      ),
+    );
+    expect(names).toHaveLength(CHECK_CONSTRAINT_COUNT);
   });
 
   it('declares the three platform roles under external control', () => {
