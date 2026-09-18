@@ -8,6 +8,8 @@ The shipped contract (`contract.prisma` → emitted `contract.json` / `contract.
 
 Everything the pack declares is `control: 'external'`. Under `external`, `db verify` **fails on a declared shape the live database lacks** and **tolerates everything live that the contract does not declare** (extra schemas, tables, columns, indexes, defaults). So *under-declaring is safe and wrong-declaring is not* — every entry below is an omission, never an approximation. The round-trip test (`test/reference-fixture-verify.integration.test.ts`) pins that the shipped contract verifies clean against the restored reference, with the undeclared schemas (`realtime`, `vault`, …) present.
 
+The 43 `CHECK` constraints are a newly declared surface, read from the one pinned reference build below. They were previously a tolerated live extra; now they are a declared shape, so a consumer whose Supabase build declares a different constraint set fails verify and cannot repair it, because no plan may emit DDL against an `external` table. That is the same bet the pack already makes on tables, native enums and indexes, and it is the reason the reference version is pinned and the fixture refresh is a deliberate step.
+
 ## What the contract deliberately does not declare
 
 The machine-readable version of the default list lives in `scripts/generate-contract.ts` (`DEFAULT_OMISSIONS`) with the full reasoning; this is the audit summary.
@@ -24,7 +26,7 @@ The machine-readable version of the default list lives in `scripts/generate-cont
 
 **Generated columns** (`auth.users.confirmed_at`, `auth.identities.email`, `storage.objects.path_tokens`): declared as ordinary columns. Introspection reports them identically on the authored and live sides, so verify is clean; the contract does not record the generation expression.
 
-**Check constraints:** none of the live ones. All 43 are declared — see "What is complete". In the other direction, the four `text[]` columns waive the `elementNotNull` check the framework would otherwise derive for a list column (`@noCheck(elementNotNull)`, emitted as `"noCheck": ["elementNotNull"]`): real Supabase has no `array_position(col, NULL) IS NULL` constraint on `auth.custom_oauth_providers.acceptable_client_ids`, `auth.custom_oauth_providers.scopes`, `storage.buckets.allowed_mime_types` or `storage.objects.path_tokens`, so expecting one would fail verify against every real database.
+**Check constraints:** none of the live ones. All 43 are declared — see "What is complete". The four `text[]` columns additionally carry `@noCheck(elementNotNull)`, which `contract infer` writes for any list column with no live check at the derived wire name; the committed contract reproduces the generator's output, so it carries the waiver too. The waiver's only effect on the emitted artefact is the `"noCheck": ["elementNotNull"]` key, which feeds the storage hash. It changes nothing about what `db verify` demands: the pack's `defaultControlPolicy: 'external'` already runs `stripDerivedChecksFromNonManagedTables` over every table before emit, so a derived check never reaches the contract whether the waiver is written or not.
 
 ## The named types are chosen by type spelling
 
