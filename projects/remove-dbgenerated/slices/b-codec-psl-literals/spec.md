@@ -1,6 +1,6 @@
 # Slice B — Literal types for column defaults
 
-**Project:** [Remove `dbgenerated`](../../spec.md). **Design:** [ADR 253](../../../../docs/architecture%20docs/adrs/ADR%20253%20-%20Literal%20types%20for%20column%20defaults.md), amended by this slice as B10 records. **Linear:** not yet created. **Branch:** `worktree/literal-types-column-defaults-852235` off `main`. **Shape:** one PR. **Depends on:** slice A, merged. **Input:** [`brief.md`](brief.md), which is unvalidated design input from another agent; every claim in it was verified against the code before this spec was written, and the corrections are listed under "Corrections to the brief".
+**Project:** [Remove `dbgenerated`](../../spec.md). **Design:** [ADR 254](../../../../docs/architecture%20docs/adrs/ADR%20254%20-%20Literal%20types%20for%20column%20defaults.md), amended by this slice as B10 records. **Linear:** not yet created. **Branch:** `worktree/literal-types-column-defaults-852235` off `main`. **Shape:** one PR. **Depends on:** slice A, merged. **Input:** [`brief.md`](brief.md), which is unvalidated design input from another agent; every claim in it was verified against the code before this spec was written, and the corrections are listed under "Corrections to the brief".
 
 ## Outcome
 
@@ -40,7 +40,7 @@ scores Int[]   @default([1, "x"])            // incompatible, reported at the se
 
 ## Decisions from the shaping discussion (2026-09-18)
 
-These settle ADR 253's open question and are written into the ADR by B10.
+These settle ADR 254's open question and are written into the ADR by B10.
 
 1. **A written number's literal type comes from its own size and precision, never from the column.** The literal types for numbers are `i8`, `i16`, `i32`, `i64`, `bigint`, `decimal` and `float`. A number gets the smallest type that holds it. `42` is `i8` on every column; `100000000000000099` is `i64`; `1.50` is `decimal`; `NaN` is `float`. Reason: one syntax then names one type, the compatibility check is a lookup with no trial decoding, and a size error is reported as an incompatibility before anything is decoded.
 2. **A codec names every type it accepts, and coercion between those types' value shapes is the codec's job, inside its existing `decodeJson`.** `pg/int8@1` names `i8` to `i64`, so its `decodeJson` accepts a JSON number as well as the digit text it stores. No new codec method; the declaration stays a list of names. Reason: the value shape a literal type produces is fixed by the type, and the codecs that store a different shape are the ones that know how to convert it.
@@ -80,7 +80,7 @@ These supersede the sections below where they differ.
 Verified against the code on 2026-09-18. Where the brief and this spec differ, this spec wins.
 
 - **`NaN`, `Infinity` and `-Infinity` print unquoted.** The PSL tokenizer reads them as number tokens (`tokenizer.ts`, `KEYWORD_NUMBERS`). The brief said to print them as a quoted string, which would read back as a `string` literal and be refused by every float codec.
-- **`pg/enum@1` names no literal type.** Enum defaults are bare member names and never reach the codec (`enumDefaultArms` in `sql-attribute-specs.ts`), so naming `string` would be inert and would contradict ADR 253. The brief said `string`.
+- **`pg/enum@1` names no literal type.** Enum defaults are bare member names and never reach the codec (`enumDefaultArms` in `sql-attribute-specs.ts`), so naming `string` would be inert and would contradict ADR 254. The brief said `string`.
 - **Mongo has seven codecs, not nine.** `mongo/array@1` and `mongo/document@1` do not exist. The seven (`mongo/objectId@1`, `mongo/string@1`, `mongo/double@1`, `mongo/int32@1`, `mongo/bool@1`, `mongo/date@1`, `mongo/vector@1`) name nothing, as the brief said.
 - **`pg/float4@1` and `pg/float8@1` do no validation in `decodeJson` on `main`** (a blind cast), and their `encodeJson` turns `NaN` into JSON `null`. The closed branch's float fix is needed and is B2's job.
 - **`sqlite/real@1`, `sql/float@1` and `pg/float@1` refuse non-finite values in `decodeJson`.** Confirmed. They therefore do not name `float`, so `Real @default(NaN)` on SQLite is an incompatibility diagnostic rather than a decode failure. The brief had them name `float`.
@@ -237,9 +237,9 @@ Unchanged: enum member defaults; list syntax on list columns; `` Json @default(j
 
 By hand, from `origin/remove-dbgenerated-codec-psl-literals`: the e2e test `test/integration/test/cli-journeys/codec-psl-literal-defaults.e2e.test.ts`, with its schema rewritten to the Outcome forms and a vector column added; the jsonb case in `infer-roundtrip-fidelity.e2e.test.ts`; the float fix (B2); the decimal canonicalisation cases as tests. Nothing that adds `encodePsl`, `decodePsl`, `PslLiteral`, or the `literal()` combinator.
 
-### B10. ADR 253 amendment
+### B10. ADR 254 amendment
 
-ADR 253 is on the unmerged branch of PR 30334 and merged into this branch. This PR edits it: the open question is closed with decisions 1 to 3 above; the literal-types table gains the numeric types by size; "Codecs declare compatible literal types" gains the list declaration and the coercion rule; the enum and non-finite float details in "Settled details" are corrected. The project spec's D9 and D10 gain a one-line amendment note pointing here, and the plan's slice C seam is updated (B6).
+ADR 254 is on the unmerged branch of PR 30334 and merged into this branch. This PR edits it: the open question is closed with decisions 1 to 3 above; the literal-types table gains the numeric types by size; "Codecs declare compatible literal types" gains the list declaration and the coercion rule; the enum and non-finite float details in "Settled details" are corrected. The project spec's D9 and D10 gain a one-line amendment note pointing here, and the plan's slice C seam is updated (B6).
 
 ## Tests (written first; each named test must fail before its implementation lands)
 
@@ -274,7 +274,7 @@ Journeys: the e2e test from B9 against a real database; the `infer-roundtrip-fid
 - All tests above green; `pnpm typecheck`, `pnpm test:packages`, `pnpm test:integration`, `pnpm test:e2e`, `pnpm lint`, `pnpm lint:deps`, `pnpm lint:docs`, `pnpm lint:throws`, `pnpm fixtures:check` (no contract file changed), `pnpm check:upgrade-coverage --mode pr` green.
 - `git grep -n "numberLiteralDefault\|PslDefaultValueFormat\|formatPslValue\|formatPslListLiteralValue\|formatLiteralValue\|encodePsl\|decodePsl" -- packages` returns nothing.
 - Seven per-pack inventory tests exist and fail on an undeclared codec.
-- ADR 253, the project spec D9/D10 note, and the plan's B6 seam updated in the PR.
+- ADR 254, the project spec D9/D10 note, and the plan's B6 seam updated in the PR.
 - One PR against `main`, description per the `create-pr` skill, no Linear prefix, and the checklist says why.
 
 ## Halt conditions

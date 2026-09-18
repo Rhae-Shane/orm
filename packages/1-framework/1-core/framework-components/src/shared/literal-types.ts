@@ -7,7 +7,7 @@
  * compatibility check is then a lookup by name, and a value too large for a column is reported as
  * an incompatibility before anything is decoded.
  *
- * ADR 253.
+ * ADR 254.
  */
 
 import type { JsonValue } from '@internal/contract/types';

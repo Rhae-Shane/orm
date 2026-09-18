@@ -3,7 +3,7 @@
  * {@link readLiteral}: a codec's declarations are tried in order and the first type that accepts
  * the value produces the literal's source text.
  *
- * ADR 253.
+ * ADR 254.
  */
 
 import type { JsonValue } from '@internal/contract/types';

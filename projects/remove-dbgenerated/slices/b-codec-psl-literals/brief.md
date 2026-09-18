@@ -1,12 +1,12 @@
 # Implementation brief — literal types for column defaults
 
-You are implementing ADR 253. This brief is self-contained: it assumes you have not seen the discussion that produced the design, and it tells you everything you need to decide nothing for yourself. Where something is not settled, it says so and tells you to stop and ask rather than choose.
+You are implementing ADR 254. This brief is self-contained: it assumes you have not seen the discussion that produced the design, and it tells you everything you need to decide nothing for yourself. Where something is not settled, it says so and tells you to stop and ask rather than choose.
 
 ## 1. One decision is blocked and must be discussed before you write code for it
 
-**A plain number scalar in a schema does not name a literal type of its own.** Under ADR 253, `42` written on an `Int` column is an `int` literal, on a `BigInt` column a `bigint` literal, and on a `Decimal` column a `decimal` literal. Which one it is depends on what the column's codec declares. That consequence is deliberate but unsettled, and Will has asked to discuss it before it is built.
+**A plain number scalar in a schema does not name a literal type of its own.** Under ADR 254, `42` written on an `Int` column is an `int` literal, on a `BigInt` column a `bigint` literal, and on a `Decimal` column a `decimal` literal. Which one it is depends on what the column's codec declares. That consequence is deliberate but unsettled, and Will has asked to discuss it before it is built.
 
-Three answers are open, and ADR 253 records all three: accept it as written; give each numeric literal type its own tag so a written literal always names its own type; or return to a single `number` literal type whose conversion each codec owns.
+Three answers are open, and ADR 254 records all three: accept it as written; give each numeric literal type its own tag so a written literal always names its own type; or return to a single `number` literal type whose conversion each codec owns.
 
 **What this means for you:**
 
@@ -39,7 +39,7 @@ Everything listed is committed. Fetch before you start.
 **On `main`:**
 
 - `docs/architecture docs/adrs/ADR 129 - Template-Tagged Literals for Extensions.md`. The tagged literal syntax, the canonical body, and how tags are registered.
-- `docs/architecture docs/adrs/ADR 184 - Codec-owned value serialization.md`. Why codecs own the JSON form of values. Its PSL half is what ADR 253 replaces.
+- `docs/architecture docs/adrs/ADR 184 - Codec-owned value serialization.md`. Why codecs own the JSON form of values. Its PSL half is what ADR 254 replaces.
 - `docs/architecture docs/adrs/ADR 252 - An earlier Prisma version's schema is a contract source.md`. The second text contract source you must keep working.
 - `docs/reference/codec-authoring-guide.md`. How a codec and its descriptor are written.
 - `projects/remove-dbgenerated/spec.md` and `projects/remove-dbgenerated/plan.md`. The project this slice belongs to. Its purpose is removing `@default(dbgenerated("..."))`, a construct that put raw SQL into a default as an unnamed string. Slice A replaced it with the `sql` tagged literal and is merged. Your slice is B. Slice C deletes `dbgenerated` and is not yours.
@@ -47,14 +47,14 @@ Everything listed is committed. Fetch before you start.
 
 **On branch `remove-dbgenerated-adr-253`, which is pull request 30334 and may have merged into `main` by the time you read this. Check `main` first; if the file is not there, fetch the branch:**
 
-- `docs/architecture docs/adrs/ADR 253 - Literal types for column defaults.md`. **The design you are implementing. It is authoritative. Where this brief and ADR 253 disagree, ADR 253 wins, and you tell Will about the disagreement.** If review changed the ADR, follow the changed ADR.
-- The same branch amends `projects/remove-dbgenerated/spec.md` decisions D9 and D10 to match ADR 253.
+- `docs/architecture docs/adrs/ADR 254 - Literal types for column defaults.md`. **The design you are implementing. It is authoritative. Where this brief and ADR 254 disagree, ADR 254 wins, and you tell Will about the disagreement.** If review changed the ADR, follow the changed ADR.
+- The same branch amends `projects/remove-dbgenerated/spec.md` decisions D9 and D10 to match ADR 254.
 
 **On branch `remove-dbgenerated-codec-psl-literals`, whose pull request 30324 is closed.** This branch holds an earlier, withdrawn attempt at the same slice, built against a design where codecs gained `encodePsl` and `decodePsl` methods. That design is dead. Five pieces of it are worth reusing and are listed in section 8. Do not merge or rebase this branch; take the pieces by hand.
 
 ## 5. Your first deliverable: rewrite the slice specification
 
-`projects/remove-dbgenerated/slices/b-codec-psl-literals/spec.md` currently describes the withdrawn design and carries a banner saying so. Rewrite it to describe the work in this brief, in the same shape as the sibling file `projects/remove-dbgenerated/slices/a-sql-default-literal/spec.md`: outcome, design sections, the tests that must exist, definition of done, halt conditions. Keep it a slice-level document. Do not restate ADR 253's rationale; point at it.
+`projects/remove-dbgenerated/slices/b-codec-psl-literals/spec.md` currently describes the withdrawn design and carries a banner saying so. Rewrite it to describe the work in this brief, in the same shape as the sibling file `projects/remove-dbgenerated/slices/a-sql-default-literal/spec.md`: outcome, design sections, the tests that must exist, definition of done, halt conditions. Keep it a slice-level document. Do not restate ADR 254's rationale; point at it.
 
 Commit the rewritten spec before you write implementation code, so the two are reviewable apart.
 
@@ -204,7 +204,7 @@ One trap from that branch: when the `@default` argument arms change, the languag
 - `docs/reference/codec-authoring-guide.md`: a codec descriptor names its literal types; show one example.
 - `packages/2-sql/2-authoring/contract-psl/README.md`: one paragraph on how a literal default is written and what the column's codec accepts.
 - Upgrade instructions for the three broken forms in section 6.7, following the `record-upgrade-instructions` skill in `skills-contrib/record-upgrade-instructions/`. Both audiences need one: app authors, whose schemas change; and extension authors, whose codec descriptors should name literal types. The repository check for this is `pnpm check:upgrade-coverage --mode pr`.
-- If ADR 253 has merged and your implementation diverges from it in any way, update the ADR in this pull request and say so in the description.
+- If ADR 254 has merged and your implementation diverges from it in any way, update the ADR in this pull request and say so in the description.
 
 ## 10. How to work
 

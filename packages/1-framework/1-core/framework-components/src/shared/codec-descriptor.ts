@@ -32,7 +32,7 @@ export interface CodecDescriptor<P = void> {
   readonly traits: readonly CodecTrait[];
   /** Database-native type names this codec handles (e.g. `['timestamptz']`). */
   readonly targetTypes: readonly string[];
-  /** The literal types this codec's columns accept as a `@default(...)` literal, by name. A codec that names none accepts no literal default. The codec's `decodeJson` accepts the value shape of every type named here in addition to its own JSON form. ADR 253. */
+  /** The literal types this codec's columns accept as a `@default(...)` literal, by name. A codec that names none accepts no literal default. The codec's `decodeJson` accepts the value shape of every type named here in addition to its own JSON form. ADR 254. */
   readonly literalTypes?: readonly LiteralTypeDeclaration[] | undefined;
   /** Standard Schema validator for the factory's params. Validates JSON-sourced params at the contract boundary (PSL → IR; `contract.json` → runtime). For non-parameterized codecs (`P = void`), the schema validates `void`/`undefined` — the framework supplies no params at the call boundary. */
   readonly paramsSchema: StandardSchemaV1<P>;

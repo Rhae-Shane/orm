@@ -3,7 +3,7 @@
  * is checked against the column's codec by membership, and the codec's `decodeJson` converts the
  * value. No per-type code and no per-codec branch live here.
  *
- * ADR 253.
+ * ADR 254.
  */
 
 import type { JsonValue } from '@internal/contract/types';

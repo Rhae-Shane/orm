@@ -1,4 +1,4 @@
-# ADR 253 — Literal types for column defaults
+# ADR 254 — Literal types for column defaults
 
 Status: **Accepted**
 
