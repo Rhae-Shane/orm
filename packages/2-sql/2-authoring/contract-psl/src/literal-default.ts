@@ -136,12 +136,6 @@ function scalarDeclarations(
 }
 
 /**
- * Reads one `@default(...)` literal for a column. `isList` selects the check: a list column's
- * elements are each checked and decoded against the element codec's scalar declarations, while a
- * scalar column's literal is checked whole — so a codec declaring `{ list: [...] }` takes a PSL
- * list on a column that is not a list.
- */
-/**
  * Reads one `@default(...)` literal for a column, refusing in parts so each contract source words
  * its own diagnostic. `isList` selects the check: a list column's elements are each checked and
  * decoded against the element codec's scalar declarations, while a scalar column's literal is

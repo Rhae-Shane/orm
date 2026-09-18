@@ -161,6 +161,19 @@ describe('Number defaults too large for the column', () => {
   });
 });
 
+describe('Json defaults whose text is not a JSON document', () => {
+  it('are rejected, carrying the JSON parser message', async () => {
+    expect(await diagnosticsOf('number-default-spellings', 'unreadable-json.prisma')).toEqual([
+      expect.stringMatching(
+        /^Field "UnreadableJson\.broken": @default holds text that this contract source does not read: /,
+      ),
+      expect.stringMatching(
+        /^Field "UnreadableJson\.list": @default holds text at element 2 that this contract source does not read: /,
+      ),
+    ]);
+  });
+});
+
 describe('Json, Decimal, BigInt and Float literal defaults', () => {
   it('lower through the column codec', async () => {
     const { columns } = await loadFixtureTable('defaults', 'Defaults');
