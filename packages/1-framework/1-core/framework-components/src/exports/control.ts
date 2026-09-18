@@ -126,9 +126,13 @@ export type {
   VerifierOutcome,
 } from '../control/verifier-disposition';
 export { dispositionForCategory } from '../control/verifier-disposition';
+export { jsonDefaultLiteralTagEntry } from '../shared/json-default-literal-tag';
+export type { LiteralTypeName } from '../shared/literal-types';
 export type {
   ControlDefaultLiteralTagEntry,
+  ControlDefaultLiteralTagLoweringEntry,
   ControlDefaultLiteralTagRegistry,
+  ControlDefaultLiteralTagTypeEntry,
   ControlDefaultRegistries,
   ControlMutationDefaultEntry,
   ControlMutationDefaultRegistry,

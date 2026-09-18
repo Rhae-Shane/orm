@@ -117,8 +117,12 @@ describe('sqlDefaultLiteralTagEntry', () => {
 });
 
 describe('the contract-psl fixture registry mirrors the family entry', () => {
-  const fixtureEntry =
+  const registered =
     createBuiltinLikeControlMutationDefaults().defaultLiteralTagRegistry.get('sql');
+  if (registered === undefined || !('lower' in registered)) {
+    throw new Error('the fixture registry does not register `sql` as a lowering tag');
+  }
+  const fixtureEntry = registered;
   const familyEntry = sqlDefaultLiteralTagEntry('sql`...`');
 
   it.each([
@@ -130,7 +134,7 @@ describe('the contract-psl fixture registry mirrors the family entry', () => {
     ["'no select here'"],
     [''],
   ])('lowers %j the same way', (body) => {
-    expect(fixtureEntry?.lower({ literal: { tag: 'sql', body, span }, context })).toEqual(
+    expect(fixtureEntry.lower({ literal: { tag: 'sql', body, span }, context })).toEqual(
       familyEntry.lower({ literal: { tag: 'sql', body, span }, context }),
     );
   });

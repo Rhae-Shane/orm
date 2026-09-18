@@ -22,6 +22,7 @@ import type { CodecLookup } from '@internal/framework-components/codec';
 import type { ExtensionPackRef, TargetPackRef } from '@internal/framework-components/components';
 import type {
   ControlDefaultLiteralTagEntry,
+  ControlDefaultLiteralTagLoweringEntry,
   ControlMutationDefaultEntry,
   ControlMutationDefaults,
   DefaultFunctionLoweringContext,
@@ -639,7 +640,7 @@ const dbgeneratedSig: FuncCallSig = {
 };
 
 // Mirrors the SQL family's `sqlDefaultLiteralTagEntry`; the authoring layer's tests cannot import the family.
-function sqlLiteralTagEntry(usage: string): ControlDefaultLiteralTagEntry {
+function sqlLiteralTagEntry(usage: string): ControlDefaultLiteralTagLoweringEntry {
   return {
     usage,
     documentation: "Uses the SQL in the string, verbatim, as the column's default expression.",

@@ -731,6 +731,11 @@ function lowerTaggedLiteral(
       describeTaggedLiteralFailure(canonicalization.reason),
     );
   }
+  if (!('lower' in entry)) {
+    throw new InternalError(
+      `Literal tag "${literal.tag}" declares literal type "${entry.literalType}"; reading a tag as a literal is not wired up yet.`,
+    );
+  }
   return entry.lower({
     literal: { tag: literal.tag, body: canonicalization.body, span: literal.span },
     context,

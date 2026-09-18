@@ -406,6 +406,13 @@ describe('postgresNativeAuthoringTypes', () => {
 
 describe('createPostgresDefaultLiteralTagRegistry', () => {
   const tagRegistry = createPostgresDefaultLiteralTagRegistry();
+  const loweringTag = (tag: string) => {
+    const entry = tagRegistry.get(tag);
+    if (entry === undefined || !('lower' in entry)) {
+      throw new Error(`the registry does not register "${tag}" as a lowering tag`);
+    }
+    return entry;
+  };
 
   it('registers sql and pg.sql, in that order', () => {
     expect([...tagRegistry.keys()]).toEqual(['sql', 'pg.sql']);
@@ -414,7 +421,7 @@ describe('createPostgresDefaultLiteralTagRegistry', () => {
   });
 
   it('lowers a body verbatim as a function default', () => {
-    const result = tagRegistry.get('pg.sql')!.lower({
+    const result = loweringTag('pg.sql').lower({
       literal: { tag: 'pg.sql', body: "'{}'::jsonb", span: stubSpan },
       context: stubContext,
     });
@@ -435,7 +442,7 @@ describe('createPostgresDefaultLiteralTagRegistry', () => {
     ['sql', 'now'],
     ['pg.sql', 'autoincrement'],
   ])('refuses %s`%s()`, which is a Prisma default function', (tag, name) => {
-    const result = tagRegistry.get(tag)!.lower({
+    const result = loweringTag(tag).lower({
       literal: { tag, body: `${name}()`, span: stubSpan },
       context: stubContext,
     });
@@ -449,7 +456,7 @@ describe('createPostgresDefaultLiteralTagRegistry', () => {
   });
 
   it('lowers sql`gen_random_uuid()` verbatim', () => {
-    const result = tagRegistry.get('sql')!.lower({
+    const result = loweringTag('sql').lower({
       literal: { tag: 'sql', body: 'gen_random_uuid()', span: stubSpan },
       context: stubContext,
     });
@@ -463,7 +470,7 @@ describe('createPostgresDefaultLiteralTagRegistry', () => {
   });
 
   it("accepts sql`now() + interval '1 day'`", () => {
-    const result = tagRegistry.get('sql')!.lower({
+    const result = loweringTag('sql').lower({
       literal: { tag: 'sql', body: "now() + interval '1 day'", span: stubSpan },
       context: stubContext,
     });
