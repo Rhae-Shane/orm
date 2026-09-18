@@ -134,7 +134,7 @@ const hits = await db.orm.public.Message.select('id', 'text')
 Through the SQL builder:
 
 ```typescript
-const snippets = db.public.message
+const snippets = db.sql.public.message
   .select('id')
   .select('snippet', (f, fns) => fns.fullTextHeadline(f.text, query))
   .where((f, fns) => fns.fullTextMatches(f.text, query))
