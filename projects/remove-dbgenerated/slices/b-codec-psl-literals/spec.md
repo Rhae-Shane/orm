@@ -55,6 +55,9 @@ These supersede the sections below where they differ.
 - **A nested list is refused with reason `invalid-number`** and the message "A list literal cannot contain another list."; it maps to `PSL_INVALID_DEFAULT_LITERAL`. A list literal's `type.list` is the element types in first-seen order, deduplicated, so an empty list is compatible with every `{ list }` declaration. `describeDeclarations` joins scalar and list parts with " and ". `integerLiteralTypesUpTo('bigint')` is allowed. (Dispatch 1.)
 - **`writeLiteral` writes a list literal itself** against a `{ list }` declaration (a scalar column such as `vector(3)`); the printer writes a list column's elements one by one against the element codec's scalar declarations. Two different paths. (Dispatch 1, for dispatch 5.)
 
+- **`readLiteral` refuses with `{ ok: false; reason; message; elementIndex }`**, where `elementIndex` is a required key typed `number | undefined` and names the failing element of a list literal so the interpreter can report at that element's span. The tag-entry union has a type predicate, `isDefaultLiteralTagLoweringEntry`, exported from `exports/control.ts`; `jsonDefaultLiteralTagEntry` and `LiteralTypeName` are exported from `exports/codec.ts` only. (Dispatch 1, round 2.)
+- **`CodecDescriptorImpl.literalTypes` stays `readonly`**, typed `readonly LiteralTypeDeclaration[] | undefined` so the target adapters can forward a wrapped descriptor's declaration. (Dispatch 2 review.)
+
 ## Corrections to the brief
 
 Verified against the code on 2026-09-18. Where the brief and this spec differ, this spec wins.
