@@ -321,27 +321,30 @@ function fieldTypeSpelling(field: PslField): string {
 /**
  * Rewrites every scalar field whose type spelling has an alias to reference
  * that alias, and records which aliases were used so only those are declared.
+ * `modelNames` keeps a relation field out of the lookup: its type name is the
+ * target model's name, which could one day collide with an alias name.
  */
-function applyNamedTypeAliases(namespace: PslNamespace, used: Set<string>): PslNamespace {
+function applyNamedTypeAliases(
+  namespace: PslNamespace,
+  modelNames: ReadonlySet<string>,
+  used: Set<string>,
+): PslNamespace {
   let changed = false;
   const models = namespace.models.map((model) => {
     const fields = model.fields.map((field) => {
-      if (field.typeNamespaceId !== undefined || field.typeContractSpaceId !== undefined) {
+      if (
+        field.typeNamespaceId !== undefined ||
+        field.typeContractSpaceId !== undefined ||
+        modelNames.has(field.typeName)
+      ) {
         return field;
       }
       const alias = NAMED_TYPE_ALIASES[fieldTypeSpelling(field)];
       if (alias === undefined) return field;
       changed = true;
       used.add(alias);
-      return {
-        kind: 'field',
-        name: field.name,
-        typeName: alias,
-        optional: field.optional,
-        list: field.list,
-        attributes: field.attributes,
-        span: field.span,
-      } satisfies PslField;
+      const { typeConstructor: _replacedByAlias, ...rest } = field;
+      return { ...rest, typeName: alias };
     });
     return { ...model, fields };
   });
@@ -444,16 +447,17 @@ async function main(): Promise<void> {
     ...storageRenamed.renameMap,
   ]);
 
+  const renamedNamespaces = [authRenamed.namespace, storageRenamed.namespace].map((namespace) =>
+    rewriteFieldTypeNames(namespace, globalRenameMap),
+  );
+  const modelNames = new Set(
+    renamedNamespaces.flatMap((namespace) => namespace.models.map((model) => model.name)),
+  );
   const usedAliases = new Set<string>();
   const namespaces = [
     roleNamespace(),
-    applyNamedTypeAliases(
-      rewriteFieldTypeNames(authRenamed.namespace, globalRenameMap),
-      usedAliases,
-    ),
-    applyNamedTypeAliases(
-      rewriteFieldTypeNames(storageRenamed.namespace, globalRenameMap),
-      usedAliases,
+    ...renamedNamespaces.map((namespace) =>
+      applyNamedTypeAliases(namespace, modelNames, usedAliases),
     ),
   ];
   const declarations = namedTypeDeclarations(usedAliases);
