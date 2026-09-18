@@ -89,11 +89,7 @@ export function printedDefaultReadsBack(
   const values = isList && Array.isArray(value) ? value : [value];
   return values.every((element) => {
     try {
-      codec.decodeJson(
-        blindCast<JsonValue, 'a stored literal default is JSON'>(
-          element as ColumnDefaultLiteralInputValue,
-        ),
-      );
+      codec.decodeJson(blindCast<JsonValue, 'a stored literal default is JSON'>(element));
       return true;
     } catch {
       return false;

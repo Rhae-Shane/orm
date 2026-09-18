@@ -99,9 +99,10 @@ type DomainFieldRef =
   | { readonly kind: 'valueObject'; readonly name: string; readonly many?: boolean };
 
 /**
- * The codec that encodes a column's default. Built with the column's own `typeParams`, because a
+ * The codec that encodes one column's default. Built with the column's own `typeParams`, because a
  * parameterized codec answers for its params when it encodes — `pg/vector@1` checks the length its
- * column declares — and the lookup's representative instance carries none.
+ * column declares — and the lookup's representative instance carries none. Only a column has params;
+ * every other encode site takes the representative instance.
  */
 function columnCodec(
   codecId: string,
@@ -369,7 +370,7 @@ function checkMemberValues(
   codecLookup: CodecLookup | undefined,
 ): readonly (string | number)[] {
   const encoded = handle.values.map((value) =>
-    encodeViaCodec(value, columnCodec(handle.codecId, undefined, codecLookup)),
+    encodeViaCodec(value, codecLookup?.get(handle.codecId)),
   );
   const values: (string | number)[] = [];
   for (const value of encoded) {
@@ -704,7 +705,7 @@ function buildStorageColumn(
   if (isValueObjectField(field)) {
     const encodedDefault =
       field.default !== undefined
-        ? encodeColumnDefault(field.default, columnCodec(JSONB_CODEC_ID, undefined, codecLookup))
+        ? encodeColumnDefault(field.default, codecLookup?.get(JSONB_CODEC_ID))
         : undefined;
 
     return {
@@ -1521,7 +1522,7 @@ export function buildSqlContractFromDefinition(
       codecId: handle.codecId,
       members: handle.enumMembers.map((m) => ({
         name: m.name,
-        value: encodeViaCodec(m.value, columnCodec(handle.codecId, undefined, codecLookup)),
+        value: encodeViaCodec(m.value, codecLookup?.get(handle.codecId)),
       })),
     };
 
@@ -1532,9 +1533,7 @@ export function buildSqlContractFromDefinition(
     }
     storageSlot[enumName] = {
       kind: 'valueSet',
-      values: handle.values.map((v) =>
-        encodeViaCodec(v, columnCodec(handle.codecId, undefined, codecLookup)),
-      ),
+      values: handle.values.map((v) => encodeViaCodec(v, codecLookup?.get(handle.codecId))),
     };
   }
 
