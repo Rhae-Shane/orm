@@ -73,6 +73,8 @@ These supersede the sections below where they differ.
 - **The e2e journey's raw SQL default is written in the form Postgres reports** (`(now() + '3 days'::interval)`), because strict verification compares raw expressions; the Outcome snippet is updated. Pre-existing raw-SQL behaviour, not a literal-type matter. (Dispatch 6.)
 - **The TypeScript builder cannot express a `BigInt` default beyond 2^53 or a non-finite `Float` default**, so those two forms are covered by the e2e journey and not by the parity pair. Recorded as a follow-up in the plan's open items. (Dispatch 6.)
 
+- **A contract that stores digit text for a `sqlite/integer@1` default now renders `DEFAULT 0` rather than `DEFAULT '0'`**, because the SQLite DDL renderer decodes through the codec before rendering and the codec now reads digit text as a number. Authoring a string on an integer column was never legitimate; the upgrade instructions record the change. (Dispatch 6 review.)
+
 ## Corrections to the brief
 
 Verified against the code on 2026-09-18. Where the brief and this spec differ, this spec wins.
