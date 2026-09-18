@@ -46,6 +46,15 @@ These settle ADR 253's open question and are written into the ADR by B10.
 2. **A codec names every type it accepts, and coercion between those types' value shapes is the codec's job, inside its existing `decodeJson`.** `pg/int8@1` names `i8` to `i64`, so its `decodeJson` accepts a JSON number as well as the digit text it stores. No new codec method; the declaration stays a list of names. Reason: the value shape a literal type produces is fixed by the type, and the codecs that store a different shape are the ones that know how to convert it.
 3. **A vector default is a list, not a JSON document.** The brief gave `pg/vector@1` the `json` type because `json` was the only type producing an array. That matches on storage shape, which is the mistake `Jsonb @default("{}")` makes. Instead a declaration may name a list of element types, `{ list: [...] }`, and a PSL list on a non-list column writes a list literal. Serhii asked for `@default([1, 2, 3])` on a vector column and this gives it. This shape was proposed in the discussion and not objected to; it is open to review in the PR.
 
+## Amendments made during the build
+
+These supersede the sections below where they differ.
+
+- **`writeLiteral` returns the complete literal source.** `text` is the whole written literal, including the tag and fence for `json` (`` json`{"a":1}` ``); `tag` is kept so a caller can tell a tagged literal apart. The printer prints `@default(<text>)`. (Dispatch 1.)
+- **No quote-fence fallback when printing `json`.** A quote-fenced tagged literal resolves the full PSL string escapes, while a backtick fence resolves only `` \` `` and `\\`, so switching fences changes what a JSON body containing `\n` reads back as. The printer always uses the backtick fence and escapes backticks and backslashes. (Dispatch 1.)
+- **A nested list is refused with reason `invalid-number`** and the message "A list literal cannot contain another list."; it maps to `PSL_INVALID_DEFAULT_LITERAL`. A list literal's `type.list` is the element types in first-seen order, deduplicated, so an empty list is compatible with every `{ list }` declaration. `describeDeclarations` joins scalar and list parts with " and ". `integerLiteralTypesUpTo('bigint')` is allowed. (Dispatch 1.)
+- **`writeLiteral` writes a list literal itself** against a `{ list }` declaration (a scalar column such as `vector(3)`); the printer writes a list column's elements one by one against the element codec's scalar declarations. Two different paths. (Dispatch 1, for dispatch 5.)
+
 ## Corrections to the brief
 
 Verified against the code on 2026-09-18. Where the brief and this spec differ, this spec wins.
