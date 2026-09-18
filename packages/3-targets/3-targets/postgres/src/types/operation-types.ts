@@ -4,7 +4,7 @@ import type {
   Expression,
   TraitExpression,
 } from '@internal/sql-relational-core/expression';
-import type { FullTextSearchLanguage } from '../core/query-operations';
+import type { FullTextSearchLanguage } from '../core/text-search-languages';
 
 type CodecTypesBase = Record<string, { readonly input: unknown; readonly output: unknown }>;
 
@@ -13,8 +13,6 @@ type TextualSelfSpec = { readonly traits: readonly ['textual'] };
 type TextualSelf<CT extends CodecTypesBase> = TraitExpression<readonly ['textual'], false, CT>;
 
 type TextArgument<CT extends CodecTypesBase> = CodecExpression<'pg/text@1', false, CT>;
-
-export type { FullTextSearchLanguage };
 
 export type QueryOperationTypes<CT extends CodecTypesBase> = SqlQueryOperationTypes<
   CT,

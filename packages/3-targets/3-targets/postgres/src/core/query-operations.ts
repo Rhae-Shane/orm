@@ -3,54 +3,18 @@ import { buildOperation, toExpr } from '@internal/sql-relational-core/expression
 import type { QueryOperationTypes } from '../types/operation-types';
 import { PG_BOOL_CODEC_ID, PG_FLOAT4_CODEC_ID, PG_TEXT_CODEC_ID } from './codec-ids';
 import { postgresError } from './errors';
+import {
+  DEFAULT_FULL_TEXT_SEARCH_LANGUAGE,
+  isFullTextSearchLanguage,
+  POSTGRES_TEXT_SEARCH_LANGUAGES,
+} from './text-search-languages';
 
 type CodecTypesBase = Record<string, { readonly input: unknown; readonly output: unknown }>;
 
 const TEXT_REF = { codecId: PG_TEXT_CODEC_ID } as const;
 
-/**
- * The text-search configurations a stock PostgreSQL server ships with. The
- * language reaches SQL as an inline literal rather than a bound parameter, so
- * only names on this list may be used.
- */
-export const POSTGRES_TEXT_SEARCH_LANGUAGES = [
-  'simple',
-  'arabic',
-  'armenian',
-  'basque',
-  'catalan',
-  'danish',
-  'dutch',
-  'english',
-  'finnish',
-  'french',
-  'german',
-  'greek',
-  'hindi',
-  'hungarian',
-  'indonesian',
-  'irish',
-  'italian',
-  'lithuanian',
-  'nepali',
-  'norwegian',
-  'portuguese',
-  'romanian',
-  'russian',
-  'serbian',
-  'spanish',
-  'swedish',
-  'tamil',
-  'turkish',
-  'yiddish',
-] as const;
-
-export type FullTextSearchLanguage = (typeof POSTGRES_TEXT_SEARCH_LANGUAGES)[number];
-
-export const DEFAULT_FULL_TEXT_SEARCH_LANGUAGE: FullTextSearchLanguage = 'english';
-
 function languageLiteral(method: string, language: string): LiteralExpr {
-  if (!(POSTGRES_TEXT_SEARCH_LANGUAGES as readonly string[]).includes(language)) {
+  if (!isFullTextSearchLanguage(language)) {
     throw postgresError(
       'RUNTIME.ARGUMENT_INVALID',
       `${method}: '${language}' is not a PostgreSQL text-search configuration Prisma recognizes.`,

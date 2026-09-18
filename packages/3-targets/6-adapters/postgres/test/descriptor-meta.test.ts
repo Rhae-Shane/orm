@@ -256,8 +256,8 @@ describe('precision bounds agree between authoring and expansion', () => {
 });
 
 describe('postgres adapter query operations', () => {
-  // Postgres built-in operations moved to @internal/target-postgres; the
-  // adapter contributes none, so a stale slot here would register them twice.
+  // Postgres built-in operations moved to @internal/target-postgres; the adapter contributes none,
+  // so a stale slot here would register them twice.
   it('the runtime descriptor contributes no query operations', () => {
     expect(postgresRuntimeAdapterDescriptor.queryOperations).toBeUndefined();
   });

@@ -1,12 +1,13 @@
 import { createSqlOperationRegistry } from '@internal/sql-operations';
 import { LiteralExpr, OperationExpr, ParamRef } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
+import { POSTGRES_TEXT_SEARCH_LANGUAGES } from '../src/core/text-search-languages';
 import postgresTargetDescriptor from '../src/exports/runtime';
 
 const TEXT_COLUMN_AST = ParamRef.of('body', { codec: { codecId: 'pg/text@1' } });
 
-// Stands in for a contract-bound text column: the operations take an
-// Expression on `self` and read its AST, not a bare AST node.
+// Stands in for a contract-bound text column: the operations take an Expression on `self` and read
+// its AST, not a bare AST node.
 const TEXT_COLUMN = {
   returnType: { codecId: 'pg/text@1', nullable: false },
   buildAst: () => TEXT_COLUMN_AST,
@@ -121,6 +122,42 @@ describe('postgres target query operations', () => {
       'fullTextMatches',
       'fullTextRank',
       'ilike',
+    ]);
+  });
+});
+
+describe('the text-search language allowlist', () => {
+  it('is exactly the configurations a stock PostgreSQL server ships with', () => {
+    expect(POSTGRES_TEXT_SEARCH_LANGUAGES).toEqual([
+      'simple',
+      'arabic',
+      'armenian',
+      'basque',
+      'catalan',
+      'danish',
+      'dutch',
+      'english',
+      'finnish',
+      'french',
+      'german',
+      'greek',
+      'hindi',
+      'hungarian',
+      'indonesian',
+      'irish',
+      'italian',
+      'lithuanian',
+      'nepali',
+      'norwegian',
+      'portuguese',
+      'romanian',
+      'russian',
+      'serbian',
+      'spanish',
+      'swedish',
+      'tamil',
+      'turkish',
+      'yiddish',
     ]);
   });
 });
