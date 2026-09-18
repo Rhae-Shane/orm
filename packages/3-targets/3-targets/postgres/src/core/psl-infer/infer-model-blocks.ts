@@ -22,6 +22,7 @@ import {
 import type { SqlColumnIR, SqlTableIR } from '@internal/sql-schema-ir/types';
 import { ifDefined } from '@internal/utils/defined';
 import { postgresRenderCheckExpressions } from '../check-expressions';
+import { literalTypesForPrintedType } from './infer-default-codec';
 import { buildDanglingForeignKeyWarning, type DanglingForeignKeyInfo } from './infer-foreign-keys';
 import {
   buildCheckAttribute,
@@ -38,14 +39,10 @@ import {
   buildMapAttribute,
   buildSimpleConstraintFieldAttribute,
   escapePslString,
-  formatPslListLiteralValue,
-  formatPslValue,
   namedArg,
-  type PslDefaultValueFormat,
   parseColumnDefault,
   parseDefaultAttributeString,
   positionalArg,
-  pslDefaultValueFormat,
   SYNTHETIC_SPAN,
 } from './psl-literals';
 
@@ -281,12 +278,11 @@ function buildScalarField(
     attributes.push(buildSimpleConstraintFieldAttribute('id', singlePkConstraintName));
   }
 
-  const defaultAttribute = inferDefaultAttribute(
-    column,
-    enumPslName === undefined ? pslDefaultValueFormat(resolution.pslType.name) : formatPslValue,
-    defaultMapping,
-    rawDefaultParser,
-  );
+  const defaultAttribute = inferDefaultAttribute(column, rawDefaultParser, {
+    ...defaultMapping,
+    literalTypes: literalTypesForPrintedType(resolution.pslType.name, enumPslName !== undefined),
+    list: column.many === true,
+  });
   if (defaultAttribute !== undefined) {
     attributes.push(parseDefaultAttributeString(defaultAttribute));
   }
@@ -344,9 +340,8 @@ function buildScalarField(
  */
 function inferDefaultAttribute(
   column: SqlColumnIR,
-  valueFormat: PslDefaultValueFormat,
-  defaultMapping: DefaultMappingOptions | undefined,
   rawDefaultParser: PslPrinterOptions['parseRawDefault'],
+  defaultMapping: DefaultMappingOptions,
 ): string | undefined {
   if (
     column.default === undefined &&
@@ -364,9 +359,8 @@ function inferDefaultAttribute(
     // A list column's literal default prints from `resolvedDefault`: the raw
     // SQL text read against the element type only yields a function, which
     // the interpreter rejects on a list column.
-    const { value } = column.resolvedDefault;
-    return Array.isArray(value)
-      ? literalOrRawAttribute(formatPslListLiteralValue(value, valueFormat), column, defaultMapping)
+    return Array.isArray(column.resolvedDefault.value)
+      ? literalOrRawAttribute(column.resolvedDefault, column, defaultMapping)
       : undefined;
   }
   const parsed = parseColumnDefault(column.default, column.nativeType, rawDefaultParser);
@@ -374,19 +368,19 @@ function inferDefaultAttribute(
     return undefined;
   }
   if (parsed.kind === 'literal') {
-    return literalOrRawAttribute(valueFormat(parsed.value), column, defaultMapping);
+    return literalOrRawAttribute(parsed, column, defaultMapping);
   }
   return mappedAttribute(parsed, defaultMapping);
 }
 
+/** A literal no named literal type writes has no PSL literal, so the raw database default prints instead. */
 function literalOrRawAttribute(
-  literal: string | undefined,
+  columnDefault: ColumnDefault,
   column: SqlColumnIR,
-  defaultMapping: DefaultMappingOptions | undefined,
+  defaultMapping: DefaultMappingOptions,
 ): string | undefined {
-  if (literal !== undefined) {
-    return `@default(${literal})`;
-  }
+  const result = mapDefault(columnDefault, defaultMapping);
+  if ('attribute' in result) return result.attribute;
   return typeof column.default === 'string'
     ? mappedAttribute({ kind: 'function', expression: column.default }, defaultMapping)
     : undefined;
