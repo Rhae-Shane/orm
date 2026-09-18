@@ -58,6 +58,13 @@ These supersede the sections below where they differ.
 - **`readLiteral` refuses with `{ ok: false; reason; message; elementIndex }`**, where `elementIndex` is a required key typed `number | undefined` and names the failing element of a list literal so the interpreter can report at that element's span. The tag-entry union has a type predicate, `isDefaultLiteralTagLoweringEntry`, exported from `exports/control.ts`; `jsonDefaultLiteralTagEntry` and `LiteralTypeName` are exported from `exports/codec.ts` only. (Dispatch 1, round 2.)
 - **`CodecDescriptorImpl.literalTypes` stays `readonly`**, typed `readonly LiteralTypeDeclaration[] | undefined` so the target adapters can forward a wrapped descriptor's declaration. (Dispatch 2 review.)
 
+- **`Jsonb @default([1, 2])` is an incompatibility, not a JSON array.** A PSL list reads as a list literal, and `pg/jsonb@1` names only `json`, so the membership rule refuses it; the JSON array is written `` json`[1, 2]` ``. The Tests section's "harmless consequence" line is withdrawn. (Dispatch 3.)
+- **`100000000000000099` is an `i64` literal**, so the Outcome's first error reads `pg/int4@1 is not compatible with an i64 literal; it accepts i8, i16, i32 literals`. Messages choose the article ("an i64", "a string"). (Dispatch 3.)
+- **Diagnostics inside a list are reported at the `@default(...)` attribute span** and name the failing element in the message (`Field "N.scores" at element 2: ...`), because the attribute-spec layer carries no span for string, number and boolean arguments. Reporting at the element's own span needs the parser's argument types to carry spans and is handed to the editor-tooling brief (project decision D14). (Dispatch 3.)
+- **A column bound to a value set (`pg.enum(Ref)`) keeps the member-name path**: a string default on such a column is checked against the value set and never against `literalTypes`. (Dispatch 3.)
+- **A lowering tag (`sql`) inside a list literal is `PSL_INVALID_DEFAULT_LITERAL`** with a message saying the tag produces a default of its own. (Dispatch 3.)
+- **The Prisma 7 reader keeps a private copy of the old number-through-codec helper until dispatch 4 replaces it** with B5. (Dispatch 3.)
+
 ## Corrections to the brief
 
 Verified against the code on 2026-09-18. Where the brief and this spec differ, this spec wins.

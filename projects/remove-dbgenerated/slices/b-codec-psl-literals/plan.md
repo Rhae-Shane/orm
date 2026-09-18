@@ -12,4 +12,5 @@ Spec: [`spec.md`](spec.md). One implementer and one reviewer, resumed across eve
 | 6 | Journeys | e2e test, roundtrip-fidelity jsonb case, parity pair, integration number-defaults test (spec B9 and Tests § Journeys); `pnpm test:integration` and `pnpm test:e2e` green | 3, 4, 5 | 7 | `pnpm test:packages`, `pnpm test:integration`, `pnpm test:e2e`, `pnpm fixtures:check` |
 | 7 | Docs, upgrade instructions, ADR amendment | spec B8 and B10; every DoD command green | 6 | PR | every command in the spec's Definition of done |
 
-Open items: none at planning time.
+Open items:
+- Element-level spans for list-literal diagnostics need the parser argument types to carry spans; handed to the editor-tooling brief (project D14), not this slice.
