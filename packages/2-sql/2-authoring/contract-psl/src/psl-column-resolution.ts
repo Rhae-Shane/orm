@@ -28,6 +28,7 @@ import {
   type ControlMutationDefaultRegistry,
   type DefaultFunctionLoweringContext,
   describeTaggedLiteralFailure,
+  isDefaultLiteralTagLoweringEntry,
   type LoweredDefaultResult,
   type MutationDefaultGeneratorDescriptor,
 } from '@internal/framework-components/control';
@@ -731,7 +732,7 @@ function lowerTaggedLiteral(
       describeTaggedLiteralFailure(canonicalization.reason),
     );
   }
-  if (!('lower' in entry)) {
+  if (!isDefaultLiteralTagLoweringEntry(entry)) {
     throw new InternalError(
       `Literal tag "${literal.tag}" declares literal type "${entry.literalType}"; reading a tag as a literal is not wired up yet.`,
     );

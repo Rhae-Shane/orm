@@ -59,15 +59,13 @@ function writeNumber(value: JsonValue, type: LiteralTypeName): string | undefine
 }
 
 /**
- * A json body inside a backtick fence, where `` \` `` and `\\` are the only escapes resolved; when
- * the body already contains a backtick the quote fence is used instead.
+ * A json body inside a backtick fence, which resolves `` \` `` and `\\` and nothing else — so a
+ * `\n` in the JSON text survives as the two characters JSON wrote. A quote fence would resolve the
+ * full PSL string escapes and change what the body reads back as, so it is never used.
  */
 function writeJsonTag(value: JsonValue): WrittenLiteralText {
-  const body = JSON.stringify(value);
-  const fenced = body.includes('`')
-    ? `"${body.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
-    : `\`${body.replace(/\\/g, '\\\\')}\``;
-  return { text: `json${fenced}`, tag: 'json' };
+  const body = JSON.stringify(value).replace(/\\/g, '\\\\').replace(/`/g, '\\`');
+  return { text: `json\`${body}\``, tag: 'json' };
 }
 
 function writeScalar(value: JsonValue, type: LiteralTypeName): WrittenLiteralText | undefined {

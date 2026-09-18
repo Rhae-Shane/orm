@@ -29,13 +29,16 @@ export type LiteralTypeDeclaration =
   | LiteralTypeName
   | { readonly list: readonly LiteralTypeName[] };
 
+/** A literal whose type is a single name: everything a `list` element can be. */
+export type ScalarLiteral = { readonly type: LiteralTypeName; readonly value: JsonValue };
+
 /**
  * A classified literal. A list literal's `type.list` holds the types of its elements in first-seen
  * order, so an empty list has an empty list of element types and is compatible with every list
  * declaration.
  */
 export type Literal =
-  | { readonly type: LiteralTypeName; readonly value: JsonValue }
+  | ScalarLiteral
   | {
       readonly type: { readonly list: readonly LiteralTypeName[] };
       readonly value: readonly JsonValue[];
@@ -49,13 +52,15 @@ export type WrittenLiteral =
   | { readonly kind: 'json'; readonly text: string }
   | { readonly kind: 'list'; readonly elements: readonly WrittenLiteral[] };
 
-export type ReadLiteralResult =
-  | { readonly ok: true; readonly literal: Literal }
-  | {
-      readonly ok: false;
-      readonly reason: 'invalid-json' | 'invalid-number';
-      readonly message: string;
-    };
+export interface LiteralRefusal {
+  readonly ok: false;
+  readonly reason: 'invalid-json' | 'invalid-number';
+  readonly message: string;
+  /** Which element of a list literal was refused; `undefined` when the literal is not a list. */
+  readonly elementIndex: number | undefined;
+}
+
+export type ReadLiteralResult = { readonly ok: true; readonly literal: Literal } | LiteralRefusal;
 
 const INTEGER_TEXT = /^-?\d+$/;
 const DECIMAL_TEXT = /^-?\d+\.\d+$/;
@@ -111,12 +116,7 @@ export function classifyNumberText(text: string): ScalarLiteral | undefined {
   };
 }
 
-/** A literal whose type is a single name: everything a `list` element can be. */
-export type ScalarLiteral = { readonly type: LiteralTypeName; readonly value: JsonValue };
-
-type ReadScalarResult =
-  | { readonly ok: true; readonly literal: ScalarLiteral }
-  | Extract<ReadLiteralResult, { ok: false }>;
+type ReadScalarResult = { readonly ok: true; readonly literal: ScalarLiteral } | LiteralRefusal;
 
 export function readLiteral(written: WrittenLiteral): ReadLiteralResult {
   return written.kind === 'list' ? readList(written.elements) : readScalar(written);
@@ -135,6 +135,7 @@ function readScalar(written: Exclude<WrittenLiteral, { kind: 'list' }>): ReadSca
             ok: false,
             reason: 'invalid-number',
             message: `"${written.text}" is not a number literal.`,
+            elementIndex: undefined,
           }
         : { ok: true, literal };
     }
@@ -151,6 +152,7 @@ function readJson(text: string): ReadScalarResult {
       ok: false,
       reason: 'invalid-json',
       message: error instanceof Error ? error.message : String(error),
+      elementIndex: undefined,
     };
   }
 }
@@ -158,16 +160,17 @@ function readJson(text: string): ReadScalarResult {
 function readList(elements: readonly WrittenLiteral[]): ReadLiteralResult {
   const types: LiteralTypeName[] = [];
   const values: JsonValue[] = [];
-  for (const element of elements) {
+  for (const [elementIndex, element] of elements.entries()) {
     if (element.kind === 'list') {
       return {
         ok: false,
         reason: 'invalid-number',
         message: 'A list literal cannot contain another list.',
+        elementIndex,
       };
     }
     const read = readScalar(element);
-    if (!read.ok) return read;
+    if (!read.ok) return { ...read, elementIndex };
     if (!types.includes(read.literal.type)) types.push(read.literal.type);
     values.push(read.literal.value);
   }

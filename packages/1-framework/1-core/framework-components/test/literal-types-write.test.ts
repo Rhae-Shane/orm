@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { integerLiteralTypesUpTo, type LiteralTypeDeclaration } from '../src/shared/literal-types';
 import { writeLiteral } from '../src/shared/literal-types-write';
+import { resolveBacktickEscapes } from '../src/shared/tagged-literal';
 
 const integers = integerLiteralTypesUpTo('i64');
 
@@ -63,11 +64,23 @@ describe('writeLiteral', () => {
       });
     });
 
-    it('switches to the quote fence when the text contains a backtick', () => {
+    it('escapes a backtick inside the backtick fence', () => {
       expect(writeLiteral({ a: '`' }, ['json'])).toEqual({
-        text: 'json"{\\"a\\":\\"`\\"}"',
+        text: 'json`{"a":"\\`"}`',
         tag: 'json',
       });
+    });
+
+    it.each([
+      ['a backtick', { a: '`' }],
+      ['a backslash', { a: '\\' }],
+      ['a backslash before a backtick', { a: '\\`' }],
+      ['an escape sequence a quote fence would resolve', { a: 'x\ny' }],
+    ])('round-trips %s through the fence escapes', (_name, value) => {
+      const written = writeLiteral(value, ['json']);
+      if (written === undefined) throw new Error('expected a json literal');
+      const body = written.text.slice('json`'.length, -1);
+      expect(JSON.parse(resolveBacktickEscapes(body))).toEqual(value);
     });
   });
 

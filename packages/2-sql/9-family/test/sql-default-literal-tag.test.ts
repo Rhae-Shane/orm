@@ -1,3 +1,4 @@
+import { isDefaultLiteralTagLoweringEntry } from '@internal/framework-components/control';
 import { checkSqlDefaultBody } from '@internal/sql-contract/validators';
 import { describe, expect, it } from 'vitest';
 import { createBuiltinLikeControlMutationDefaults } from '../../2-authoring/contract-psl/test/fixtures';
@@ -119,7 +120,7 @@ describe('sqlDefaultLiteralTagEntry', () => {
 describe('the contract-psl fixture registry mirrors the family entry', () => {
   const registered =
     createBuiltinLikeControlMutationDefaults().defaultLiteralTagRegistry.get('sql');
-  if (registered === undefined || !('lower' in registered)) {
+  if (registered === undefined || !isDefaultLiteralTagLoweringEntry(registered)) {
     throw new Error('the fixture registry does not register `sql` as a lowering tag');
   }
   const fixtureEntry = registered;

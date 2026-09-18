@@ -113,6 +113,13 @@ export type ControlDefaultLiteralTagEntry =
   | ControlDefaultLiteralTagLoweringEntry
   | ControlDefaultLiteralTagTypeEntry;
 
+/** Which of the two kinds of tag entry this is; the only place the discriminating key is named. */
+export function isDefaultLiteralTagLoweringEntry(
+  entry: ControlDefaultLiteralTagEntry,
+): entry is ControlDefaultLiteralTagLoweringEntry {
+  return 'lower' in entry;
+}
+
 export type ControlDefaultLiteralTagRegistry = ReadonlyMap<string, ControlDefaultLiteralTagEntry>;
 
 export interface ControlMutationDefaults {

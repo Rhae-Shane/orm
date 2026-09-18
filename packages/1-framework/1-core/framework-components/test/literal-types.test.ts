@@ -30,9 +30,11 @@ describe('readLiteral', () => {
       ['the largest i16', '32767', 'i16', 32767],
       ['one past the largest i16', '32768', 'i32', 32768],
       ['the smallest i16', '-32768', 'i16', -32768],
+      ['one past the smallest i16', '-32769', 'i32', -32769],
       ['the largest i32', '2147483647', 'i32', 2147483647],
       ['one past the largest i32', '2147483648', 'i64', '2147483648'],
       ['the smallest i32', '-2147483648', 'i32', -2147483648],
+      ['one past the smallest i32', '-2147483649', 'i64', '-2147483649'],
       ['past the safe integer range', '9007199254740993', 'i64', '9007199254740993'],
       ['the largest i64', '9223372036854775807', 'i64', '9223372036854775807'],
       ['the smallest i64', '-9223372036854775808', 'i64', '-9223372036854775808'],
@@ -70,6 +72,7 @@ describe('readLiteral', () => {
       ok: false,
       reason: 'invalid-number',
       message: expect.stringContaining(text),
+      elementIndex: undefined,
     });
   });
 
@@ -112,18 +115,23 @@ describe('readLiteral', () => {
       expect(readOk({ kind: 'list', elements: [] })).toEqual({ type: { list: [] }, value: [] });
     });
 
-    it('reports the refusal of an element', () => {
-      expect(readLiteral({ kind: 'list', elements: [number('1'), number('1e3')] })).toMatchObject({
+    it('reports the refusal of an element at that element', () => {
+      expect(readLiteral({ kind: 'list', elements: [number('1'), number('1e3')] })).toEqual({
         ok: false,
         reason: 'invalid-number',
+        message: expect.stringContaining('1e3'),
+        elementIndex: 1,
       });
     });
 
-    it('refuses a nested list', () => {
-      expect(readLiteral({ kind: 'list', elements: [{ kind: 'list', elements: [] }] })).toEqual({
+    it('refuses a nested list at that element', () => {
+      expect(
+        readLiteral({ kind: 'list', elements: [number('1'), { kind: 'list', elements: [] }] }),
+      ).toEqual({
         ok: false,
         reason: 'invalid-number',
-        message: expect.stringContaining('list'),
+        message: 'A list literal cannot contain another list.',
+        elementIndex: 1,
       });
     });
   });

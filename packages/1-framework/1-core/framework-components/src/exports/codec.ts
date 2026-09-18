@@ -26,8 +26,10 @@ export type {
   ColumnTypeDescriptor,
 } from '../shared/column-spec';
 export { column } from '../shared/column-spec';
+export { jsonDefaultLiteralTagEntry } from '../shared/json-default-literal-tag';
 export type {
   Literal,
+  LiteralRefusal,
   LiteralTypeDeclaration,
   LiteralTypeName,
   ReadLiteralResult,

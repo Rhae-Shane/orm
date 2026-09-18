@@ -1,4 +1,5 @@
 import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
+import { isDefaultLiteralTagLoweringEntry } from '@internal/framework-components/control';
 import { describe, expect, it } from 'vitest';
 import { createSqliteBuiltinCodecLookup } from '../src/core/codec-lookup';
 import {
@@ -84,7 +85,7 @@ describe('createSqliteDefaultLiteralTagRegistry', () => {
   const tagRegistry = createSqliteDefaultLiteralTagRegistry();
   const loweringTag = (tag: string) => {
     const entry = tagRegistry.get(tag);
-    if (entry === undefined || !('lower' in entry)) {
+    if (entry === undefined || !isDefaultLiteralTagLoweringEntry(entry)) {
       throw new Error(`the registry does not register "${tag}" as a lowering tag`);
     }
     return entry;
