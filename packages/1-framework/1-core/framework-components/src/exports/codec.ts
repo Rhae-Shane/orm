@@ -26,6 +26,22 @@ export type {
   ColumnTypeDescriptor,
 } from '../shared/column-spec';
 export { column } from '../shared/column-spec';
+export type {
+  Literal,
+  LiteralTypeDeclaration,
+  LiteralTypeName,
+  ReadLiteralResult,
+  ScalarLiteral,
+  WrittenLiteral,
+} from '../shared/literal-types';
+export {
+  describeDeclarations,
+  integerLiteralTypesUpTo,
+  isCompatible,
+  readLiteral,
+} from '../shared/literal-types';
+export type { WrittenLiteralText } from '../shared/literal-types-write';
+export { writeLiteral } from '../shared/literal-types-write';
 export { renderTsLiteral } from '../shared/render-ts-literal';
 export {
   CONTRACT_CODEC_DESCRIPTOR_MISSING,
