@@ -1,5 +1,12 @@
 export { buildEntityTypesByDiscriminator } from '../interpreter';
 export {
+  describeLiteralType,
+  type LiteralDefaultColumn,
+  type LiteralDefaultRefusal,
+  type ReadLiteralDefaultResult,
+  readLiteralDefault,
+} from '../literal-default';
+export {
   type ColumnDescriptor,
   type ResolveFieldTypeResult,
   resolveFieldTypeDescriptor,

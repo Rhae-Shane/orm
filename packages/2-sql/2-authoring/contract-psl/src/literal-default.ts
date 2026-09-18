@@ -56,6 +56,34 @@ export type LiteralDefaultResult =
   | { readonly ok: true; readonly value: AuthoredColumnDefaultLiteralValue }
   | { readonly ok: false; readonly diagnostic: SourceDiagnostic };
 
+/**
+ * Why a literal default was refused, in parts, so each contract source words its own diagnostic:
+ * PSL says `pg/int4@1 is not compatible with a decimal literal`, the Prisma 7 reader says what a
+ * Prisma 7 user needs to hear, and neither restates the other's phrasing.
+ */
+export type LiteralDefaultRefusal = {
+  /** Which element of a list literal the refusal is about; `undefined` when it is about the whole literal. */
+  readonly elementIndex: number | undefined;
+} & (
+  | {
+      readonly kind: 'unreadable';
+      readonly reason: 'invalid-json' | 'invalid-number';
+      readonly message: string;
+    }
+  | {
+      readonly kind: 'incompatible';
+      readonly codecId: string;
+      readonly literalType: string;
+      /** What the codec accepts instead, as {@link describeDeclarations} words it. */
+      readonly accepts: string;
+    }
+  | { readonly kind: 'undecodable'; readonly codecId: string; readonly message: string }
+);
+
+export type ReadLiteralDefaultResult =
+  | { readonly ok: true; readonly value: AuthoredColumnDefaultLiteralValue }
+  | { readonly ok: false; readonly refusal: LiteralDefaultRefusal };
+
 /** The written literal a tagged literal's body is, given the literal type its tag names. */
 export function writtenLiteralForTagBody(
   literalType: LiteralTypeName,
@@ -91,8 +119,9 @@ function at(elementIndex: number | undefined): string {
 
 const VOWEL = /^[aeiou]/;
 
-function article(name: string): string {
-  return VOWEL.test(name) ? 'an' : 'a';
+/** A literal type in a diagnostic, with its article: `a decimal literal`, `an i64 literal`. */
+export function describeLiteralType(literalType: string): string {
+  return `${VOWEL.test(literalType) ? 'an' : 'a'} ${literalType} literal`;
 }
 
 /** How a literal's type reads in a diagnostic: `bigint`, `string`, or `list` for a list literal. */
@@ -112,26 +141,31 @@ function scalarDeclarations(
  * scalar column's literal is checked whole — so a codec declaring `{ list: [...] }` takes a PSL
  * list on a column that is not a list.
  */
-export function lowerLiteralDefault(input: {
+/**
+ * Reads one `@default(...)` literal for a column, refusing in parts so each contract source words
+ * its own diagnostic. `isList` selects the check: a list column's elements are each checked and
+ * decoded against the element codec's scalar declarations, while a scalar column's literal is
+ * checked whole — so a codec declaring `{ list: [...] }` takes a PSL list on a column that is not a
+ * list.
+ */
+export function readLiteralDefault(input: {
   readonly written: WrittenLiteral;
   readonly isList: boolean;
   readonly column: LiteralDefaultColumn;
   readonly codecLookup: CodecLookup | undefined;
   readonly fieldPath: string;
-  readonly sourceId: string;
-  readonly span: SourceSpan;
-}): LiteralDefaultResult {
-  const reject = (code: string, message: string): LiteralDefaultResult => ({
-    ok: false,
-    diagnostic: { code, message, sourceId: input.sourceId, span: input.span },
-  });
-
+}): ReadLiteralDefaultResult {
   const read = readLiteral(input.written);
   if (!read.ok) {
-    return reject(
-      REFUSAL_CODES[read.reason],
-      `Field "${input.fieldPath}"${at(read.elementIndex)}: ${read.message}`,
-    );
+    return {
+      ok: false,
+      refusal: {
+        kind: 'unreadable',
+        reason: read.reason,
+        message: read.message,
+        elementIndex: read.elementIndex,
+      },
+    };
   }
 
   const descriptorFor = input.codecLookup?.descriptorFor;
@@ -149,11 +183,19 @@ export function lowerLiteralDefault(input: {
 
   const declared = descriptor.literalTypes ?? [];
   const declarations = input.isList ? scalarDeclarations(declared) : declared;
-  const incompatible = (name: string, elementIndex?: number): LiteralDefaultResult =>
-    reject(
-      PSL_DEFAULT_LITERAL_TYPE_INCOMPATIBLE,
-      `Field "${input.fieldPath}"${at(elementIndex)}: ${input.column.codecId} is not compatible with ${article(name)} ${name} literal; it accepts ${describeDeclarations(declarations)}`,
-    );
+  const incompatible = (
+    literalType: string,
+    elementIndex: number | undefined,
+  ): ReadLiteralDefaultResult => ({
+    ok: false,
+    refusal: {
+      kind: 'incompatible',
+      codecId: input.column.codecId,
+      literalType,
+      accepts: describeDeclarations(declarations),
+      elementIndex,
+    },
+  });
 
   const typeParams = codecRefTypeParams(input.column.typeParams);
   const codec = materializeCodec(
@@ -161,7 +203,7 @@ export function lowerLiteralDefault(input: {
     { codecId: input.column.codecId, ...ifDefined('typeParams', typeParams) },
     { name: input.fieldPath },
   );
-  const decode = (value: JsonValue, elementIndex?: number): LiteralDefaultResult => {
+  const decode = (value: JsonValue, elementIndex: number | undefined): ReadLiteralDefaultResult => {
     try {
       return {
         ok: true,
@@ -171,17 +213,23 @@ export function lowerLiteralDefault(input: {
         >(codec.decodeJson(value)),
       };
     } catch (error) {
-      return reject(
-        PSL_INVALID_DEFAULT_LITERAL,
-        `Field "${input.fieldPath}"${at(elementIndex)}: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      return {
+        ok: false,
+        refusal: {
+          kind: 'undecodable',
+          codecId: input.column.codecId,
+          message: error instanceof Error ? error.message : String(error),
+          elementIndex,
+        },
+      };
     }
   };
 
   if (!input.isList) {
-    if (!isCompatible(read.literal, declarations))
-      return incompatible(literalTypeName(read.literal));
-    return decode(blindCast<JsonValue, 'a literal value is JSON'>(read.literal.value));
+    if (!isCompatible(read.literal, declarations)) {
+      return incompatible(literalTypeName(read.literal), undefined);
+    }
+    return decode(blindCast<JsonValue, 'a literal value is JSON'>(read.literal.value), undefined);
   }
 
   if (input.written.kind !== 'list') {
@@ -208,4 +256,35 @@ export function lowerLiteralDefault(input: {
     decoded.push(result.value);
   }
   return { ok: true, value: decoded };
+}
+
+/** {@link readLiteralDefault} worded as a PSL diagnostic. */
+export function lowerLiteralDefault(input: {
+  readonly written: WrittenLiteral;
+  readonly isList: boolean;
+  readonly column: LiteralDefaultColumn;
+  readonly codecLookup: CodecLookup | undefined;
+  readonly fieldPath: string;
+  readonly sourceId: string;
+  readonly span: SourceSpan;
+}): LiteralDefaultResult {
+  const read = readLiteralDefault(input);
+  if (read.ok) return read;
+  const { refusal } = read;
+  const where = `Field "${input.fieldPath}"${at(refusal.elementIndex)}`;
+  const diagnostic = (code: string, message: string): LiteralDefaultResult => ({
+    ok: false,
+    diagnostic: { code, message, sourceId: input.sourceId, span: input.span },
+  });
+  switch (refusal.kind) {
+    case 'unreadable':
+      return diagnostic(REFUSAL_CODES[refusal.reason], `${where}: ${refusal.message}`);
+    case 'incompatible':
+      return diagnostic(
+        PSL_DEFAULT_LITERAL_TYPE_INCOMPATIBLE,
+        `${where}: ${refusal.codecId} is not compatible with ${describeLiteralType(refusal.literalType)}; it accepts ${refusal.accepts}`,
+      );
+    case 'undecodable':
+      return diagnostic(PSL_INVALID_DEFAULT_LITERAL, `${where}: ${refusal.message}`);
+  }
 }
