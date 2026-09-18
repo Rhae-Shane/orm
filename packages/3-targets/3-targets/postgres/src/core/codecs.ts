@@ -57,6 +57,9 @@ import {
   pgByteaDecodeJson,
   pgByteaDecodeWire,
   pgByteaEncodeJson,
+  pgFloatDecodeJson,
+  pgFloatEncode,
+  pgFloatEncodeJson,
   pgInt8Decode,
   pgInt8NumberDecode,
   pgInt8NumberDecodeJson,
@@ -685,10 +688,10 @@ export class PgInt8Codec extends CodecImpl<
     return pgBigintEncodeJson(PG_INT8_CODEC_ID, value);
   }
   decodeJson(json: JsonValue): bigint {
-    if (typeof json !== 'string') {
+    if (typeof json !== 'string' && typeof json !== 'number') {
       throw postgresError(
         'RUNTIME.DECODE_FAILED',
-        'pg/int8@1 database JSON value must be a decimal string',
+        'pg/int8@1 database JSON value must be a decimal string or a whole number',
         { meta: { codecId: PG_INT8_CODEC_ID, received: typeof json } },
       );
     }
@@ -789,19 +792,17 @@ export class PgFloat4Codec extends CodecImpl<
   string | number,
   number
 > {
-  async encode(value: number, _ctx: CodecCallContext): Promise<number> {
-    return value;
+  async encode(value: number, _ctx: CodecCallContext): Promise<string | number> {
+    return pgFloatEncode(value);
   }
   async decode(wire: string | number, _ctx: CodecCallContext): Promise<number> {
     return decodePostgresNumberWire(wire);
   }
   encodeJson(value: number): JsonValue {
-    return value;
+    return pgFloatEncodeJson(value);
   }
   decodeJson(json: JsonValue): number {
-    return blindCast<number, 'identity numeric codecs serialize JSON in their wire number form'>(
-      json,
-    );
+    return pgFloatDecodeJson(PG_FLOAT4_CODEC_ID, json);
   }
 }
 
@@ -844,19 +845,17 @@ export class PgFloat8Codec extends CodecImpl<
   string | number,
   number
 > {
-  async encode(value: number, _ctx: CodecCallContext): Promise<number> {
-    return value;
+  async encode(value: number, _ctx: CodecCallContext): Promise<string | number> {
+    return pgFloatEncode(value);
   }
   async decode(wire: string | number, _ctx: CodecCallContext): Promise<number> {
     return decodePostgresNumberWire(wire);
   }
   encodeJson(value: number): JsonValue {
-    return value;
+    return pgFloatEncodeJson(value);
   }
   decodeJson(json: JsonValue): number {
-    return blindCast<number, 'identity numeric codecs serialize JSON in their wire number form'>(
-      json,
-    );
+    return pgFloatDecodeJson(PG_FLOAT8_CODEC_ID, json);
   }
 }
 
@@ -964,10 +963,11 @@ export class PgNumericCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
+    if (typeof json === 'number') return pgNumericDecode(json);
     if (typeof json !== 'string') {
       throw postgresError(
         'RUNTIME.DECODE_FAILED',
-        'pg/numeric@1 database JSON value must be a decimal string',
+        'pg/numeric@1 database JSON value must be a decimal string or a number',
         { meta: { codecId: PG_NUMERIC_CODEC_ID, received: typeof json } },
       );
     }
@@ -1030,10 +1030,10 @@ export class PgUnboundedIntCodec extends CodecImpl<
     return pgBigintEncodeJson(PG_UNBOUNDED_INT_CODEC_ID, value);
   }
   decodeJson(json: JsonValue): bigint {
-    if (typeof json !== 'string') {
+    if (typeof json !== 'string' && typeof json !== 'number') {
       throw postgresError(
         'RUNTIME.DECODE_FAILED',
-        'pg/unboundedint@1 database JSON value must be a decimal string',
+        'pg/unboundedint@1 database JSON value must be a decimal string or a whole number',
         { meta: { codecId: PG_UNBOUNDED_INT_CODEC_ID, received: typeof json } },
       );
     }

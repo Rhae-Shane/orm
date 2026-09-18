@@ -24,7 +24,8 @@ const isDescriptor = (value: unknown): value is AnyCodecDescriptor =>
   'traits' in value &&
   'factory' in value;
 
-const descriptors = Object.values(sqlCodecs).filter(isDescriptor);
+const moduleExports: readonly unknown[] = Object.values(sqlCodecs);
+const descriptors = moduleExports.filter(isDescriptor);
 
 describe('relational-core literal type inventory', () => {
   it('registers codecs to check', () => {

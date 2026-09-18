@@ -52,6 +52,9 @@ const vectorParamsSchema = arktype({
 
 const PG_VECTOR_NATIVE_TYPE = 'vector';
 
+/** The shape of a whole-number or `decimal` literal default's element, which a vector default is written as. */
+const NUMERAL_TEXT = /^-?\d+(?:\.\d+)?$/;
+
 function parseVector(value: string): number[] {
   if (!value.startsWith('[') || !value.endsWith(']')) {
     throw pgVectorError(
@@ -147,7 +150,9 @@ export class PgVectorCodec extends CodecImpl<
         meta: { codecId: VECTOR_CODEC_ID },
       });
     }
-    const value = [...json];
+    const value = json.map((element) =>
+      typeof element === 'string' && NUMERAL_TEXT.test(element) ? Number(element) : element,
+    );
     this.assertVector(value, 'RUNTIME.DECODE_FAILED');
     return value;
   }

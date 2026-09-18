@@ -7,7 +7,6 @@ import {
   type CodecInstanceContext,
   type CodecRef,
   type CodecTrait,
-  type LiteralTypeDeclaration,
   validateCodecTypeParams,
 } from '@internal/framework-components/codec';
 import {
@@ -123,7 +122,6 @@ class PostgresCodecDescriptorAdapter<D extends AnyCodecDescriptor> extends Postg
   override readonly codecId: string;
   override readonly traits: readonly CodecTrait[];
   override readonly targetTypes: readonly string[];
-  override readonly literalTypes: readonly LiteralTypeDeclaration[] | undefined;
   override readonly paramsSchema: D['paramsSchema'];
   override readonly renderOutputType?: (params: DescriptorParams<D>) => string | undefined;
   override readonly renderInputType?: (params: DescriptorParams<D>) => string | undefined;
@@ -143,8 +141,9 @@ class PostgresCodecDescriptorAdapter<D extends AnyCodecDescriptor> extends Postg
     this.codecId = descriptor.codecId;
     this.traits = descriptor.traits;
     this.targetTypes = descriptor.targetTypes;
-    this.literalTypes = descriptor.literalTypes;
     this.paramsSchema = descriptor.paramsSchema;
+
+    this.literalTypes = descriptor.literalTypes;
     this.factory = (params) => descriptor.factory(params);
 
     const renderOutputType = descriptor.renderOutputType;

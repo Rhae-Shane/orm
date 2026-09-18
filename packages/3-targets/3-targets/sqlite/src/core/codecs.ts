@@ -145,6 +145,29 @@ const UPPERCASE_HEX = /^(?:[0-9A-F]{2})*$/;
  * `9.0e+999`, which reads back as `Infinity` rather than failing. A real is
  * therefore carried only where it is finite.
  */
+const NUMERAL_TEXT = /^-?\d+(?:\.\d+)?$/;
+
+/** A whole number within the range a JS number holds exactly, read from a JSON number or the digit text an `i64` literal default carries. */
+const safeWholeNumber = (codecId: string, json: JsonValue): number => {
+  const text = typeof json === 'number' ? String(json) : json;
+  if (typeof text !== 'string' || !DECIMAL_INTEGER.test(text)) {
+    throw sqliteError(
+      'RUNTIME.DECODE_FAILED',
+      `${codecId} database JSON value must be a whole number or decimal text`,
+      { meta: { codecId, received: typeof json } },
+    );
+  }
+  const value = BigInt(text);
+  if (value < MIN_SAFE_INTEGER_BIGINT || value > MAX_SAFE_INTEGER_BIGINT) {
+    throw sqliteError(
+      'RUNTIME.DECODE_FAILED',
+      `${codecId} value must be an integer within the safe integer range, got ${text}`,
+      { meta: { codecId, received: text } },
+    );
+  }
+  return Number(value);
+};
+
 const finiteReal = (value: number, code: 'RUNTIME.ENCODE_FAILED' | 'RUNTIME.DECODE_FAILED') => {
   if (!Number.isFinite(value)) {
     throw sqliteError(code, 'sqlite/real@1 value must be a finite number', {
@@ -315,7 +338,7 @@ export class SqliteIntegerCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): number {
-    return json as number;
+    return safeWholeNumber(SQLITE_INTEGER_CODEC_ID, json);
   }
 }
 
@@ -358,10 +381,11 @@ export class SqliteRealCodec extends CodecImpl<
     return finiteReal(value, 'RUNTIME.ENCODE_FAILED');
   }
   decodeJson(json: JsonValue): number {
+    if (typeof json === 'string' && NUMERAL_TEXT.test(json)) return Number(json);
     if (typeof json !== 'number') {
       throw sqliteError(
         'RUNTIME.DECODE_FAILED',
-        'sqlite/real@1 database JSON value must be a number',
+        'sqlite/real@1 database JSON value must be a number or decimal text',
         {
           meta: { codecId: SQLITE_REAL_CODEC_ID, received: typeof json },
         },
@@ -588,10 +612,11 @@ export class SqliteBigintCodec extends CodecImpl<
     return bigintEncodeJson(SQLITE_BIGINT_CODEC_ID, value);
   }
   decodeJson(json: JsonValue): bigint {
+    if (typeof json === 'number') return BigInt(safeWholeNumber(SQLITE_BIGINT_CODEC_ID, json));
     if (typeof json !== 'string' || !DECIMAL_INTEGER.test(json)) {
       throw sqliteError(
         'RUNTIME.DECODE_FAILED',
-        'sqlite/bigint@1 database JSON value must be a decimal string',
+        'sqlite/bigint@1 database JSON value must be a decimal string or a whole number',
         { meta: { codecId: SQLITE_BIGINT_CODEC_ID, received: typeof json } },
       );
     }
@@ -660,10 +685,11 @@ export class SqliteBigintNumberCodec extends CodecImpl<
     return encodableSafeInteger(value);
   }
   decodeJson(json: JsonValue): number {
+    if (typeof json === 'string') return safeWholeNumber(SQLITE_BIGINT_NUMBER_CODEC_ID, json);
     if (typeof json !== 'number') {
       throw sqliteError(
         'RUNTIME.DECODE_FAILED',
-        'sqlite/bigintnumber@1 database JSON value must be a number',
+        'sqlite/bigintnumber@1 database JSON value must be a number or decimal text',
         { meta: { codecId: SQLITE_BIGINT_NUMBER_CODEC_ID, received: typeof json } },
       );
     }

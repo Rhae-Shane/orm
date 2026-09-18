@@ -7,7 +7,6 @@ import {
   type CodecInstanceContext,
   type CodecRef,
   type CodecTrait,
-  type LiteralTypeDeclaration,
   validateCodecTypeParams,
 } from '@internal/framework-components/codec';
 import type { ProjectionExpr } from '@internal/sql-relational-core/ast';
@@ -72,7 +71,6 @@ class SqliteCodecDescriptorAdapter<D extends AnyCodecDescriptor> extends SqliteC
   override readonly codecId: string;
   override readonly traits: readonly CodecTrait[];
   override readonly targetTypes: readonly string[];
-  override readonly literalTypes: readonly LiteralTypeDeclaration[] | undefined;
   override readonly paramsSchema: D['paramsSchema'];
   override readonly renderOutputType?: (params: DescriptorParams<D>) => string | undefined;
   override readonly renderInputType?: (params: DescriptorParams<D>) => string | undefined;
@@ -89,8 +87,9 @@ class SqliteCodecDescriptorAdapter<D extends AnyCodecDescriptor> extends SqliteC
     this.codecId = descriptor.codecId;
     this.traits = descriptor.traits;
     this.targetTypes = descriptor.targetTypes;
-    this.literalTypes = descriptor.literalTypes;
     this.paramsSchema = descriptor.paramsSchema;
+
+    this.literalTypes = descriptor.literalTypes;
 
     const renderOutputType = descriptor.renderOutputType;
     if (renderOutputType !== undefined) {

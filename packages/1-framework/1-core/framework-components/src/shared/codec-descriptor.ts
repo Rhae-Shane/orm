@@ -33,7 +33,7 @@ export interface CodecDescriptor<P = void> {
   /** Database-native type names this codec handles (e.g. `['timestamptz']`). */
   readonly targetTypes: readonly string[];
   /** The literal types this codec's columns accept as a `@default(...)` literal, by name. A codec that names none accepts no literal default. The codec's `decodeJson` accepts the value shape of every type named here in addition to its own JSON form. ADR 253. */
-  readonly literalTypes?: readonly LiteralTypeDeclaration[];
+  readonly literalTypes?: readonly LiteralTypeDeclaration[] | undefined;
   /** Standard Schema validator for the factory's params. Validates JSON-sourced params at the contract boundary (PSL → IR; `contract.json` → runtime). For non-parameterized codecs (`P = void`), the schema validates `void`/`undefined` — the framework supplies no params at the call boundary. */
   readonly paramsSchema: StandardSchemaV1<P>;
   /** Whether this descriptor is parameterized — i.e. its `paramsSchema` is something other than the singleton `voidParamsSchema`. Consumers that need to gate column-aware dispatch read this directly rather than threading a free-floating `(codecId) => boolean` callback. */
@@ -77,8 +77,8 @@ export abstract class CodecDescriptorImpl<TParams = void> implements CodecDescri
   abstract readonly traits: readonly CodecTrait[];
   abstract readonly targetTypes: readonly string[];
 
-  /** Optional literal types this codec's columns accept. See {@link CodecDescriptor.literalTypes}. */
-  readonly literalTypes?: readonly LiteralTypeDeclaration[];
+  /** Optional literal types this codec's columns accept. See {@link CodecDescriptor.literalTypes}. Declared mutable so a descriptor that adapts another can carry the adapted codec's declaration over in its constructor. */
+  literalTypes?: readonly LiteralTypeDeclaration[] | undefined;
 
   abstract readonly paramsSchema: StandardSchemaV1<TParams>;
 

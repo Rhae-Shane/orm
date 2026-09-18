@@ -15,7 +15,10 @@ export function numberLiteralDefault(
   const codec = numberHoldingCodec(codecLookup, codecId);
   if (codec === undefined) return undefined;
   const number = Number(text);
-  if (tryDecodeJson(codec, number) !== undefined) return number;
+  const asNumber = tryDecodeJson(codec, number);
+  // A codec whose application value is text (`pg/numeric@1`) also reads a JSON number, but reading
+  // one loses the spelling written — `1.50` becomes `1.5` — so the written text is read instead.
+  if (asNumber !== undefined && typeof asNumber.value !== 'string') return number;
   const decoded = tryDecodeJson(codec, canonicalDecimalText(text));
   return decoded !== undefined && isNumberValue(decoded.value) ? decoded.value : undefined;
 }
