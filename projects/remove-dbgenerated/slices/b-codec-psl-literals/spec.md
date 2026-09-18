@@ -65,6 +65,10 @@ These supersede the sections below where they differ.
 - **A lowering tag (`sql`) inside a list literal is `PSL_INVALID_DEFAULT_LITERAL`** with a message saying the tag produces a default of its own. (Dispatch 3.)
 - **The Prisma 7 reader keeps a private copy of the old number-through-codec helper until dispatch 4 replaces it** with B5. (Dispatch 3.)
 
+- **The printer falls back when the codec would refuse what it wrote.** Before printing a literal, the Postgres printer passes the written value back through the column codec's `decodeJson`; a refusal (for example a temporal `infinity` sentinel, which `decodeTemporalText` rejects) takes the raw-default fallback as on `main`. Infer never prints a schema that emit cannot read. (Dispatch 5 review.)
+- **The Postgres printer restates the type-name-to-codec binding** in `psl-infer/infer-default-codec.ts`, because the emit-side binding lives in the adapter, which depends on the target. Two tests keep it honest: one in the adapter asserts entry-by-entry agreement with the authoring type tables, one in the target asserts every printed type name is covered. (Dispatch 5.)
+- **Temporal defaults print as string literals** (`Date @default("2024-01-01")`) rather than `dbgenerated`; verify compares them through `parseTemporal` on both sides and the planner renders them quoted, so the round trip holds. The upgrade instructions mention the changed infer output. (Dispatch 5.)
+
 ## Corrections to the brief
 
 Verified against the code on 2026-09-18. Where the brief and this spec differ, this spec wins.
