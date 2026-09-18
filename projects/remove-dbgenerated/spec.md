@@ -58,19 +58,19 @@ Nobody can tell from a function's name whether it returns a value of the column'
 
 ### D9. Every literal default has a literal type; PSL writes it as a scalar or with a tag
 
-*Amended 2026-09-17; replaces the 2026-09-16 D9.* A literal default has a literal type: `string`, `number`, `boolean`, or `json`. The literal type says what the value is, independent of how PSL writes it. Each literal type defines its value: a `string` literal is the text, a `number` literal is the digits exactly as written, kept as text, a `boolean` literal is `true` or `false`, and a `json` literal is a JSON value.
+*Amended 2026-09-17; replaces the 2026-09-16 D9. Full design: ADR 253.* A literal default has a literal type, and the literal type says what the value is, independent of how PSL writes it. There are seven: `string`, `boolean`, `int`, `float`, `bigint`, `decimal`, and `json`. Each one is defined in the framework, and each produces the value shape the codecs that name it already accept in `decodeJson`, so `int` gives a whole JSON number, `bigint` gives the digits as text, `decimal` gives decimal text with its trailing zeros, and `json` gives a JSON value.
 
-PSL writes a literal of a given type in one of two ways. The PSL scalars that exist today write `string`, `number`, and `boolean` literals: `"x"`, `42`, `NaN`, `true`. A tag writes a literal of the type the tag names: `@default(json\`{ "a": 1 }\`)` is a `json` literal. Both ways lower to the same literal. The syntax tree keeps what was written, for the formatter and the language server. The tag registry from slice A maps each tag to the literal type it writes, and tags follow the registration rule in D3.
+PSL writes a literal of a given type in one of two ways. The plain PSL scalars write `string`, `boolean`, and the numeric literal types. A tag writes a literal of the type the tag names, as in `` @default(json`{ "a": 1 }`) ``; the tag registry entry says which literal type a tag writes, and each SQL target registers `json` with no prefixed alias. Both ways lower to the same literal. The syntax tree keeps what was written, for the formatter and the language server.
 
 The `sql` tag is different: it writes a raw SQL expression, not a value of the column's type. It lowers to a raw SQL default as D2 describes, and no codec check applies to it.
 
+**Open, to discuss with the operator before implementation:** a plain number scalar names no literal type of its own, so `42` is an `int` literal on an `Int` column, a `bigint` literal on a `BigInt` column, and a `decimal` literal on a `Decimal` column, decided by what the column's codec declares. Whether to accept that, to give each numeric literal type its own tag, or to keep one `number` literal type that each codec converts, is not settled. The numeric literal types are not implemented until it is. ADR 253 records the three options.
+
 ### D10. Codecs declare the literal types they are compatible with
 
-*Amended 2026-09-17; replaces the 2026-09-16 D10.* A codec descriptor declares the literal types a column of that codec is compatible with, as static metadata beside `traits` and `targetTypes`. A default whose literal type the column's codec does not declare is a diagnostic at the literal that names the codec and its compatible literal types, for example `pg/int4@1 is not compatible with a json literal; it accepts number literals`.
+*Amended 2026-09-17; replaces the 2026-09-16 D10. Full design: ADR 253.* A codec descriptor names the literal types a column of that codec is compatible with, as static metadata beside `traits` and `targetTypes`. The declaration carries names only: the literal type produces the value the codec's existing `decodeJson` accepts, so no codec gains a method and no conversion code is written per codec. The declaration is optional, and a codec that names no literal type accepts no literal defaults.
 
-For each compatible literal type, the descriptor may give a read function from the literal's value to the codec's JSON form, and a write function for the reverse. Without them, the literal's value already is the codec's JSON form. Most codecs need no function: `pg/jsonb@1` is compatible with `json`, `pg/text@1` with `string`, and `pg/int8@1` with `number`, because its JSON form is the digit text. A codec whose JSON form differs from the literal's value gives the pair: `pg/int4@1` reads the digit text into a JavaScript number and refuses a fraction. The interpreter then passes the JSON form through the codec's `decodeJson`, so a value the codec refuses, such as a vector of the wrong length, is reported with the codec's own message. The contract stores the JSON form as it does today (D1).
-
-Codecs have no `encodePsl` or `decodePsl` members. A codec never sees PSL syntax: it receives a literal of a type it declared.
+A default whose literal type the column's codec does not name is a diagnostic at the literal that names the codec and its compatible literal types, for example `pg/int4@1 is not compatible with a json literal; it accepts int literals`. The interpreter then passes the literal type's value to `decodeJson`, so a value the codec refuses, such as a vector of the wrong length, is reported with the codec's own message. The contract stores the JSON form as it does today (D1).
 
 ### D11. The DDL side of ADR 184 is out of scope
 
@@ -78,7 +78,7 @@ Codecs have no `encodePsl` or `decodePsl` members. A codec never sees PSL syntax
 
 ### D12. `contract infer` prints the new forms and never a gap
 
-When a Postgres default is a named function, infer prints the named function. When the column's codec can write the value as a literal, infer prints it as a literal of the codec's first compatible literal type: a `string`, `number`, or `boolean` literal as a PSL scalar, any other literal type with its tag. Otherwise infer prints `@default(sql\`<expression>\`)`, switching to the double-quote fence when the expression contains a backtick. Infer never emits a comment in place of a default and never stops on one. The family printer's `// Raw default:` comment fallback is deleted.
+When a Postgres default is a named function, infer prints the named function. When the column's codec names a literal type that can write the value, infer prints it as a literal of that type: as a plain PSL scalar where the type has one, otherwise with the type's tag. Otherwise infer prints `@default(sql\`<expression>\`)`, switching to the double-quote fence when the expression contains a backtick. Infer never emits a comment in place of a default and never stops on one. The family printer's `// Raw default:` comment fallback is deleted.
 
 ### D13. The Prisma 7 source maps `dbgenerated` directly
 
@@ -109,7 +109,7 @@ Slice A implements completion of registered tags inside `@default(`, because the
 
 ## Contract-impact
 
-Entities affected: `ColumnDefault` (unchanged shape, new producers). `Codec` interface (unchanged). Codec descriptors (a new declaration of compatible literal types, slice B). The tag registry maps each tag to a literal type (slice B). `ControlMutationDefaults` (a new tag registry beside the function registry, slice A). No migration of stored contracts.
+Entities affected: `ColumnDefault` (unchanged shape, new producers). `Codec` interface (unchanged). Codec descriptors (a new declaration naming compatible literal types, slice B). Literal types are defined in the framework and the tag registry says which one each tag writes (slice B). `ControlMutationDefaults` (a new tag registry beside the function registry, slice A). No migration of stored contracts.
 
 ## Adapter-impact
 
@@ -122,7 +122,7 @@ Entities affected: `ColumnDefault` (unchanged shape, new producers). `Codec` int
 ## ADR pointers
 
 - ADR 129 — amended in slice A: two fences, tag registration rule (D3), canonicalization applies to both fences, the `TaggedLiteral` node's fields as built.
-- ADR 184 — amended in slice B: the PSL half is a declaration of compatible literal types on the codec descriptor, with read and write functions only where the codec's JSON form differs from the literal's value (D9, D10); DDL methods remain future work.
+- ADR 184 — its PSL half is replaced by ADR 253: a codec descriptor names the literal types it is compatible with, and gains no methods (D9, D10). DDL methods remain future work.
 - ADR 129 — also amended in slice B: a tag writes a literal of a literal type; `sql` writes a raw SQL expression (D9).
 - ADR 167 — note added in slice C: the `dbgenerated(...)` stopgap is removed and what replaced it.
 
@@ -160,7 +160,7 @@ Conclusions from the shaping discussion on 2026-09-16, with reasons, assumptions
 
 **Codecs declare the literal types they are compatible with; tags are how PSL writes a literal of a type (2026-09-17).** Why: it answers how to check a default literal against a codec whose SQL type can be anything. The check is a lookup, not a trial decode. The codec deals only in literal types and never sees PSL syntax, so the PSL scalars and the tags are two ways of writing the same thing. This replaces the 2026-09-16 entries "Codec interface, not a separate registry" and "Normalised content to the codec, no pre-parsing". Alternatives rejected: `encodePsl` and `decodePsl` on the codec, taking a string, number, or boolean kind (built in slice B's first PR and withdrawn, because it made the parser's classification the codec's input); passing the raw argument text to the codec (needs an unparsed argument form for `@default` alone).
 
-**The conversion from a literal's value to the JSON form lives with the codec (2026-09-17).** Why: one literal type maps to different JSON forms for different codecs (`number` is `42` for `pg/int4@1`, `"9007199254740993"` for `pg/int8@1`, `"1.50"` for `pg/numeric@1`), and existing contract JSON must not change. The literal type alone cannot choose, and trying each form in turn is the special case this project removes.
+**The literal types are cut where the stored representations are cut (2026-09-18).** Why: codecs that hold numbers store different JSON forms, `42` for `pg/int4@1`, `"9007199254740993"` for `pg/int8@1`, and `"1.50"` for `pg/numeric@1`, and existing contract JSON must not change. Separate `int`, `bigint`, and `decimal` literal types each produce one of those forms, so the codec declaration is a list of names and no codec carries conversion code. Alternative rejected: one `number` literal type with a read and a write function per codec, which duplicates what each codec's `decodeJson` already does. The consequence that a plain number scalar names no literal type of its own is open, and recorded in D9.
 
 **DDL side out of scope.** Why: no strong reason to do it now; the Prisma 7 source's workaround for bytes and timestamps is contained and recorded.
 
