@@ -1,6 +1,6 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import type { ExecutionMutationDefaultValue, JsonValue } from '@internal/contract/types';
-import type { CodecLookup } from '@internal/framework-components/codec';
+import type { Codec, CodecLookup } from '@internal/framework-components/codec';
 import type { ControlMutationDefaults } from '@internal/framework-components/control';
 import type { FieldSymbol, PslSpan, ResolvedAttribute } from '@internal/psl-parser';
 import type { ExpressionAst } from '@internal/psl-parser/syntax';
@@ -13,7 +13,6 @@ import {
   printSyntax,
   StringLiteralExprAst,
 } from '@internal/psl-parser/syntax';
-import { numberLiteralDefault } from '@internal/sql-contract-psl/resolution';
 import type {
   AuthoredColumnDefault,
   AuthoredColumnDefaultLiteralValue,
@@ -217,6 +216,54 @@ function rejectedNumberReason(
     : `holds ${text}, which is not an integer; ${wholeNumberScalar} default must be a whole number.`;
 }
 
+const DECIMAL_NUMERAL = /^(-?)0*(\d+)(\.\d+)?$/;
+
+/**
+ * Leading zeros and the sign of zero never change a decimal. Trailing zeros are kept, because a
+ * column without a scale keeps them.
+ */
+function canonicalDecimalText(text: string): string {
+  const numeral = DECIMAL_NUMERAL.exec(text);
+  if (numeral === null) return text;
+  const [, sign = '', whole = '', fraction = ''] = numeral;
+  const digits = `${whole}${fraction}`;
+  return /^[0.]+$/.test(digits) ? digits : `${sign}${digits}`;
+}
+
+function tryDecodeJson(codec: Codec, json: JsonValue): { readonly value: unknown } | undefined {
+  try {
+    return { value: codec.decodeJson(json) };
+  } catch {
+    return undefined;
+  }
+}
+
+function isNumberValue(value: unknown): value is string | number | bigint {
+  return typeof value === 'string' || typeof value === 'number' || typeof value === 'bigint';
+}
+
+/**
+ * The default value a number literal gives a column whose codec holds numbers. Returns `undefined`
+ * when the codec does not hold numbers, or reads the literal neither as a JSON number nor as
+ * decimal text. Replaced by the literal-type path when this reader is rewritten.
+ */
+function numberDefaultThroughCodec(
+  text: string,
+  codecId: string,
+  codecLookup: CodecLookup | undefined,
+): AuthoredColumnDefaultLiteralValue | undefined {
+  const holdsNumbers = codecLookup?.descriptorFor?.(codecId)?.traits.includes('numeric') === true;
+  const codec = holdsNumbers ? codecLookup?.get(codecId) : undefined;
+  if (codec === undefined) return undefined;
+  const number = Number(text);
+  const asNumber = tryDecodeJson(codec, number);
+  // A codec whose application value is text (`pg/numeric@1`) also reads a JSON number, but reading
+  // one loses the spelling written — `1.50` becomes `1.5` — so the written text is read instead.
+  if (asNumber !== undefined && typeof asNumber.value !== 'string') return number;
+  const decoded = tryDecodeJson(codec, canonicalDecimalText(text));
+  return decoded !== undefined && isNumberValue(decoded.value) ? decoded.value : undefined;
+}
+
 /** A number default for the field: Prisma 7 accepts only whole numbers for `Int` and `BigInt`. */
 function numberValue(
   text: string,
@@ -225,7 +272,7 @@ function numberValue(
   if (Object.hasOwn(WHOLE_NUMBER_SCALARS, input.field.typeName) && !WHOLE_NUMBER_TEXT.test(text)) {
     return undefined;
   }
-  return numberLiteralDefault(text, input.codecId, input.codecLookup);
+  return numberDefaultThroughCodec(text, input.codecId, input.codecLookup);
 }
 
 function elementValue(

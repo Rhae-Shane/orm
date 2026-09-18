@@ -596,6 +596,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
             diagnostics,
           })
         : lowerDefaultForField({
+            defaultAttributeSpan: defaultAttribute.span,
             modelName: model.name,
             fieldName: field.name,
             field,

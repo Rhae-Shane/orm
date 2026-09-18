@@ -3,6 +3,7 @@ import { createTestSqlNamespace } from '../../../1-core/contract/test/test-suppo
 import { interpretPslDocumentToSqlContract as interpretPslDocumentToSqlContractInternal } from '../src/interpreter';
 import {
   createBuiltinLikeControlMutationDefaults,
+  postgresCodecLookup,
   postgresNativeScalarTypeDescriptors,
   postgresTarget,
   symbolTableInputFromParseArgs,
@@ -18,6 +19,7 @@ describe('interpretPslDocumentToSqlContract tagged literal defaults', () => {
     });
     return interpretPslDocumentToSqlContractInternal({
       target: postgresTarget,
+      codecLookup: postgresCodecLookup,
       scalarColumnDescriptors: postgresNativeScalarTypeDescriptors,
       composedExtensionContracts: new Map(),
       createNamespace: createTestSqlNamespace,
@@ -83,7 +85,7 @@ describe('interpretPslDocumentToSqlContract tagged literal defaults', () => {
       {
         code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
         message:
-          'Expected one of: string | number | boolean | autoincrement() | now() | uuid() | cuid() | ulid() | nanoid() | dbgenerated() | sql`...`',
+          'Expected one of: string | number | boolean | autoincrement() | now() | uuid() | cuid() | ulid() | nanoid() | dbgenerated() | sql`...` | string | number | boolean | sql`...`[]',
         sourceId: 'schema.prisma',
         span: lineThreeSpan(21, 'gen_random_uuid()'.length),
       },
@@ -94,7 +96,7 @@ describe('interpretPslDocumentToSqlContract tagged literal defaults', () => {
     expect(diagnostics('v String @default(sqlite.sql`x`)')).toEqual([
       {
         code: 'PSL_UNKNOWN_DEFAULT_LITERAL_TAG',
-        message: 'Unknown literal tag "sqlite.sql". Known tags: sql, pg.sql.',
+        message: 'Unknown literal tag "sqlite.sql". Known tags: sql, pg.sql, json.',
         sourceId: 'schema.prisma',
         span: lineThreeSpan(21, 'sqlite.sql`x`'.length),
       },
@@ -167,5 +169,43 @@ describe('interpretPslDocumentToSqlContract tagged literal defaults', () => {
     expect(diagnostics('tags String[] @default(uuid())')).toEqual([
       expect.objectContaining({ code: 'PSL_LIST_EXECUTION_DEFAULT_UNSUPPORTED' }),
     ]);
+  });
+
+  describe('the json tag', () => {
+    it('reads a JSON document as the column default', () => {
+      expect(columnDefault('v Jsonb @default(json`{ "plan": "free" }`)', 'v')).toEqual({
+        kind: 'literal',
+        value: { plan: 'free' },
+      });
+    });
+
+    it('reads json`null` as JSON null', () => {
+      expect(columnDefault('v Jsonb @default(json`null`)', 'v')).toEqual({
+        kind: 'literal',
+        value: null,
+      });
+    });
+
+    it('reads a json tag inside a list on a jsonb list column', () => {
+      expect(columnDefault('v Jsonb[] @default([json`{}`, json`[1]`])', 'v')).toEqual({
+        kind: 'literal',
+        value: [{}, [1]],
+      });
+    });
+
+    it('refuses a body that is not a JSON document', () => {
+      expect(diagnostics('v Jsonb @default(json`{ plan }`)')).toEqual([
+        expect.objectContaining({ code: 'PSL_INVALID_JSON_LITERAL' }),
+      ]);
+    });
+
+    it('refuses a json literal on a column whose codec does not accept one', () => {
+      expect(diagnostics('v Int @default(json`1`)')).toEqual([
+        expect.objectContaining({
+          code: 'PSL_DEFAULT_LITERAL_TYPE_INCOMPATIBLE',
+          message: expect.stringContaining('is not compatible with a json literal'),
+        }),
+      ]);
+    });
   });
 });

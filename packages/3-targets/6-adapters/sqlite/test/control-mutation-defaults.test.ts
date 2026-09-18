@@ -1,4 +1,5 @@
 import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
+import { jsonDefaultLiteralTagEntry } from '@internal/framework-components/codec';
 import { isDefaultLiteralTagLoweringEntry } from '@internal/framework-components/control';
 import { describe, expect, it } from 'vitest';
 import { createSqliteBuiltinCodecLookup } from '../src/core/codec-lookup';
@@ -91,9 +92,15 @@ describe('createSqliteDefaultLiteralTagRegistry', () => {
     return entry;
   };
 
-  it('registers sql and sqlite.sql, in that order', () => {
-    expect([...tagRegistry.keys()]).toEqual(['sql', 'sqlite.sql']);
+  it('registers sql, sqlite.sql and json, in that order', () => {
+    expect([...tagRegistry.keys()]).toEqual(['sql', 'sqlite.sql', 'json']);
     expect(tagRegistry.get('sqlite.sql')?.usage).toBe('sqlite.sql`...`');
+    expect(tagRegistry.get('json')?.usage).toBe('json`...`');
+  });
+
+  it('registers json as a literal of type json, with no prefixed alias', () => {
+    expect(tagRegistry.get('json')).toEqual(jsonDefaultLiteralTagEntry());
+    expect(tagRegistry.get('sqlite.json')).toBeUndefined();
   });
 
   it('lowers sql`CURRENT_TIMESTAMP` verbatim, with no rewrite to now()', () => {
@@ -114,7 +121,7 @@ describe('createSqliteDefaultLiteralTagRegistry', () => {
     const registries = sqliteAdapterDescriptor.controlMutationDefaults;
     if (registries === undefined)
       throw new Error('the adapter descriptor declares mutation defaults');
-    expect([...registries.defaultLiteralTagRegistry.keys()]).toEqual(['sql', 'sqlite.sql']);
+    expect([...registries.defaultLiteralTagRegistry.keys()]).toEqual(['sql', 'sqlite.sql', 'json']);
   });
 
   it.each([

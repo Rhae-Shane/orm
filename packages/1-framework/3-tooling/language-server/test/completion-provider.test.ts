@@ -1202,7 +1202,10 @@ describe('providePslCompletionItems', () => {
         insertTextFormat: item.insertTextFormat,
       }));
     const postgresTags = postgres.createPostgresDefaultLiteralTagRegistry();
-    const documentation = postgresTags.get('sql')?.documentation;
+    // The tagged-literal arm carries every registered tag's documentation, deduplicated.
+    const documentation = [
+      ...new Set([...postgresTags.values()].map((entry) => entry.documentation)),
+    ].join(' ');
     const value = (label: string) => ({
       label,
       detail: 'PSL argument value',
@@ -1221,18 +1224,21 @@ describe('providePslCompletionItems', () => {
       value('false'),
       tag('sql', true),
       tag('pg.sql', true),
+      tag('json', true),
     ]);
     expect(complete(sqlite.createSqliteDefaultLiteralTagRegistry(), true)).toEqual([
       value('true'),
       value('false'),
       tag('sql', true),
       tag('sqlite.sql', true),
+      tag('json', true),
     ]);
     expect(complete(postgresTags, false)).toEqual([
       value('true'),
       value('false'),
       tag('sql', false),
       tag('pg.sql', false),
+      tag('json', false),
     ]);
   }, 5_000);
 

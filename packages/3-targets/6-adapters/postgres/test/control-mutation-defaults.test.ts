@@ -4,6 +4,7 @@ import {
   instantiateAuthoringTypeConstructor,
   validateAuthoringHelperArguments,
 } from '@internal/framework-components/authoring';
+import { jsonDefaultLiteralTagEntry } from '@internal/framework-components/codec';
 import { isDefaultLiteralTagLoweringEntry } from '@internal/framework-components/control';
 import { describe, expect, it } from 'vitest';
 import { createPostgresBuiltinCodecLookup } from '../src/core/codec-lookup';
@@ -415,10 +416,16 @@ describe('createPostgresDefaultLiteralTagRegistry', () => {
     return entry;
   };
 
-  it('registers sql and pg.sql, in that order', () => {
-    expect([...tagRegistry.keys()]).toEqual(['sql', 'pg.sql']);
+  it('registers sql, pg.sql and json, in that order', () => {
+    expect([...tagRegistry.keys()]).toEqual(['sql', 'pg.sql', 'json']);
     expect(tagRegistry.get('sql')?.usage).toBe('sql`...`');
     expect(tagRegistry.get('pg.sql')?.usage).toBe('pg.sql`...`');
+    expect(tagRegistry.get('json')?.usage).toBe('json`...`');
+  });
+
+  it('registers json as a literal of type json, with no prefixed alias', () => {
+    expect(tagRegistry.get('json')).toEqual(jsonDefaultLiteralTagEntry());
+    expect(tagRegistry.get('pg.json')).toBeUndefined();
   });
 
   it('lowers a body verbatim as a function default', () => {
@@ -436,7 +443,7 @@ describe('createPostgresDefaultLiteralTagRegistry', () => {
     const registries = postgresAdapterDescriptor.controlMutationDefaults;
     if (registries === undefined)
       throw new Error('the adapter descriptor declares mutation defaults');
-    expect([...registries.defaultLiteralTagRegistry.keys()]).toEqual(['sql', 'pg.sql']);
+    expect([...registries.defaultLiteralTagRegistry.keys()]).toEqual(['sql', 'pg.sql', 'json']);
   });
 
   it.each([

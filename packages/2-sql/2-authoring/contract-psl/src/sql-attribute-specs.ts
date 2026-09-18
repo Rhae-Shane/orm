@@ -180,33 +180,28 @@ const mapFieldSpec = fieldAttribute('map', {
   refine: validateMappedName,
 });
 
-type DefaultArgValue =
-  | string
-  | NumLiteral
-  | boolean
-  | (string | NumLiteral | boolean)[]
-  | TypedFuncCall
-  | ParsedTaggedLiteral;
+type DefaultLiteralElement = string | NumLiteral | boolean | ParsedTaggedLiteral;
+
+type DefaultArgValue = DefaultLiteralElement | DefaultLiteralElement[] | TypedFuncCall;
 
 function scalarDefaultArms(
   isList: boolean,
   registries: ControlDefaultRegistries,
 ): readonly [ArgType<DefaultArgValue, AttributeCtx>, ...ArgType<DefaultArgValue, AttributeCtx>[]] {
-  const literal = () => oneOf(str(), numLiteral(), bool());
   const tagEntries = [...registries.defaultLiteralTagRegistry];
-  const tagArms =
+  const tagArm = () =>
+    taggedLiteral(
+      tagEntries.map(([tag]) => tag),
+      {
+        documentation: [...new Set(tagEntries.map(([, entry]) => entry.documentation))].join(' '),
+      },
+    );
+  const tagArms = tagEntries.length > 0 ? [tagArm()] : [];
+  // A list element may itself be a tagged literal, so `Jsonb[] @default([json`{}`])` parses.
+  const literal = () =>
     tagEntries.length > 0
-      ? [
-          taggedLiteral(
-            tagEntries.map(([tag]) => tag),
-            {
-              documentation: [...new Set(tagEntries.map(([, entry]) => entry.documentation))].join(
-                ' ',
-              ),
-            },
-          ),
-        ]
-      : [];
+      ? oneOf(str(), numLiteral(), bool(), tagArm())
+      : oneOf(str(), numLiteral(), bool());
   const funcArms = [...registries.defaultFunctionRegistry.entries()].map(([name, entry]) =>
     funcCall(
       name,
@@ -216,9 +211,11 @@ function scalarDefaultArms(
       >(entry.signature),
     ),
   );
+  // A scalar column takes a list literal too: a codec such as `pg/vector@1` declares a list of
+  // element types, and its value is written as a PSL list on a column that is not a list.
   return isList
     ? [list(literal()), ...funcArms, ...tagArms]
-    : [str(), numLiteral(), bool(), ...funcArms, ...tagArms];
+    : [str(), numLiteral(), bool(), ...funcArms, ...tagArms, list(literal())];
 }
 
 function noEnumMember(): RejectingArgType<never, AttributeCtx> {
