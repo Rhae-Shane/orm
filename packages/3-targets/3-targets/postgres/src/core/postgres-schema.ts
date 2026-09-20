@@ -120,7 +120,7 @@ export class PostgresSchema extends SqlNamespaceBase {
         const physicalName = PostgresFunction.is(entity) ? entity.functionName : handle;
         invariant(
           !Object.hasOwn(rekeyed, physicalName),
-          `PostgresSchema "${input.id}": two function entities resolve to the same physical function name "${physicalName}".`,
+          `PostgresSchema "${input.id}": two function entities resolve to the same physical function name "${physicalName}". Overloaded functions (same name, different signatures) are unsupported; give each function a distinct name.`,
         );
         rekeyed[physicalName] = entity;
       }

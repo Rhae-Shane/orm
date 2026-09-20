@@ -24,8 +24,11 @@ export interface PostgresFunctionInput {
  * Postgres contract-IR class for a user-defined SQL function.
  *
  * Authored and serialized into `contract.json` under
- * `storage.namespaces[ns].entries.function[HandleName]`. Schema-diff uses
+ * `storage.namespaces[ns].entries.function[<physicalName>]`. Schema-diff uses
  * {@link PostgresFunctionSchemaNode}; this class is not a DiffableNode.
+ *
+ * MVP limits: opaque `signature`/`body` (not validated), one name per namespace
+ * (no overloads), create/drop only (no in-place replace).
  */
 export class PostgresFunction extends SqlNode {
   static is(node: unknown): node is PostgresFunction {

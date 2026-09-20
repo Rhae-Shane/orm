@@ -329,6 +329,34 @@ describe('PostgresSchema — native_enum entries', () => {
   });
 });
 
+describe('PostgresSchema — function entries', () => {
+  it('rejects two function entities that share a physical function name (overloads unsupported)', () => {
+    const collidingInput = {
+      FooInt: {
+        kind: 'postgres-function',
+        functionName: 'foo',
+        signature: 'x int',
+        returns: 'int',
+        body: 'RETURN x;',
+        language: 'plpgsql',
+        volatility: 'STABLE',
+      },
+      FooText: {
+        kind: 'postgres-function',
+        functionName: 'foo',
+        signature: 'x text',
+        returns: 'text',
+        body: 'RETURN x;',
+        language: 'plpgsql',
+        volatility: 'STABLE',
+      },
+    };
+    expect(
+      () => new PostgresSchema({ id: 'public', entries: { table: {}, function: collidingInput } }),
+    ).toThrow(/Overloaded functions|same physical function name "foo"/);
+  });
+});
+
 describe('PostgresSchema — native_enum affects storageHash', () => {
   function hashWithNativeEnum(members: readonly string[]): string {
     return computeStorageHash({

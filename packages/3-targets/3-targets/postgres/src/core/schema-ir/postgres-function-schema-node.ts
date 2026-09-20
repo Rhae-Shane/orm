@@ -18,9 +18,13 @@ export interface PostgresFunctionSchemaNodeInput {
 }
 
 /**
- * Schema-diff leaf for a managed Postgres function. Identity is
- * `function:<functionName>` within a namespace. Equality compares every
- * authored field except `control`.
+ * Schema-diff leaf for a managed Postgres function.
+ *
+ * **MVP identity is name-only** (`function:<functionName>` within a namespace).
+ * Postgres overloads (`foo(int)` vs `foo(text)`) are unsupported: the schema
+ * rejects two entities that share a physical `functionName`. Equality compares
+ * every authored field except `control`. The opaque `signature` is not part of
+ * `id` because the MVP cannot normalize Postgres argument-list spelling.
  */
 export class PostgresFunctionSchemaNode extends SqlSchemaIRNode implements DiffableNode {
   override readonly nodeKind = PostgresSchemaNodeKind.function;

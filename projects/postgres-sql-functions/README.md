@@ -23,8 +23,11 @@ Or paste [`github-issue.md`](github-issue.md) into https://github.com/prisma/orm
 
 ## What landed in-tree (MVP)
 
-- **Diagnostics:** raw `` sql`nanoid(...)` `` / `dbgenerated("nanoid(...)")` refused when the expression looks like a client generator (`PSL_RAW_DEFAULT_LOOKS_LIKE_CLIENT_GENERATOR` / `CONTRACT.DEFAULT_LOOKS_LIKE_CLIENT_GENERATOR`).
-- **Entity:** `PostgresFunction` + PSL `function` block + TS `pgFunction(...)` on the entities list.
-- **Migrations:** `createFunction` / `dropFunction` in the `dep` / `dropType` buckets so CREATE FUNCTION runs before CREATE TABLE.
+Narrow scope — see [`spec.md`](spec.md) D4–D9:
 
-Prefer client `@default(nanoid(16))` / `field.generated(nanoid())` when the app always inserts through Prisma. For a DB-side helper, name it something other than a Prisma generator (e.g. `app_nanoid`) and declare it with `pgFunction` / `function`.
+- **Diagnostics:** raw `` sql`nanoid(...)` `` / `dbgenerated("nanoid(...)")` refused when the expression looks like a client generator (`PSL_RAW_DEFAULT_LOOKS_LIKE_CLIENT_GENERATOR` / `CONTRACT.DEFAULT_LOOKS_LIKE_CLIENT_GENERATOR`). Naming `app_nanoid` is an MVP convenience, not a permanent ban on a DB function named `nanoid`.
+- **Entity:** `PostgresFunction` + PSL `function` block + TS `pgFunction(...)` — opaque body/signature (Prisma does not validate SQL); one physical name per namespace (no overloads).
+- **Migrations:** `CREATE FUNCTION` / `DROP FUNCTION` only (no `OR REPLACE`; body/signature edits conflict until drop+recreate). `dep` / `dropType` bucket ordering — enough for simple helpers whose dependencies already exist; not a general Postgres function dependency graph.
+- **Ownership:** `DROP` only for managed / unclaimed functions; mark shared or extension functions `external`.
+
+Prefer client `@default(nanoid(16))` / `field.generated(nanoid())` when the app always inserts through Prisma. For a DB-side helper in this MVP, declare `pgFunction` / `function` and call a non-generator name (e.g. `app_nanoid`).

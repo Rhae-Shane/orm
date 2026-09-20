@@ -44,6 +44,7 @@ export function clientGeneratorSqlDefaultMessage(options: {
     `Raw SQL default "${options.body.trim()}" looks like Prisma's client-side ${options.generator}() generator. ` +
     `Write ${options.namedForm} so Prisma generates the value before insert, ` +
     'or declare a Postgres function entity and call a database function name that is not a Prisma generator ' +
-    '(for example app_nanoid(16)). Migrate does not create a function from this expression alone.'
+    '(for example app_nanoid(16); naming around client generators is an MVP constraint). ' +
+    'Migrate does not create a function from this expression alone.'
   );
 }
