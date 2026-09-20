@@ -529,15 +529,12 @@ function nativeEnumMemberChangeRefusal(options: {
 }
 
 /**
- * Managed native-enum issue -> op lowering. A missing declared type creates
- * it; an unclaimed live type drops it (ownership-scoped upstream by
- * `retainUnownedExtras`, destructiveness gated by the operation-class
- * policy); a paired member-value mismatch lowers to one `ALTER TYPE ... ADD
- * VALUE` per appended member when the database's members are a strict,
- * order-preserving prefix of the contract's — any other change (rename,
- * removal, reorder, or the database holding members the contract lacks) is
- * refused with a NAMED diagnostic, never a silent no-op and never a
- * drop-and-recreate.
+ * Managed function issue → op lowering. A missing declared function creates
+ * it (`CREATE FUNCTION`); an unclaimed live function drops it (ownership-
+ * scoped upstream by `retainUnownedExtras`, destructiveness gated by the
+ * operation-class policy and control-policy partition). Body or signature
+ * drift is refused with a named diagnostic — never silent, never
+ * `CREATE OR REPLACE`.
  */
 function mapFunctionNodeIssue(
   issue: SchemaDiffIssue,

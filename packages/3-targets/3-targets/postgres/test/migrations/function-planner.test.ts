@@ -101,7 +101,7 @@ describe('Postgres function migration planning', () => {
     expect(createFunctionIdx).toBeLessThan(createTableIdx);
   });
 
-  it('renders CREATE OR REPLACE FUNCTION with the opaque body', () => {
+  it('renders CREATE FUNCTION with the opaque body (not OR REPLACE)', () => {
     const op = createFunction({
       schemaName: 'public',
       functionName: 'app_nanoid',
@@ -112,10 +112,47 @@ describe('Postgres function migration planning', () => {
       volatility: 'STABLE',
     });
     const sql = op.execute[0]?.sql ?? '';
-    expect(sql).toContain('CREATE OR REPLACE FUNCTION "public"."app_nanoid"(size int DEFAULT 16)');
+    expect(sql).toContain('CREATE FUNCTION "public"."app_nanoid"(size int DEFAULT 16)');
+    expect(sql).not.toContain('OR REPLACE');
     expect(sql).toContain('RETURNS text');
     expect(sql).toContain('LANGUAGE plpgsql STABLE');
     expect(sql).toContain(APP_NANOID_BODY);
+  });
+
+  it('rejects not-equal function drift instead of planning CREATE OR REPLACE', async () => {
+    const expected = buildPostgresPlanDiff({ contract: makeContract() }).expected;
+    const actualFn = new PostgresFunctionSchemaNode({
+      functionName: 'app_nanoid',
+      namespaceId: 'public',
+      signature: 'size int DEFAULT 16',
+      returns: 'text',
+      body: 'RETURN null;',
+      language: 'plpgsql',
+      volatility: 'STABLE',
+    });
+    const actual = new PostgresDatabaseSchemaNode({
+      namespaces: {
+        public: new PostgresNamespaceSchemaNode({
+          schemaName: 'public',
+          tables: {},
+          functions: [actualFn],
+        }),
+      },
+      roles: {},
+      existingSchemas: ['public'],
+      pgVersion: '',
+    });
+    const issues = coalesceSubtreeIssues(
+      buildPostgresPlanDiff({ contract: makeContract(), actual }).issues,
+    );
+    const result = await planIssues(issues, {
+      expected,
+      actual,
+      codecHooks: new Map(),
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.summary).toMatch(/not supported yet|drop and recreate/i);
   });
 
   it('diff equality ignores control and matches authored fields', () => {

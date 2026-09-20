@@ -28,8 +28,10 @@ function renderCreateFunctionSql(options: {
     );
   }
   const name = qualifiedFunctionName(options.schemaName, options.functionName);
+  // CREATE (not OR REPLACE): body/signature edits are planner conflicts until a
+  // dedicated replace/alter path exists. Authors must drop and recreate.
   return [
-    `CREATE OR REPLACE FUNCTION ${name}(${options.signature})`,
+    `CREATE FUNCTION ${name}(${options.signature})`,
     `RETURNS ${options.returns}`,
     `LANGUAGE ${options.language} ${options.volatility}`,
     `AS $${BODY_DOLLAR_TAG}$`,
@@ -38,7 +40,7 @@ function renderCreateFunctionSql(options: {
   ].join('\n');
 }
 
-/** `CREATE OR REPLACE FUNCTION` for a managed Postgres function entity. */
+/** `CREATE FUNCTION` for a managed Postgres function entity. */
 export function createFunction(options: {
   readonly schemaName: string;
   readonly functionName: string;
@@ -60,7 +62,11 @@ export function createFunction(options: {
   };
 }
 
-/** `DROP FUNCTION` for an unclaimed managed Postgres function. */
+/**
+ * `DROP FUNCTION` for an unclaimed managed Postgres function.
+ * Control policy / ownership must suppress this for `external` /
+ * `tolerated` / `observed` subjects and for entities another space owns.
+ */
 export function dropFunction(options: {
   readonly schemaName: string;
   readonly functionName: string;

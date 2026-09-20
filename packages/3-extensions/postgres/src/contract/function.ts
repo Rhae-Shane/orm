@@ -11,8 +11,11 @@ export interface PgFunctionHandle {
 
 /**
  * Declares a managed Postgres function for the `entities` list. Migrate plans
- * `CREATE OR REPLACE FUNCTION` / `DROP FUNCTION`. Column defaults that call the
- * function stay raw SQL (for example `` sql`app_nanoid(16)` ``).
+ * `CREATE FUNCTION` / `DROP FUNCTION` only — body or signature changes are not
+ * migrated yet (drop and recreate). The body is opaque SQL Prisma does not
+ * validate. Overloaded names are unsupported (one physical name per namespace).
+ * Column defaults that call the function stay raw SQL (for example
+ * `` sql`app_nanoid(16)` ``).
  */
 export function pgFunction(input: {
   readonly name: string;
