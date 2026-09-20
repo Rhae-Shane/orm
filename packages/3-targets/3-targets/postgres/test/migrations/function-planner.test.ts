@@ -223,6 +223,7 @@ describe('functionIdentitySignature', () => {
   it('does not treat DEFAULT as a substring of an identifier', () => {
     expect(functionIdentitySignature('mydefault int')).toBe('mydefault int');
     expect(functionIdentitySignature('size int DEFAULTED 16')).toBe('size int DEFAULTED 16');
+    expect(functionIdentitySignature('éDEFAULT int')).toBe('éDEFAULT int');
   });
 
   it('strips modes and omits OUT arguments from identity', () => {
@@ -245,6 +246,7 @@ describe('functionIdentitySignature', () => {
 
   it('does not treat $ inside an identifier as a dollar-quote delimiter', () => {
     expect(functionIdentitySignature('foo$tag$ int DEFAULT 1')).toBe('foo$tag$ int');
+    expect(functionIdentitySignature('é$tag$ int DEFAULT 1')).toBe('é$tag$ int');
   });
 
   it('treats doubled quotes inside double-quoted identifiers as escapes', () => {

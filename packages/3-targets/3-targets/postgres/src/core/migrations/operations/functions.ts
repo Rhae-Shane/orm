@@ -11,6 +11,11 @@ const ARG_MODE = /^(IN|OUT|INOUT|VARIADIC)\b/i;
 /** Tag body in `$tag$…$tag$` — empty tag is `$$…$$`. */
 const DOLLAR_TAG = /^\$([A-Za-z_][A-Za-z0-9_]*)?\$/;
 
+/** Postgres identifier characters, including non-ASCII letters (SQL Unicode). */
+function isPostgresIdentifierChar(ch: string): boolean {
+  return /[\p{L}\p{N}_$]/u.test(ch);
+}
+
 function qualifiedFunctionName(schemaName: string, functionName: string): string {
   const schema = boundSchema(schemaName);
   return schema === undefined ? quoteIdentifier(functionName) : qualifyName(schema, functionName);
@@ -24,7 +29,7 @@ function qualifiedFunctionName(schemaName: string, functionName: string): string
  */
 function skipDollarQuoted(text: string, index: number): number | undefined {
   if (text[index] !== '$') return undefined;
-  if (index > 0 && /[\w$]/i.test(text[index - 1]!)) return undefined;
+  if (index > 0 && isPostgresIdentifierChar(text[index - 1]!)) return undefined;
   const open = DOLLAR_TAG.exec(text.slice(index));
   if (open === null) return undefined;
   const closer = open[0];
@@ -113,7 +118,7 @@ function stripDefaultClause(arg: string): string {
     if (depth !== 0) continue;
     if (ch === '=') return arg.slice(0, i).trim();
     // Require a left token boundary so identifiers like `mydefault` are not cut.
-    if ((i === 0 || !/[\w$]/i.test(arg[i - 1]!)) && /^DEFAULT\b/i.test(arg.slice(i))) {
+    if ((i === 0 || !isPostgresIdentifierChar(arg[i - 1]!)) && /^DEFAULT\b/i.test(arg.slice(i))) {
       return arg.slice(0, i).trim();
     }
   }
