@@ -889,9 +889,9 @@ function isPolicyDiffIssue(issue: SchemaDiffIssue<SqlSchemaDiffNode>): boolean {
 }
 
 /**
- * Drops a `not-expected` issue when it is a whole extra storage entity (a table
- * or a native enum) that some space in the composition owns. Each such node
- * yields its own storage coordinate (see {@link postgresNodeStorageCoordinate}),
+ * Drops a `not-expected` issue when it is a whole extra storage entity (a table,
+ * native enum, or function) that some space in the composition owns. Each such
+ * node yields its own storage coordinate (see {@link postgresNodeStorageCoordinate}),
  * so `declaresEntity` answers over the whole composition on one uniform
  * coordinate: a positive answer means a sibling owns this entity here — leave
  * it; a negative answer means a genuine orphan — drop it. A node with no storage

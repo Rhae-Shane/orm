@@ -229,7 +229,7 @@ export function resolvePostgresCallControlPolicySubject(
 
 /**
  * Node kinds whose *absence* is the creation of a whole, top-level Postgres
- * object: a namespace, a table, or a native enum. Used by
+ * object: a namespace, a table, a native enum, or a function. Used by
  * {@link resolvePostgresNodeIssueCreationFactoryName} to decide whether a
  * `tolerated` subject permits the issue to flow into the planner
  * (create-if-absent) and to seed the suppressed-subject warning's
