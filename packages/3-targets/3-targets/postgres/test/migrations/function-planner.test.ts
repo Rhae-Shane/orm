@@ -243,6 +243,17 @@ describe('functionIdentitySignature', () => {
     expect(functionIdentitySignature('a text DEFAULT $tag$a,b$tag$, b int')).toBe('a text, b int');
   });
 
+  it('does not treat $ inside an identifier as a dollar-quote delimiter', () => {
+    expect(functionIdentitySignature('foo$tag$ int DEFAULT 1')).toBe('foo$tag$ int');
+  });
+
+  it('treats doubled quotes inside double-quoted identifiers as escapes', () => {
+    expect(functionIdentitySignature('"a"",""b" int DEFAULT 1, c text')).toBe(
+      '"a"",""b" int, c text',
+    );
+    expect(functionIdentitySignature('"a,b" int, c text')).toBe('"a,b" int, c text');
+  });
+
   it('returns empty for zero-arg and OUT-only declarations', () => {
     expect(functionIdentitySignature('')).toBe('');
     expect(functionIdentitySignature('OUT b text')).toBe('');

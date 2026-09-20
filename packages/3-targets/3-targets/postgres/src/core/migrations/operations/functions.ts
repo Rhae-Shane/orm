@@ -19,9 +19,12 @@ function qualifiedFunctionName(schemaName: string, functionName: string): string
 /**
  * If `text` starts a Postgres dollar-quote at `index`, returns the index just
  * past the closing delimiter; otherwise `undefined`.
+ * Delimiters immediately after an identifier character (e.g. `foo$tag$`) are
+ * not dollar quotes.
  */
 function skipDollarQuoted(text: string, index: number): number | undefined {
   if (text[index] !== '$') return undefined;
+  if (index > 0 && /[\w$]/i.test(text[index - 1]!)) return undefined;
   const open = DOLLAR_TAG.exec(text.slice(index));
   if (open === null) return undefined;
   const closer = open[0];
@@ -40,7 +43,7 @@ function splitTopLevelArgs(signature: string): string[] {
     const ch = signature[i]!;
     if (quote !== null) {
       if (ch === quote) {
-        if (quote === "'" && signature[i + 1] === "'") {
+        if ((quote === "'" || quote === '"') && signature[i + 1] === quote) {
           i++;
           continue;
         }
@@ -82,7 +85,7 @@ function stripDefaultClause(arg: string): string {
     const ch = arg[i]!;
     if (quote !== null) {
       if (ch === quote) {
-        if (quote === "'" && arg[i + 1] === "'") {
+        if ((quote === "'" || quote === '"') && arg[i + 1] === quote) {
           i++;
           continue;
         }

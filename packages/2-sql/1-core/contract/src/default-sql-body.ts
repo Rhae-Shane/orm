@@ -9,9 +9,9 @@ const UNSAFE_DEFAULT_BODY = /;|--|\/\*|\$\$|\bSELECT\b/i;
  * identifiers; quoted ones are case-sensitive). Bare names stay case-insensitive.
  */
 const CLIENT_GENERATOR_QUOTED =
-  /^\s*(?:(?:"[^"]+"|[A-Za-z_][\w$]*)\s*\.\s*)?"(nanoid|uuid|cuid|ulid)"\s*\([^;]*\)\s*$/;
+  /^\s*(?:(?:"(?:[^"]|"")+"|[A-Za-z_][\w$]*)\s*\.\s*)?"(nanoid|uuid|cuid|ulid)"\s*\([^;]*\)\s*$/;
 const CLIENT_GENERATOR_BARE =
-  /^\s*(?:(?:"[^"]+"|[A-Za-z_][\w$]*)\s*\.\s*)?(nanoid|uuid|cuid|ulid)\s*\([^;]*\)\s*$/i;
+  /^\s*(?:(?:"(?:[^"]|"")+"|[A-Za-z_][\w$]*)\s*\.\s*)?(nanoid|uuid|cuid|ulid)\s*\([^;]*\)\s*$/i;
 
 /** Returns undefined when the body may be rendered as `DEFAULT (<body>)`, else the reason. */
 export function checkSqlDefaultBody(body: string): string | undefined {

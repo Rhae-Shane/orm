@@ -39,6 +39,10 @@ describe('clientGeneratorSqlDefaultBody', () => {
     ['public . nanoid(16)', 'nanoid'],
     ['public. nanoid(16)', 'nanoid'],
     ['"public" . "cuid"(2)', 'cuid'],
+    ['"app""id".nanoid(16)', 'nanoid'],
+    ['"app""id"."nanoid"(16)', 'nanoid'],
+    ['"public" . nanoid(16)', 'nanoid'],
+    ['public . "nanoid"(16)', 'nanoid'],
   ])('matches %j', (body, name) => {
     expect(clientGeneratorSqlDefaultBody(body)).toBe(name);
   });
