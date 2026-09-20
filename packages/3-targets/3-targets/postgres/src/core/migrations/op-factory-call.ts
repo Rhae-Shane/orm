@@ -1627,7 +1627,7 @@ export class DropFunctionCall extends PostgresOpFactoryCallNode {
   readonly operationClass = 'destructive' as const;
   readonly schemaName: string;
   readonly functionName: string;
-  /** Identity signature for DROP (input types only). */
+  /** Identity signature for DROP (defaults/modes stripped, OUT omitted). */
   readonly signature: string;
   readonly label: string;
 

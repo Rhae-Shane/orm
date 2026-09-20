@@ -4,9 +4,14 @@ const UNSAFE_DEFAULT_BODY = /;|--|\/\*|\$\$|\bSELECT\b/i;
  * Client-side Prisma generators that authors often paste into raw SQL defaults
  * by mistake. Allows an optional schema qualifier (quoted or bare) with
  * whitespace around the dot, and a quoted or bare generator name.
+ *
+ * Quoted generator names are exact lowercase only (Postgres folds unquoted
+ * identifiers; quoted ones are case-sensitive). Bare names stay case-insensitive.
  */
-const CLIENT_GENERATOR_CALL =
-  /^\s*(?:(?:"[^"]+"|[A-Za-z_][\w$]*)\s*\.\s*)?(?:"(nanoid|uuid|cuid|ulid)"|(nanoid|uuid|cuid|ulid))\s*\([^;]*\)\s*$/i;
+const CLIENT_GENERATOR_QUOTED =
+  /^\s*(?:(?:"[^"]+"|[A-Za-z_][\w$]*)\s*\.\s*)?"(nanoid|uuid|cuid|ulid)"\s*\([^;]*\)\s*$/;
+const CLIENT_GENERATOR_BARE =
+  /^\s*(?:(?:"[^"]+"|[A-Za-z_][\w$]*)\s*\.\s*)?(nanoid|uuid|cuid|ulid)\s*\([^;]*\)\s*$/i;
 
 /** Returns undefined when the body may be rendered as `DEFAULT (<body>)`, else the reason. */
 export function checkSqlDefaultBody(body: string): string | undefined {
@@ -35,9 +40,9 @@ export function reservedSqlDefaultBody(body: string): 'now' | 'autoincrement' | 
  * the function; authors almost always meant `@default(nanoid(16))` instead.
  */
 export function clientGeneratorSqlDefaultBody(body: string): string | undefined {
-  const match = CLIENT_GENERATOR_CALL.exec(body);
-  const name = match?.[1] ?? match?.[2];
-  return name?.toLowerCase();
+  const quoted = CLIENT_GENERATOR_QUOTED.exec(body)?.[1];
+  if (quoted !== undefined) return quoted;
+  return CLIENT_GENERATOR_BARE.exec(body)?.[1]?.toLowerCase();
 }
 
 /** Fix hint shared by PSL and TypeScript when {@link clientGeneratorSqlDefaultBody} matches. */

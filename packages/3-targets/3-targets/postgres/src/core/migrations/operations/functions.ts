@@ -8,23 +8,27 @@ const BODY_DOLLAR_TAG = 'prisma_fn';
 
 const ARG_MODE = /^(IN|OUT|INOUT|VARIADIC)\b/i;
 
-/**
- * Postgres multi-word type names. Checked before stripping a leading arg name
- * so `double precision` is not treated as name `double` + type `precision`.
- */
-const MULTI_WORD_TYPES = [
-  'double precision',
-  'character varying',
-  'bit varying',
-  'time with time zone',
-  'time without time zone',
-  'timestamp with time zone',
-  'timestamp without time zone',
-] as const;
+/** Tag body in `$tag$…$tag$` — empty tag is `$$…$$`. */
+const DOLLAR_TAG = /^\$([A-Za-z_][A-Za-z0-9_]*)?\$/;
 
 function qualifiedFunctionName(schemaName: string, functionName: string): string {
   const schema = boundSchema(schemaName);
   return schema === undefined ? quoteIdentifier(functionName) : qualifyName(schema, functionName);
+}
+
+/**
+ * If `text` starts a Postgres dollar-quote at `index`, returns the index just
+ * past the closing delimiter; otherwise `undefined`.
+ */
+function skipDollarQuoted(text: string, index: number): number | undefined {
+  if (text[index] !== '$') return undefined;
+  const open = DOLLAR_TAG.exec(text.slice(index));
+  if (open === null) return undefined;
+  const closer = open[0];
+  const contentStart = index + closer.length;
+  const closeAt = text.indexOf(closer, contentStart);
+  if (closeAt < 0) return text.length;
+  return closeAt + closer.length;
 }
 
 function splitTopLevelArgs(signature: string): string[] {
@@ -42,6 +46,11 @@ function splitTopLevelArgs(signature: string): string[] {
         }
         quote = null;
       }
+      continue;
+    }
+    const afterDollar = skipDollarQuoted(signature, i);
+    if (afterDollar !== undefined) {
+      i = afterDollar - 1;
       continue;
     }
     if (ch === "'" || ch === '"') {
@@ -81,6 +90,11 @@ function stripDefaultClause(arg: string): string {
       }
       continue;
     }
+    const afterDollar = skipDollarQuoted(arg, i);
+    if (afterDollar !== undefined) {
+      i = afterDollar - 1;
+      continue;
+    }
     if (ch === "'" || ch === '"') {
       quote = ch;
       continue;
@@ -95,43 +109,19 @@ function stripDefaultClause(arg: string): string {
     }
     if (depth !== 0) continue;
     if (ch === '=') return arg.slice(0, i).trim();
-    if (/^DEFAULT\b/i.test(arg.slice(i))) return arg.slice(0, i).trim();
+    // Require a left token boundary so identifiers like `mydefault` are not cut.
+    if ((i === 0 || !/[\w$]/i.test(arg[i - 1]!)) && /^DEFAULT\b/i.test(arg.slice(i))) {
+      return arg.slice(0, i).trim();
+    }
   }
   return arg.trim();
 }
 
-function matchesMultiWordType(typeText: string): boolean {
-  const lower = typeText.toLowerCase();
-  return MULTI_WORD_TYPES.some(
-    (name) => lower === name || lower.startsWith(`${name}[`) || lower.startsWith(`${name}(`),
-  );
-}
-
-function stripLeadingArgName(argBody: string): string {
-  const trimmed = argBody.trim();
-  if (trimmed === '' || matchesMultiWordType(trimmed)) return trimmed;
-
-  for (const name of MULTI_WORD_TYPES) {
-    const named = new RegExp(
-      `^(?:"[^"]+"|[A-Za-z_][A-Za-z0-9_$]*)\\s+(${name.replace(/ /g, '\\s+')}(?:\\s*(?:\\[[^\\]]*\\]|\\([^)]*\\)))*)$`,
-      'i',
-    );
-    const match = named.exec(trimmed);
-    if (match?.[1] !== undefined) return match[1]!.replace(/\s+/g, ' ').trim();
-  }
-
-  const simple = /^(?:"[^"]+"|[A-Za-z_][A-Za-z0-9_$]*)\s+(.+)$/s.exec(trimmed);
-  if (simple?.[1] !== undefined) {
-    const rest = simple[1]!.trim();
-    if (rest !== '') return rest;
-  }
-  return trimmed;
-}
-
 /**
- * Normalize a CREATE FUNCTION argument-list declaration into the identity
- * form Postgres accepts for DROP FUNCTION: input argument types only
- * (no names, modes, or DEFAULT clauses). OUT parameters are omitted.
+ * Normalize a CREATE FUNCTION argument-list declaration into the form Postgres
+ * accepts for DROP FUNCTION: defaults and modes removed, OUT args omitted.
+ * Argument names and full type expressions are kept so unnamed multi-word types
+ * are not mangled.
  */
 export function functionIdentitySignature(declarationSignature: string): string {
   const trimmed = declarationSignature.trim();
@@ -150,7 +140,7 @@ export function functionIdentitySignature(declarationSignature: string): string 
     }
     if (mode === 'OUT' || body === '') continue;
 
-    types.push(stripLeadingArgName(body));
+    types.push(body);
   }
   return types.join(', ');
 }
@@ -212,7 +202,7 @@ export function createFunction(options: {
  * `tolerated` / `observed` subjects and for entities another space owns.
  *
  * `signature` may be the CREATE declaration; DROP SQL uses the normalized
- * {@link functionIdentitySignature} form (input types only).
+ * {@link functionIdentitySignature} form (defaults/modes stripped, OUT omitted).
  */
 export function dropFunction(options: {
   readonly schemaName: string;

@@ -194,42 +194,53 @@ describe('Postgres function migration planning', () => {
     expect(a.isEqualTo(b)).toBe(true);
   });
 
-  it('renders DROP FUNCTION with identity types only (no names, modes, or DEFAULT)', () => {
+  it('renders DROP FUNCTION without DEFAULT clauses (identity keeps arg names + types)', () => {
     const op = dropFunction({
       schemaName: 'public',
       functionName: 'app_nanoid',
       signature: 'size int DEFAULT 16',
     });
-    expect(op.execute[0]?.sql).toBe('DROP FUNCTION "public"."app_nanoid"(int);');
+    expect(op.execute[0]?.sql).toBe('DROP FUNCTION "public"."app_nanoid"(size int);');
   });
 
   it('DropFunctionCall normalizes the declaration signature for DROP SQL and TS render', async () => {
     const call = new DropFunctionCall('public', 'app_nanoid', 'size int DEFAULT 16');
-    expect(call.signature).toBe('int');
+    expect(call.signature).toBe('size int');
     expect(call.renderTypeScript()).toBe(
-      'this.dropFunction({ schema: "public", functionName: "app_nanoid", signature: "int" })',
+      'this.dropFunction({ schema: "public", functionName: "app_nanoid", signature: "size int" })',
     );
     const op = await call.toOp();
-    expect(op.execute[0]?.sql).toBe('DROP FUNCTION "public"."app_nanoid"(int);');
+    expect(op.execute[0]?.sql).toBe('DROP FUNCTION "public"."app_nanoid"(size int);');
   });
 });
 
 describe('functionIdentitySignature', () => {
-  it('strips argument names and DEFAULT clauses', () => {
-    expect(functionIdentitySignature('size int DEFAULT 16')).toBe('int');
-    expect(functionIdentitySignature("a int = 1, b text DEFAULT 'x'")).toBe('int, text');
+  it('strips DEFAULT clauses and keeps names with types', () => {
+    expect(functionIdentitySignature('size int DEFAULT 16')).toBe('size int');
+    expect(functionIdentitySignature("a int = 1, b text DEFAULT 'x'")).toBe('a int, b text');
+  });
+
+  it('does not treat DEFAULT as a substring of an identifier', () => {
+    expect(functionIdentitySignature('mydefault int')).toBe('mydefault int');
+    expect(functionIdentitySignature('size int DEFAULTED 16')).toBe('size int DEFAULTED 16');
   });
 
   it('strips modes and omits OUT arguments from identity', () => {
-    expect(functionIdentitySignature('IN a int, OUT b text, INOUT c int')).toBe('int, int');
-    expect(functionIdentitySignature('VARIADIC arr int[]')).toBe('int[]');
+    expect(functionIdentitySignature('IN a int, OUT b text, INOUT c int')).toBe('a int, c int');
+    expect(functionIdentitySignature('VARIADIC arr int[]')).toBe('arr int[]');
   });
 
-  it('preserves unnamed and multi-word types', () => {
+  it('preserves unnamed and multi-word types intact', () => {
     expect(functionIdentitySignature('int')).toBe('int');
     expect(functionIdentitySignature('double precision')).toBe('double precision');
-    expect(functionIdentitySignature('x double precision')).toBe('double precision');
-    expect(functionIdentitySignature('n numeric(10, 2)')).toBe('numeric(10, 2)');
+    expect(functionIdentitySignature('x double precision')).toBe('x double precision');
+    expect(functionIdentitySignature('n numeric(10, 2)')).toBe('n numeric(10, 2)');
+    expect(functionIdentitySignature('interval day to second')).toBe('interval day to second');
+  });
+
+  it('ignores commas inside dollar-quoted DEFAULT values', () => {
+    expect(functionIdentitySignature('a text DEFAULT $$x,y$$, b int')).toBe('a text, b int');
+    expect(functionIdentitySignature('a text DEFAULT $tag$a,b$tag$, b int')).toBe('a text, b int');
   });
 
   it('returns empty for zero-arg and OUT-only declarations', () => {

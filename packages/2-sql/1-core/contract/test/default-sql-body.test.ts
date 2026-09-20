@@ -28,6 +28,7 @@ describe('clientGeneratorSqlDefaultBody', () => {
   it.each([
     ['nanoid()', 'nanoid'],
     ['nanoid(16)', 'nanoid'],
+    ['NANOID(16)', 'nanoid'],
     [' uuid(7) ', 'uuid'],
     ['cuid(2)', 'cuid'],
     ['ulid()', 'ulid'],
@@ -46,6 +47,9 @@ describe('clientGeneratorSqlDefaultBody', () => {
     ['gen_random_uuid()'],
     ['app_nanoid(16)'],
     ['"app_nanoid"(16)'],
+    ['"NANOID"(16)'],
+    ['"NanoId"(16)'],
+    ['"public"."NANOID"(16)'],
     ['NOW()'],
     ['random()'],
     [''],
