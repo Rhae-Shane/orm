@@ -177,6 +177,21 @@ describe('createPostgresDefaultFunctionRegistry', () => {
     expect(result).toMatchObject({ ok: false });
   });
 
+  it.each([['nanoid(16)'], ['"nanoid"(16)'], ['public . nanoid(16)'], ['"public"."nanoid"(16)']])(
+    'rejects dbgenerated(%j) as a client-generator lookalike',
+    (expression) => {
+      const handler = registry.get('dbgenerated')!;
+      const result = handler.lower({
+        call: makeCall('dbgenerated', { expression }),
+        context: stubContext,
+      });
+      expect(result).toMatchObject({
+        ok: false,
+        diagnostic: { code: 'PSL_RAW_DEFAULT_LOOKS_LIKE_CLIENT_GENERATOR' },
+      });
+    },
+  );
+
   describe('dbgenerated keeps the raw expression verbatim, never resolving it', () => {
     // `lowerDbgenerated` must not resolve the raw SQL text — a literal-shaped
     // expression (e.g. `'{}'::jsonb`) is normalized once, at SchemaIR

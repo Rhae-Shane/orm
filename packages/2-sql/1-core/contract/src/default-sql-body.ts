@@ -1,7 +1,12 @@
 const UNSAFE_DEFAULT_BODY = /;|--|\/\*|\$\$|\bSELECT\b/i;
 
-/** Client-side Prisma generators that authors often paste into raw SQL defaults by mistake. */
-const CLIENT_GENERATOR_CALL = /^\s*(?:[A-Za-z_][\w$]*\.)?(nanoid|uuid|cuid|ulid)\s*\([^;]*\)\s*$/i;
+/**
+ * Client-side Prisma generators that authors often paste into raw SQL defaults
+ * by mistake. Allows an optional schema qualifier (quoted or bare) with
+ * whitespace around the dot, and a quoted or bare generator name.
+ */
+const CLIENT_GENERATOR_CALL =
+  /^\s*(?:(?:"[^"]+"|[A-Za-z_][\w$]*)\s*\.\s*)?(?:"(nanoid|uuid|cuid|ulid)"|(nanoid|uuid|cuid|ulid))\s*\([^;]*\)\s*$/i;
 
 /** Returns undefined when the body may be rendered as `DEFAULT (<body>)`, else the reason. */
 export function checkSqlDefaultBody(body: string): string | undefined {
@@ -31,7 +36,8 @@ export function reservedSqlDefaultBody(body: string): 'now' | 'autoincrement' | 
  */
 export function clientGeneratorSqlDefaultBody(body: string): string | undefined {
   const match = CLIENT_GENERATOR_CALL.exec(body);
-  return match?.[1]?.toLowerCase();
+  const name = match?.[1] ?? match?.[2];
+  return name?.toLowerCase();
 }
 
 /** Fix hint shared by PSL and TypeScript when {@link clientGeneratorSqlDefaultBody} matches. */

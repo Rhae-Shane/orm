@@ -184,6 +184,12 @@ describe('interpretPslDocumentToSqlContract tagged literal defaults', () => {
     ]);
   });
 
+  it('rejects a quoted client-generator lookalike in a raw SQL default', () => {
+    expect(diagnostics('v String @default(sql`"nanoid"(16)`)')).toEqual([
+      expect.objectContaining({ code: 'PSL_RAW_DEFAULT_LOOKS_LIKE_CLIENT_GENERATOR' }),
+    ]);
+  });
+
   it('still rejects a client-side generator on a list column', () => {
     expect(diagnostics('tags String[] @default(uuid())')).toEqual([
       expect.objectContaining({ code: 'PSL_LIST_EXECUTION_DEFAULT_UNSUPPORTED' }),

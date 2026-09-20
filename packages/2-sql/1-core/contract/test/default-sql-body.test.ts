@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { reservedSqlDefaultBody } from '../src/default-sql-body';
+import { clientGeneratorSqlDefaultBody, reservedSqlDefaultBody } from '../src/default-sql-body';
 
 describe('reservedSqlDefaultBody', () => {
   it.each([
@@ -21,5 +21,35 @@ describe('reservedSqlDefaultBody', () => {
     [''],
   ])('passes %j as raw SQL', (body) => {
     expect(reservedSqlDefaultBody(body)).toBeUndefined();
+  });
+});
+
+describe('clientGeneratorSqlDefaultBody', () => {
+  it.each([
+    ['nanoid()', 'nanoid'],
+    ['nanoid(16)', 'nanoid'],
+    [' uuid(7) ', 'uuid'],
+    ['cuid(2)', 'cuid'],
+    ['ulid()', 'ulid'],
+    ['public.nanoid(16)', 'nanoid'],
+    ['"nanoid"(16)', 'nanoid'],
+    ['"uuid"()', 'uuid'],
+    ['"public"."nanoid"(16)', 'nanoid'],
+    ['public . nanoid(16)', 'nanoid'],
+    ['public. nanoid(16)', 'nanoid'],
+    ['"public" . "cuid"(2)', 'cuid'],
+  ])('matches %j', (body, name) => {
+    expect(clientGeneratorSqlDefaultBody(body)).toBe(name);
+  });
+
+  it.each([
+    ['gen_random_uuid()'],
+    ['app_nanoid(16)'],
+    ['"app_nanoid"(16)'],
+    ['NOW()'],
+    ['random()'],
+    [''],
+  ])('ignores %j', (body) => {
+    expect(clientGeneratorSqlDefaultBody(body)).toBeUndefined();
   });
 });

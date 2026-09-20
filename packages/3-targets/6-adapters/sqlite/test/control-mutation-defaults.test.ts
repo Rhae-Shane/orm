@@ -78,6 +78,20 @@ describe('createSqliteDefaultFunctionRegistry — dbgenerated canonicalization',
       value: { kind: 'storage', defaultValue: { kind: 'function', expression: 'random()' } },
     });
   });
+
+  it.each([['nanoid(16)'], ['"nanoid"(16)'], ['public . nanoid(16)'], ['"public"."nanoid"(16)']])(
+    'rejects dbgenerated(%j) as a client-generator lookalike',
+    (expression) => {
+      const result = dbgenerated.lower({
+        call: makeCall('dbgenerated', { expression }),
+        context: stubContext,
+      });
+      expect(result).toMatchObject({
+        ok: false,
+        diagnostic: { code: 'PSL_RAW_DEFAULT_LOOKS_LIKE_CLIENT_GENERATOR' },
+      });
+    },
+  );
 });
 
 describe('createSqliteDefaultLiteralTagRegistry', () => {

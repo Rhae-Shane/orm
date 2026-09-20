@@ -6,9 +6,13 @@ import { coalesceSubtreeIssues, planIssues } from '../../src/core/migrations/iss
 import {
   CreateFunctionCall,
   CreateTableCall,
-  type PostgresOpFactoryCall,
+  DropFunctionCall,
 } from '../../src/core/migrations/op-factory-call';
-import { createFunction } from '../../src/core/migrations/operations/functions';
+import {
+  createFunction,
+  dropFunction,
+  functionIdentitySignature,
+} from '../../src/core/migrations/operations/functions';
 import { PostgresFunction } from '../../src/core/postgres-function';
 import { PostgresSchema } from '../../src/core/postgres-schema';
 import { PostgresDatabaseSchemaNode } from '../../src/core/schema-ir/postgres-database-schema-node';
@@ -69,8 +73,8 @@ function makeContract(): Contract<SqlStorage> {
 }
 
 describe('Postgres function migration planning', () => {
-  it('plans CREATE FUNCTION before CREATE TABLE when both are missing', async () => {
-    const expected = buildPostgresPlanDiff({ contract: makeContract() }).expected;
+  it('plans CREATE FUNCTION before CREATE TABLE when both are missing', () => {
+    const contract = makeContract();
     const actual = new PostgresDatabaseSchemaNode({
       namespaces: {
         public: new PostgresNamespaceSchemaNode({
@@ -79,21 +83,27 @@ describe('Postgres function migration planning', () => {
           functions: [],
         }),
       },
-      roles: {},
+      roles: [],
       existingSchemas: ['public'],
       pgVersion: '',
     });
-    const issues = coalesceSubtreeIssues(
-      buildPostgresPlanDiff({ contract: makeContract(), actual }).issues,
-    );
-    const result = await planIssues(issues, {
-      expected,
-      actual,
+    const { issues } = buildPostgresPlanDiff({
+      contract,
+      actualSchema: actual,
+      frameworkComponents: [],
+    });
+    const result = planIssues({
+      issues: coalesceSubtreeIssues(issues),
+      toContract: contract,
+      fromContract: null,
+      schemaName: 'public',
       codecHooks: new Map(),
+      storageTypes: contract.storage.types ?? {},
+      strategies: [],
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    const calls = result.value as readonly PostgresOpFactoryCall[];
+    const calls = result.value.calls;
     const createFunctionIdx = calls.findIndex((call) => call instanceof CreateFunctionCall);
     const createTableIdx = calls.findIndex((call) => call instanceof CreateTableCall);
     expect(createFunctionIdx).toBeGreaterThanOrEqual(0);
@@ -119,8 +129,8 @@ describe('Postgres function migration planning', () => {
     expect(sql).toContain(APP_NANOID_BODY);
   });
 
-  it('rejects not-equal function drift instead of planning CREATE OR REPLACE', async () => {
-    const expected = buildPostgresPlanDiff({ contract: makeContract() }).expected;
+  it('rejects not-equal function drift instead of planning CREATE OR REPLACE', () => {
+    const contract = makeContract();
     const actualFn = new PostgresFunctionSchemaNode({
       functionName: 'app_nanoid',
       namespaceId: 'public',
@@ -138,21 +148,27 @@ describe('Postgres function migration planning', () => {
           functions: [actualFn],
         }),
       },
-      roles: {},
+      roles: [],
       existingSchemas: ['public'],
       pgVersion: '',
     });
-    const issues = coalesceSubtreeIssues(
-      buildPostgresPlanDiff({ contract: makeContract(), actual }).issues,
-    );
-    const result = await planIssues(issues, {
-      expected,
-      actual,
+    const { issues } = buildPostgresPlanDiff({
+      contract,
+      actualSchema: actual,
+      frameworkComponents: [],
+    });
+    const result = planIssues({
+      issues: coalesceSubtreeIssues(issues),
+      toContract: contract,
+      fromContract: null,
+      schemaName: 'public',
       codecHooks: new Map(),
+      storageTypes: contract.storage.types ?? {},
+      strategies: [],
     });
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error.summary).toMatch(/not supported yet|drop and recreate/i);
+    expect(result.failure[0]?.summary).toMatch(/not supported yet|drop and recreate/i);
   });
 
   it('diff equality ignores control and matches authored fields', () => {
@@ -176,5 +192,48 @@ describe('Postgres function migration planning', () => {
       control: 'managed',
     });
     expect(a.isEqualTo(b)).toBe(true);
+  });
+
+  it('renders DROP FUNCTION with identity types only (no names, modes, or DEFAULT)', () => {
+    const op = dropFunction({
+      schemaName: 'public',
+      functionName: 'app_nanoid',
+      signature: 'size int DEFAULT 16',
+    });
+    expect(op.execute[0]?.sql).toBe('DROP FUNCTION "public"."app_nanoid"(int);');
+  });
+
+  it('DropFunctionCall normalizes the declaration signature for DROP SQL and TS render', async () => {
+    const call = new DropFunctionCall('public', 'app_nanoid', 'size int DEFAULT 16');
+    expect(call.signature).toBe('int');
+    expect(call.renderTypeScript()).toBe(
+      'this.dropFunction({ schema: "public", functionName: "app_nanoid", signature: "int" })',
+    );
+    const op = await call.toOp();
+    expect(op.execute[0]?.sql).toBe('DROP FUNCTION "public"."app_nanoid"(int);');
+  });
+});
+
+describe('functionIdentitySignature', () => {
+  it('strips argument names and DEFAULT clauses', () => {
+    expect(functionIdentitySignature('size int DEFAULT 16')).toBe('int');
+    expect(functionIdentitySignature("a int = 1, b text DEFAULT 'x'")).toBe('int, text');
+  });
+
+  it('strips modes and omits OUT arguments from identity', () => {
+    expect(functionIdentitySignature('IN a int, OUT b text, INOUT c int')).toBe('int, int');
+    expect(functionIdentitySignature('VARIADIC arr int[]')).toBe('int[]');
+  });
+
+  it('preserves unnamed and multi-word types', () => {
+    expect(functionIdentitySignature('int')).toBe('int');
+    expect(functionIdentitySignature('double precision')).toBe('double precision');
+    expect(functionIdentitySignature('x double precision')).toBe('double precision');
+    expect(functionIdentitySignature('n numeric(10, 2)')).toBe('numeric(10, 2)');
+  });
+
+  it('returns empty for zero-arg and OUT-only declarations', () => {
+    expect(functionIdentitySignature('')).toBe('');
+    expect(functionIdentitySignature('OUT b text')).toBe('');
   });
 });

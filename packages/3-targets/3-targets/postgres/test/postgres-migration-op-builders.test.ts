@@ -73,6 +73,26 @@ class ExposedMigration extends PostgresMigration<Contract, Contract> {
     return this.dropNativeEnumType(options);
   }
 
+  callCreateFunction(options: {
+    readonly schema: string;
+    readonly functionName: string;
+    readonly signature: string;
+    readonly returns: string;
+    readonly body: string;
+    readonly language: string;
+    readonly volatility: 'VOLATILE' | 'STABLE' | 'IMMUTABLE';
+  }): Promise<Op> {
+    return this.createFunction(options);
+  }
+
+  callDropFunction(options: {
+    readonly schema: string;
+    readonly functionName: string;
+    readonly signature: string;
+  }): Promise<Op> {
+    return this.dropFunction(options);
+  }
+
   callAddNativeEnumValue(options: {
     readonly schema: string;
     readonly typeName: string;
@@ -268,6 +288,28 @@ const cases: ReadonlyArray<{
     run: (m) => m.callDropNativeEnumType({ schema: 'public', typeName: 'color' }),
   },
   {
+    name: 'createFunction',
+    run: (m) =>
+      m.callCreateFunction({
+        schema: 'public',
+        functionName: 'app_nanoid',
+        signature: 'size int DEFAULT 16',
+        returns: 'text',
+        body: 'RETURN null;',
+        language: 'plpgsql',
+        volatility: 'STABLE',
+      }),
+  },
+  {
+    name: 'dropFunction',
+    run: (m) =>
+      m.callDropFunction({
+        schema: 'public',
+        functionName: 'app_nanoid',
+        signature: 'size int DEFAULT 16',
+      }),
+  },
+  {
     name: 'addNativeEnumValue',
     run: (m) => m.callAddNativeEnumValue({ schema: 'public', typeName: 'color', value: 'blue' }),
   },
@@ -424,6 +466,7 @@ describe('PostgresMigration op-builder methods without a ControlStack', () => {
         'addPrimaryKey',
         'addUnique',
         'alterColumnType',
+        'createFunction',
         'createIndex',
         'createNativeEnumType',
         'createSchema',
@@ -433,6 +476,7 @@ describe('PostgresMigration op-builder methods without a ControlStack', () => {
         'dropColumn',
         'dropConstraint',
         'dropDefault',
+        'dropFunction',
         'dropIndex',
         'dropNativeEnumType',
         'dropNotNull',

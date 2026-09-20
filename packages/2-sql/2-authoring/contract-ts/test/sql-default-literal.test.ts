@@ -106,6 +106,14 @@ describe('sql template tag', () => {
     );
   });
 
+  it('rejects a quoted client-generator lookalike', () => {
+    expect(() => sql`"nanoid"(16)`).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.DEFAULT_LOOKS_LIKE_CLIENT_GENERATOR',
+      }),
+    );
+  });
+
   it('rejects a body the SQL check refuses with CONTRACT.DEFAULT_INVALID', () => {
     expect(() => sql`x; drop table t`).toThrow(
       expect.objectContaining({

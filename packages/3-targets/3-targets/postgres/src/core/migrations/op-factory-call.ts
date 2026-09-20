@@ -76,7 +76,7 @@ import {
   renameCheckConstraint,
 } from './operations/constraints';
 import { createExtension } from './operations/dependencies';
-import { createFunction, dropFunction } from './operations/functions';
+import { createFunction, dropFunction, functionIdentitySignature } from './operations/functions';
 import {
   type CreateIndexElements,
   type CreateIndexExtras,
@@ -1627,14 +1627,15 @@ export class DropFunctionCall extends PostgresOpFactoryCallNode {
   readonly operationClass = 'destructive' as const;
   readonly schemaName: string;
   readonly functionName: string;
+  /** Identity signature for DROP (input types only). */
   readonly signature: string;
   readonly label: string;
 
-  constructor(schemaName: string, functionName: string, signature: string) {
+  constructor(schemaName: string, functionName: string, declarationSignature: string) {
     super();
     this.schemaName = schemaName;
     this.functionName = functionName;
-    this.signature = signature;
+    this.signature = functionIdentitySignature(declarationSignature);
     this.label = `Drop function "${functionName}"`;
     this.freeze();
   }

@@ -235,7 +235,7 @@ export abstract class PostgresMigration<
       body: options.body,
       language: options.language,
       volatility: options.volatility,
-    }).toOp();
+    }).toOp(this.controlAdapterFor('createFunction'));
   }
 
   protected dropFunction(options: {
@@ -243,7 +243,9 @@ export abstract class PostgresMigration<
     readonly functionName: string;
     readonly signature: string;
   }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
-    return new DropFunctionCall(options.schema, options.functionName, options.signature).toOp();
+    return new DropFunctionCall(options.schema, options.functionName, options.signature).toOp(
+      this.controlAdapterFor('dropFunction'),
+    );
   }
 
   /**

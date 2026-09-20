@@ -47,16 +47,24 @@ describe('clientGeneratorSqlDefaultBody', () => {
     ['cuid(2)', 'cuid'],
     ['ulid()', 'ulid'],
     ['public.nanoid(16)', 'nanoid'],
+    ['"nanoid"(16)', 'nanoid'],
+    ['"public"."nanoid"(16)', 'nanoid'],
+    ['public . nanoid(16)', 'nanoid'],
+    ['public. nanoid(16)', 'nanoid'],
   ])('matches %j', (body, name) => {
     expect(clientGeneratorSqlDefaultBody(body)).toBe(name);
   });
 
-  it.each([['gen_random_uuid()'], ['app_nanoid(16)'], ['NOW()'], ['random()'], ['']])(
-    'ignores %j',
-    (body) => {
-      expect(clientGeneratorSqlDefaultBody(body)).toBeUndefined();
-    },
-  );
+  it.each([
+    ['gen_random_uuid()'],
+    ['app_nanoid(16)'],
+    ['"app_nanoid"(16)'],
+    ['NOW()'],
+    ['random()'],
+    [''],
+  ])('ignores %j', (body) => {
+    expect(clientGeneratorSqlDefaultBody(body)).toBeUndefined();
+  });
 });
 
 describe('sqlDefaultLiteralTagEntry', () => {
@@ -118,6 +126,9 @@ describe('sqlDefaultLiteralTagEntry', () => {
     ['cuid(2)'],
     ['ulid()'],
     ['public.nanoid(16)'],
+    ['"nanoid"(16)'],
+    ['"public"."nanoid"(16)'],
+    ['public . nanoid(16)'],
   ])('refuses client-generator lookalike %s', (body) => {
     const result = entry.lower({ literal: { tag: 'sql', body, span }, context });
     expect(result).toMatchObject({
