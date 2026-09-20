@@ -1,5 +1,6 @@
 import type { ExecutionMutationDefaultValue } from '@internal/contract/types';
 import {
+  PSL_RAW_DEFAULT_LOOKS_LIKE_CLIENT_GENERATOR,
   sqlDefaultLiteralTagEntry,
   timestampNowControlDescriptor,
 } from '@internal/family-sql/control';
@@ -15,6 +16,10 @@ import type {
 import { builtinGeneratorRegistryMetadata } from '@internal/ids';
 import type { FuncCallSig } from '@internal/psl-parser';
 import { int, num, oneOf, optional, str } from '@internal/psl-parser';
+import {
+  clientGeneratorSqlDefaultBody,
+  clientGeneratorSqlDefaultMessage,
+} from '@internal/sql-contract/validators';
 import { PG_TIMESTAMPTZ_DATE_CODEC_ID } from '@internal/target-postgres/codec-ids';
 import {
   instantNowControlDescriptor,
@@ -112,6 +117,22 @@ function lowerDbgenerated(input: {
       span: input.call.span,
       message: 'Default function "dbgenerated" argument cannot be empty.',
     });
+  }
+  const clientGenerator = clientGeneratorSqlDefaultBody(expression);
+  if (clientGenerator !== undefined) {
+    return {
+      ok: false,
+      diagnostic: {
+        code: PSL_RAW_DEFAULT_LOOKS_LIKE_CLIENT_GENERATOR,
+        message: clientGeneratorSqlDefaultMessage({
+          generator: clientGenerator,
+          body: expression,
+          namedForm: `@default(${expression.trim()})`,
+        }),
+        sourceId: input.context.sourceId,
+        span: input.call.span,
+      },
+    };
   }
   return {
     ok: true,

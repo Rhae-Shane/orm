@@ -90,12 +90,20 @@ describe('sql template tag', () => {
     );
   });
 
-  it('passes NOW(), gen_random_uuid() and uuid() through verbatim', () => {
-    expect([sql`NOW()`, sql`gen_random_uuid()`, sql`uuid()`]).toEqual([
+  it('passes NOW(), gen_random_uuid() and app_nanoid(16) through verbatim', () => {
+    expect([sql`NOW()`, sql`gen_random_uuid()`, sql`app_nanoid(16)`]).toEqual([
       { kind: 'function', expression: 'NOW()' },
       { kind: 'function', expression: 'gen_random_uuid()' },
-      { kind: 'function', expression: 'uuid()' },
+      { kind: 'function', expression: 'app_nanoid(16)' },
     ]);
+  });
+
+  it('rejects a client-generator lookalike with CONTRACT.DEFAULT_LOOKS_LIKE_CLIENT_GENERATOR', () => {
+    expect(() => sql`nanoid(16)`).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.DEFAULT_LOOKS_LIKE_CLIENT_GENERATOR',
+      }),
+    );
   });
 
   it('rejects a body the SQL check refuses with CONTRACT.DEFAULT_INVALID', () => {

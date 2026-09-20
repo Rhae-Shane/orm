@@ -4,7 +4,12 @@ import {
   describeTaggedLiteralFailure,
   resolveTemplateTagEscapes,
 } from '@internal/framework-components/control';
-import { checkSqlDefaultBody, reservedSqlDefaultBody } from '@internal/sql-contract/validators';
+import {
+  checkSqlDefaultBody,
+  clientGeneratorSqlDefaultBody,
+  clientGeneratorSqlDefaultMessage,
+  reservedSqlDefaultBody,
+} from '@internal/sql-contract/validators';
 import { contractError } from './contract-errors';
 
 /**
@@ -37,6 +42,24 @@ export function sql(strings: TemplateStringsArray, ...values: readonly never[]):
       'CONTRACT.DEFAULT_INVALID',
       `Write .default(${reserved}()) instead of sql\`${reserved}()\`; ${reserved}() is a Prisma default function, not raw SQL.`,
       { meta: { reason: 'reserved-function', expression: canonical.body } },
+    );
+  }
+  const clientGenerator = clientGeneratorSqlDefaultBody(canonical.body);
+  if (clientGenerator !== undefined) {
+    throw contractError(
+      'CONTRACT.DEFAULT_LOOKS_LIKE_CLIENT_GENERATOR',
+      clientGeneratorSqlDefaultMessage({
+        generator: clientGenerator,
+        body: canonical.body,
+        namedForm: `.default(${canonical.body.trim()})`,
+      }),
+      {
+        meta: {
+          reason: 'client-generator',
+          expression: canonical.body,
+          generator: clientGenerator,
+        },
+      },
     );
   }
   const rejected = checkSqlDefaultBody(canonical.body);

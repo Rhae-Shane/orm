@@ -1,4 +1,7 @@
-import { checkSqlDefaultBody } from '@internal/sql-contract/validators';
+import {
+  checkSqlDefaultBody,
+  clientGeneratorSqlDefaultBody,
+} from '@internal/sql-contract/validators';
 import { describe, expect, it } from 'vitest';
 import { createBuiltinLikeControlMutationDefaults } from '../../2-authoring/contract-psl/test/fixtures';
 import { sqlDefaultLiteralTagEntry } from '../src/core/sql-default-literal-tag';
@@ -34,6 +37,26 @@ describe('checkSqlDefaultBody', () => {
   ])('rejects %s', (_name, body) => {
     expect(checkSqlDefaultBody(body)).toBe(REJECTION);
   });
+});
+
+describe('clientGeneratorSqlDefaultBody', () => {
+  it.each([
+    ['nanoid()', 'nanoid'],
+    ['nanoid(16)', 'nanoid'],
+    [' uuid(7) ', 'uuid'],
+    ['cuid(2)', 'cuid'],
+    ['ulid()', 'ulid'],
+    ['public.nanoid(16)', 'nanoid'],
+  ])('matches %j', (body, name) => {
+    expect(clientGeneratorSqlDefaultBody(body)).toBe(name);
+  });
+
+  it.each([['gen_random_uuid()'], ['app_nanoid(16)'], ['NOW()'], ['random()'], ['']])(
+    'ignores %j',
+    (body) => {
+      expect(clientGeneratorSqlDefaultBody(body)).toBeUndefined();
+    },
+  );
 });
 
 describe('sqlDefaultLiteralTagEntry', () => {
@@ -78,8 +101,8 @@ describe('sqlDefaultLiteralTagEntry', () => {
     });
   });
 
-  it.each([['NOW()'], ['gen_random_uuid()'], ['uuid()']])(
-    'lowers %s verbatim: only the exact texts now() and autoincrement() are reserved',
+  it.each([['NOW()'], ['gen_random_uuid()'], ['random()'], ['app_nanoid(16)']])(
+    'lowers %s verbatim: client generators are refused separately',
     (body) => {
       expect(entry.lower({ literal: { tag: 'sql', body, span }, context })).toEqual({
         ok: true,
@@ -87,6 +110,21 @@ describe('sqlDefaultLiteralTagEntry', () => {
       });
     },
   );
+
+  it.each([
+    ['uuid()'],
+    ['nanoid()'],
+    ['nanoid(16)'],
+    ['cuid(2)'],
+    ['ulid()'],
+    ['public.nanoid(16)'],
+  ])('refuses client-generator lookalike %s', (body) => {
+    const result = entry.lower({ literal: { tag: 'sql', body, span }, context });
+    expect(result).toMatchObject({
+      ok: false,
+      diagnostic: { code: 'PSL_RAW_DEFAULT_LOOKS_LIKE_CLIENT_GENERATOR', span },
+    });
+  });
 
   it('accepts a body that uses now() inside a larger expression', () => {
     expect(

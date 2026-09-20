@@ -68,6 +68,12 @@ import { generateId } from '@internal/ids/runtime';
 const value = generateId({ id: 'uuidv4' });
 ```
 
+## Client vs database defaults
+
+`nanoid()`, `uuid()`, `cuid()`, and `ulid()` are **client-side** generators: Prisma fills the value before the insert. They never require a Postgres function and never emit `DEFAULT` in migrations.
+
+A raw SQL default such as `` sql`nanoid(16)` `` or `@default(dbgenerated("nanoid(16)"))` means “call a database function named `nanoid`.” Postgres has no built-in `nanoid`, so migrate fails unless you create that function yourself (or declare a Postgres function entity — see [`projects/postgres-sql-functions`](../../../projects/postgres-sql-functions/spec.md)). Authoring refuses those lookalike raw defaults with `PSL_RAW_DEFAULT_LOOKS_LIKE_CLIENT_GENERATOR` / `CONTRACT.DEFAULT_LOOKS_LIKE_CLIENT_GENERATOR`.
+
 ## Related docs
 
 - [Data Contract](../../../docs/architecture%20docs/subsystems/1.%20Data%20Contract.md)

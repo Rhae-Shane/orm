@@ -583,6 +583,10 @@ A list column declares `@default(autoincrement())`: `Field "<Model>.<field>" is 
 
 A `` @default(sql`...`) `` body fails the SQL family's body check: `Default SQL must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.` (the rule the migration planners apply at DDL time, run at authoring time so it has a source span), or is exactly `now()` or `autoincrement()`: `` Write @default(now()) instead of sql`now()`; now() is a Prisma default function, not raw SQL. `` The message names the tag as written (`sql`, `pg.sql` or `sqlite.sql`). Reported at the literal.
 
+### PSL_RAW_DEFAULT_LOOKS_LIKE_CLIENT_GENERATOR
+
+A raw SQL default (`` @default(sql`...`) `` or `@default(dbgenerated("..."))`) is a bare call to a Prisma client-side ID generator (`nanoid`, `uuid`, `cuid`, or `ulid`, optionally schema-qualified). That expression would become `DEFAULT (nanoid(16))` in migrate without creating the function in Postgres, so apply fails. Write `@default(nanoid(16))` (or the matching named generator) so Prisma generates the value before insert, or declare a Postgres function entity and call a database function name that is not a Prisma generator (for example `app_nanoid(16)`). Reported at the literal or `dbgenerated` call. TypeScript `` sql`nanoid(16)` `` raises `CONTRACT.DEFAULT_LOOKS_LIKE_CLIENT_GENERATOR` with the same message.
+
 ## ORM
 
 ### ORM.AGGREGATE_OPERATION_RESERVED

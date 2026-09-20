@@ -93,6 +93,7 @@ export type {
 } from '../core/migrations/types';
 export {
   PSL_INVALID_DEFAULT_SQL,
+  PSL_RAW_DEFAULT_LOOKS_LIKE_CLIENT_GENERATOR,
   sqlDefaultLiteralTagEntry,
 } from '../core/sql-default-literal-tag';
 export {

@@ -173,9 +173,15 @@ describe('interpretPslDocumentToSqlContract tagged literal defaults', () => {
   it.each([
     ['NOW()', 'v DateTime @default(sql`NOW()`)'],
     ['gen_random_uuid()', 'v String @default(sql`gen_random_uuid()`)'],
-    ['uuid()', 'v String @default(sql`uuid()`)'],
+    ['app_nanoid(16)', 'v String @default(sql`app_nanoid(16)`)'],
   ])('lowers sql`%s` verbatim', (expression, fieldLine) => {
     expect(columnDefault(fieldLine, 'v')).toEqual({ kind: 'function', expression });
+  });
+
+  it('rejects a client-generator lookalike in a raw SQL default', () => {
+    expect(diagnostics('v String @default(sql`nanoid(16)`)')).toEqual([
+      expect.objectContaining({ code: 'PSL_RAW_DEFAULT_LOOKS_LIKE_CLIENT_GENERATOR' }),
+    ]);
   });
 
   it('still rejects a client-side generator on a list column', () => {
