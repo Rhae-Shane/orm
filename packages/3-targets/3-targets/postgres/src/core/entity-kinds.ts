@@ -1,9 +1,11 @@
 import type { EntityKindDescriptor } from '@internal/framework-components/ir';
+import { PostgresFunction, type PostgresFunctionInput } from './postgres-function';
 import { PostgresNativeEnum, type PostgresNativeEnumInput } from './postgres-native-enum';
 import { PostgresRlsEnablement, type PostgresRlsEnablementInput } from './postgres-rls-enablement';
 import { PostgresRlsPolicy } from './postgres-rls-policy';
 import { PostgresRole, type PostgresRoleInput } from './postgres-role';
 import {
+  PostgresFunctionSchema,
   PostgresNativeEnumSchema,
   PostgresRlsEnablementSchema,
   PostgresRlsPolicySchema,
@@ -39,4 +41,10 @@ export const nativeEnumEntityKind: EntityKindDescriptor<
   kind: 'native_enum',
   schema: PostgresNativeEnumSchema,
   construct: (input) => new PostgresNativeEnum(input),
+};
+
+export const functionEntityKind: EntityKindDescriptor<PostgresFunctionInput, PostgresFunction> = {
+  kind: 'function',
+  schema: PostgresFunctionSchema,
+  construct: (input) => new PostgresFunction(input),
 };

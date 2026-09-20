@@ -40,11 +40,13 @@ import {
 } from './codec-ids';
 import { postgresError } from './errors';
 import { postgresNowGeneratorIds } from './now-generators';
+import { PostgresFunction } from './postgres-function';
 import { PostgresNativeEnum } from './postgres-native-enum';
 import { PostgresRlsEnablement, type PostgresRlsEnablementInput } from './postgres-rls-enablement';
 import { PostgresRlsPolicy, type RlsPolicyOperation } from './postgres-rls-policy';
 import { PostgresRole } from './postgres-role';
 import {
+  PostgresFunctionSchema,
   PostgresNativeEnumSchema,
   PostgresRlsEnablementSchema,
   PostgresRlsPolicySchema,
@@ -406,6 +408,114 @@ function lowerNativeEnumFromBlock(
   return new PostgresNativeEnum({ typeName, members });
 }
 
+function lowerFunctionFromBlock(
+  block: PslExtensionBlock,
+  ctx: AuthoringEntityContext,
+): PostgresFunction | undefined {
+  const diagnostics = ctx.diagnostics;
+  const sourceId = ctx.sourceId ?? 'unknown';
+  const params = block.parameters ?? {};
+  const requiredString = (key: string): string | undefined => {
+    const value = params[key];
+    if (value === undefined || value.kind !== 'value' || typeof value.raw !== 'string') {
+      diagnostics?.push({
+        code: PSL_EXTENSION_INVALID_VALUE,
+        message: `function "${block.name}" requires parameter "${key}" as a string`,
+        sourceId,
+        span: block.span,
+      });
+      return undefined;
+    }
+    try {
+      const parsed: unknown = JSON.parse(value.raw);
+      if (typeof parsed !== 'string' || parsed.trim().length === 0) {
+        diagnostics?.push({
+          code: PSL_EXTENSION_INVALID_VALUE,
+          message: `function "${block.name}" parameter "${key}" must be a non-empty string`,
+          sourceId,
+          span: value.span,
+        });
+        return undefined;
+      }
+      return parsed;
+    } catch {
+      diagnostics?.push({
+        code: PSL_EXTENSION_INVALID_VALUE,
+        message: `function "${block.name}" parameter "${key}" is not valid JSON`,
+        sourceId,
+        span: value.span,
+      });
+      return undefined;
+    }
+  };
+
+  const signature = requiredString('signature');
+  const returns = requiredString('returns');
+  const body = requiredString('body');
+  if (signature === undefined || returns === undefined || body === undefined) return undefined;
+
+  const languageParam = params['language'];
+  let language: string | undefined;
+  if (languageParam !== undefined && languageParam.kind === 'value') {
+    try {
+      const parsed: unknown = JSON.parse(languageParam.raw);
+      if (typeof parsed === 'string' && parsed.trim().length > 0) language = parsed;
+    } catch {
+      diagnostics?.push({
+        code: PSL_EXTENSION_INVALID_VALUE,
+        message: `function "${block.name}" parameter "language" is not valid JSON`,
+        sourceId,
+        span: languageParam.span,
+      });
+      return undefined;
+    }
+  }
+
+  const volatilityParam = params['volatility'];
+  let volatility: 'VOLATILE' | 'STABLE' | 'IMMUTABLE' | undefined;
+  if (volatilityParam !== undefined && volatilityParam.kind === 'value') {
+    try {
+      const parsed: unknown = JSON.parse(volatilityParam.raw);
+      if (parsed === 'VOLATILE' || parsed === 'STABLE' || parsed === 'IMMUTABLE') {
+        volatility = parsed;
+      } else {
+        diagnostics?.push({
+          code: PSL_EXTENSION_INVALID_VALUE,
+          message: `function "${block.name}" parameter "volatility" must be VOLATILE, STABLE, or IMMUTABLE`,
+          sourceId,
+          span: volatilityParam.span,
+        });
+        return undefined;
+      }
+    } catch {
+      diagnostics?.push({
+        code: PSL_EXTENSION_INVALID_VALUE,
+        message: `function "${block.name}" parameter "volatility" is not valid JSON`,
+        sourceId,
+        span: volatilityParam.span,
+      });
+      return undefined;
+    }
+  }
+
+  const mapAttr = block.attributes['map'];
+  let functionName = block.name;
+  if (mapAttr !== undefined) {
+    const mapped = mapAttr.args['name'];
+    invariant(typeof mapped === 'string', '@@map on a function block parses one string argument');
+    functionName = mapped;
+  }
+
+  return new PostgresFunction({
+    functionName,
+    signature,
+    returns,
+    body,
+    ...ifDefined('language', language),
+    ...ifDefined('volatility', volatility),
+  });
+}
+
 /**
  * `native_enum`'s entity-type factory output, checked separately from the assembled
  * `postgresAuthoringEntityTypes` map below: `deriveValueSet` is SQL-family surface
@@ -478,6 +588,14 @@ export const postgresAuthoringEntityTypes = {
     discriminator: 'native_enum',
     validatorSchema: PostgresNativeEnumSchema,
     output: nativeEnumEntityTypeOutput,
+  },
+  function: {
+    kind: 'entity',
+    discriminator: 'function',
+    validatorSchema: PostgresFunctionSchema,
+    output: {
+      factory: lowerFunctionFromBlock,
+    },
   },
 } as const satisfies AuthoringEntityTypeNamespace;
 
@@ -678,6 +796,45 @@ export const postgresAuthoringPslBlockDescriptors = {
     discriminator: 'role',
     name: { required: true },
     parameters: {},
+  },
+  function: {
+    kind: 'pslBlock',
+    keyword: 'function',
+    documentation:
+      'Declares a PostgreSQL function whose CREATE/DROP is planned with migrations. Column defaults that call it stay raw SQL expressions.',
+    discriminator: 'function',
+    name: { required: true },
+    parameters: {
+      signature: {
+        kind: 'value',
+        codecId: 'pg/text@1',
+        required: true,
+        documentation: 'The function argument list, e.g. size int DEFAULT 16.',
+      },
+      returns: {
+        kind: 'value',
+        codecId: 'pg/text@1',
+        required: true,
+        documentation: 'The function return type, e.g. text.',
+      },
+      body: {
+        kind: 'value',
+        codecId: 'pg/text@1',
+        required: true,
+        documentation: 'The function body (PL/pgSQL or SQL) without surrounding dollar quotes.',
+      },
+      language: {
+        kind: 'value',
+        codecId: 'pg/text@1',
+        documentation: 'The function language. Defaults to plpgsql.',
+      },
+      volatility: {
+        kind: 'value',
+        codecId: 'pg/text@1',
+        documentation: 'VOLATILE, STABLE, or IMMUTABLE. Defaults to STABLE.',
+      },
+    },
+    attributes: { map: () => nativeEnumMapAttribute },
   },
 } as const satisfies AuthoringPslBlockDescriptorNamespace;
 
@@ -927,6 +1084,7 @@ export function postgresLowerEntityHandles(
     { coordinate: RlsTargetCoordinate; entity: PostgresRlsEnablement }
   >();
   const roles = new Map<string, PostgresRole>();
+  const functions: LoweredPackEntity[] = [];
   const policies: {
     readonly handle: RlsPolicyHandleShape;
     readonly refs: Readonly<Record<string, ResolvedEntityHandleRef>>;
@@ -979,6 +1137,24 @@ export function postgresLowerEntityHandles(
           'policy handles are constructed only by the postgres contract-builder policy*() constructors, which enforce this shape'
         >(handle);
         policies.push({ handle: policyHandle, refs });
+        break;
+      }
+      case 'function': {
+        const functionHandle = blindCast<
+          {
+            readonly entityKind: 'function';
+            readonly name: string;
+            readonly entity: PostgresFunction;
+            readonly namespaceId?: string;
+          },
+          'function handles are constructed only by pgFunction()'
+        >(handle);
+        functions.push({
+          namespaceId: functionHandle.namespaceId ?? input.defaultNamespaceId,
+          entityKind: 'function',
+          key: functionHandle.name,
+          entity: functionHandle.entity,
+        });
         break;
       }
       default:
@@ -1049,5 +1225,6 @@ export function postgresLowerEntityHandles(
   for (const [name, entity] of roles) {
     rows.push({ namespaceId: UNBOUND_NAMESPACE_ID, entityKind: 'role', key: name, entity });
   }
+  rows.push(...functions);
   return rows;
 }

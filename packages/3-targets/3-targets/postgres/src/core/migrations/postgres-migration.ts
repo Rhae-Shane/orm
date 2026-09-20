@@ -20,6 +20,7 @@ import {
   AddUniqueCall,
   AlterColumnTypeCall,
   type AlterColumnTypeOptions,
+  CreateFunctionCall,
   CreateIndexCall,
   CreateNativeEnumTypeCall,
   CreatePostgresRlsPolicyCall,
@@ -30,6 +31,7 @@ import {
   DropColumnCall,
   DropConstraintCall,
   DropDefaultCall,
+  DropFunctionCall,
   DropIndexCall,
   DropNativeEnumTypeCall,
   DropNotNullCall,
@@ -214,6 +216,34 @@ export abstract class PostgresMigration<
     return new DropNativeEnumTypeCall(options.schema, options.typeName).toOp(
       this.controlAdapterFor('dropNativeEnumType'),
     );
+  }
+
+  protected createFunction(options: {
+    readonly schema: string;
+    readonly functionName: string;
+    readonly signature: string;
+    readonly returns: string;
+    readonly body: string;
+    readonly language: string;
+    readonly volatility: 'VOLATILE' | 'STABLE' | 'IMMUTABLE';
+  }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
+    return new CreateFunctionCall({
+      schemaName: options.schema,
+      functionName: options.functionName,
+      signature: options.signature,
+      returns: options.returns,
+      body: options.body,
+      language: options.language,
+      volatility: options.volatility,
+    }).toOp();
+  }
+
+  protected dropFunction(options: {
+    readonly schema: string;
+    readonly functionName: string;
+    readonly signature: string;
+  }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
+    return new DropFunctionCall(options.schema, options.functionName, options.signature).toOp();
   }
 
   /**

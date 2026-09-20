@@ -4,6 +4,11 @@ export {
   type PostgresCheckKind,
   postgresRenderCheckExpressions,
 } from '../core/check-expressions';
+export {
+  PostgresFunction,
+  type PostgresFunctionInput,
+  type PostgresFunctionVolatility,
+} from '../core/postgres-function';
 export { PostgresNativeEnum, type PostgresNativeEnumInput } from '../core/postgres-native-enum';
 export {
   PostgresRlsEnablement,
@@ -27,6 +32,10 @@ export {
   PostgresDatabaseSchemaNode,
   type PostgresDatabaseSchemaNodeInput,
 } from '../core/schema-ir/postgres-database-schema-node';
+export {
+  PostgresFunctionSchemaNode,
+  type PostgresFunctionSchemaNodeInput,
+} from '../core/schema-ir/postgres-function-schema-node';
 export {
   PostgresNamespaceSchemaNode,
   type PostgresNamespaceSchemaNodeInput,

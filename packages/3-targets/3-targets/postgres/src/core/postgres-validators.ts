@@ -32,3 +32,14 @@ export const PostgresNativeEnumSchema = type({
   members: type.string.array().readonly(),
   'control?': "'managed' | 'tolerated' | 'external' | 'observed'",
 });
+
+export const PostgresFunctionSchema = type({
+  kind: "'postgres-function'",
+  functionName: 'string',
+  signature: 'string',
+  returns: 'string',
+  body: 'string',
+  'language?': 'string',
+  'volatility?': "'VOLATILE' | 'STABLE' | 'IMMUTABLE'",
+  'control?': "'managed' | 'tolerated' | 'external' | 'observed'",
+});

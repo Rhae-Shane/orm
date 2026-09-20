@@ -45,6 +45,7 @@ import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import type { Result } from '@internal/utils/result';
 import { notOk, ok } from '@internal/utils/result';
+import type { PostgresFunctionSchemaNode } from '../schema-ir/postgres-function-schema-node';
 import type { PostgresNamespaceSchemaNode } from '../schema-ir/postgres-namespace-schema-node';
 import type { PostgresNativeEnumSchemaNode } from '../schema-ir/postgres-native-enum-schema-node';
 import type { PostgresTableSchemaNode } from '../schema-ir/postgres-table-schema-node';
@@ -63,6 +64,7 @@ import {
   AddPrimaryKeyCall,
   AddUniqueCall,
   AlterColumnTypeCall,
+  CreateFunctionCall,
   CreateIndexCall,
   CreateNativeEnumTypeCall,
   CreateSchemaCall,
@@ -72,6 +74,7 @@ import {
   DropColumnCall,
   DropConstraintCall,
   DropDefaultCall,
+  DropFunctionCall,
   DropIndexCall,
   DropNativeEnumTypeCall,
   DropNotNullCall,
@@ -147,8 +150,10 @@ function classifyCall(call: PostgresOpFactoryCall): CallCategory {
     case 'createSchema':
     case 'createNativeEnumType':
     case 'addNativeEnumValue':
+    case 'createFunction':
       return 'dep';
     case 'dropNativeEnumType':
+    case 'dropFunction':
       return 'dropType';
     case 'dropTable':
     case 'dropColumn':
@@ -534,6 +539,56 @@ function nativeEnumMemberChangeRefusal(options: {
  * refused with a NAMED diagnostic, never a silent no-op and never a
  * drop-and-recreate.
  */
+function mapFunctionNodeIssue(
+  issue: SchemaDiffIssue,
+  ctx: StrategyContext,
+): Result<readonly PostgresOpFactoryCall[], SqlPlannerConflict> {
+  const ddlSchemaName = issueSchemaName(issue);
+  if (ddlSchemaName === undefined) {
+    return notOk(
+      nodeConflict(
+        'unsupportedOperation',
+        `Function issue has no schema in its path: ${issue.path.join('/')}`,
+      ),
+    );
+  }
+  const schemaName = emissionSchemaName(ctx, ddlSchemaName);
+  if (issueOutcome(issue) === 'not-found') {
+    const expected = blindCast<
+      PostgresFunctionSchemaNode,
+      'a not-found function issue always carries the expected PostgresFunctionSchemaNode'
+    >(issue.expected);
+    return ok([
+      new CreateFunctionCall({
+        schemaName,
+        functionName: expected.functionName,
+        signature: expected.signature,
+        returns: expected.returns,
+        body: expected.body,
+        language: expected.language,
+        volatility: expected.volatility,
+      }),
+    ]);
+  }
+  if (issueOutcome(issue) === 'not-expected') {
+    const actual = blindCast<
+      PostgresFunctionSchemaNode,
+      'a not-expected function issue always carries the actual PostgresFunctionSchemaNode'
+    >(issue.actual);
+    return ok([new DropFunctionCall(schemaName, actual.functionName, actual.signature)]);
+  }
+  return notOk(
+    nodeConflict(
+      'unsupportedOperation',
+      `Changing a Postgres function body or signature is not supported yet; drop and recreate "${
+        blindCast<PostgresFunctionSchemaNode, 'not-equal function issue carries expected node'>(
+          issue.expected,
+        ).functionName
+      }".`,
+    ),
+  );
+}
+
 function mapNativeEnumNodeIssue(
   issue: SchemaDiffIssue,
   ctx: StrategyContext,
@@ -912,6 +967,10 @@ export function mapNodeIssueToCall(
 
   if (node.nodeKind === PostgresSchemaNodeKind.nativeEnum) {
     return mapNativeEnumNodeIssue(issue, ctx);
+  }
+
+  if (node.nodeKind === PostgresSchemaNodeKind.function) {
+    return mapFunctionNodeIssue(issue, ctx);
   }
 
   const ddlSchemaName = issueSchemaName(issue);

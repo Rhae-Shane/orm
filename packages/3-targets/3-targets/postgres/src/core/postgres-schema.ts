@@ -21,11 +21,13 @@ import { ifDefined } from '@internal/utils/defined';
 import { PostgresTableSource } from './ast/table-source';
 import { PG_TEXT_CODEC_ID } from './codec-ids';
 import {
+  functionEntityKind,
   nativeEnumEntityKind,
   policyEntityKind,
   rlsEnablementEntityKind,
   roleEntityKind,
 } from './entity-kinds';
+import { PostgresFunction } from './postgres-function';
 import { PostgresNativeEnum } from './postgres-native-enum';
 import type { PostgresRlsEnablement } from './postgres-rls-enablement';
 import type { PostgresRlsPolicy } from './postgres-rls-policy';
@@ -39,6 +41,7 @@ export type PostgresNamespaceEntries = SqlNamespaceEntries & {
   readonly role?: Readonly<Record<string, PostgresRole>>;
   readonly rls?: Readonly<Record<string, PostgresRlsEnablement>>;
   readonly native_enum?: Readonly<Record<string, PostgresNativeEnum>>;
+  readonly function?: Readonly<Record<string, PostgresFunction>>;
 };
 
 export interface PostgresSchemaInput {
@@ -85,6 +88,7 @@ export class PostgresSchema extends SqlNamespaceBase {
         roleEntityKind,
         rlsEnablementEntityKind,
         nativeEnumEntityKind,
+        functionEntityKind,
       ]),
       'carry',
     );
@@ -109,6 +113,20 @@ export class PostgresSchema extends SqlNamespaceBase {
       dispatched['native_enum'] = Object.freeze(rekeyed);
     }
 
+    const functionSlot = dispatched['function'];
+    if (functionSlot !== undefined) {
+      const rekeyed: Record<string, unknown> = {};
+      for (const [handle, entity] of Object.entries(functionSlot)) {
+        const physicalName = PostgresFunction.is(entity) ? entity.functionName : handle;
+        invariant(
+          !Object.hasOwn(rekeyed, physicalName),
+          `PostgresSchema "${input.id}": two function entities resolve to the same physical function name "${physicalName}".`,
+        );
+        rekeyed[physicalName] = entity;
+      }
+      dispatched['function'] = Object.freeze(rekeyed);
+    }
+
     // Drop an empty valueSet so presence signals non-emptiness.
     const valueSetRaw = dispatched['valueSet'];
     const withPresence =
@@ -123,7 +141,7 @@ export class PostgresSchema extends SqlNamespaceBase {
     this.entries = Object.freeze(
       blindCast<
         PostgresNamespaceEntries,
-        'composeSqlEntityKinds([policyEntityKind, roleEntityKind, rlsEnablementEntityKind, nativeEnumEntityKind]) supplies table→StorageTable, valueSet→StorageValueSet, policy→PostgresRlsPolicy, role→PostgresRole, rls→PostgresRlsEnablement, native_enum→PostgresNativeEnum descriptors'
+        'composeSqlEntityKinds([policyEntityKind, roleEntityKind, rlsEnablementEntityKind, nativeEnumEntityKind, functionEntityKind]) supplies table→StorageTable, valueSet→StorageValueSet, policy→PostgresRlsPolicy, role→PostgresRole, rls→PostgresRlsEnablement, native_enum→PostgresNativeEnum, function→PostgresFunction descriptors'
       >(entriesInput),
     );
     Object.defineProperty(this, 'kind', {

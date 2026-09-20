@@ -76,6 +76,7 @@ import {
   renameCheckConstraint,
 } from './operations/constraints';
 import { createExtension } from './operations/dependencies';
+import { createFunction, dropFunction } from './operations/functions';
 import {
   type CreateIndexElements,
   type CreateIndexExtras,
@@ -1558,6 +1559,108 @@ export class CreateNativeEnumTypeCall extends PostgresOpFactoryCallNode {
   }
 }
 
+export class CreateFunctionCall extends PostgresOpFactoryCallNode {
+  readonly factoryName = 'createFunction' as const;
+  readonly operationClass = 'additive' as const;
+  readonly schemaName: string;
+  readonly functionName: string;
+  readonly signature: string;
+  readonly returns: string;
+  readonly body: string;
+  readonly language: string;
+  readonly volatility: 'VOLATILE' | 'STABLE' | 'IMMUTABLE';
+  readonly label: string;
+
+  constructor(options: {
+    readonly schemaName: string;
+    readonly functionName: string;
+    readonly signature: string;
+    readonly returns: string;
+    readonly body: string;
+    readonly language: string;
+    readonly volatility: 'VOLATILE' | 'STABLE' | 'IMMUTABLE';
+  }) {
+    super();
+    this.schemaName = options.schemaName;
+    this.functionName = options.functionName;
+    this.signature = options.signature;
+    this.returns = options.returns;
+    this.body = options.body;
+    this.language = options.language;
+    this.volatility = options.volatility;
+    this.label = `Create function "${options.functionName}"`;
+    this.freeze();
+  }
+
+  async toOp(_lowerer?: ExecuteRequestLowerer): Promise<Op> {
+    return createFunction({
+      schemaName: this.schemaName,
+      functionName: this.functionName,
+      signature: this.signature,
+      returns: this.returns,
+      body: this.body,
+      language: this.language,
+      volatility: this.volatility,
+    });
+  }
+
+  renderTypeScript(): string {
+    const opts = [
+      `schema: ${jsonToTsSource(this.schemaName)}`,
+      `functionName: ${jsonToTsSource(this.functionName)}`,
+      `signature: ${jsonToTsSource(this.signature)}`,
+      `returns: ${jsonToTsSource(this.returns)}`,
+      `body: ${jsonToTsSource(this.body)}`,
+      `language: ${jsonToTsSource(this.language)}`,
+      `volatility: ${jsonToTsSource(this.volatility)}`,
+    ];
+    return `this.createFunction({ ${opts.join(', ')} })`;
+  }
+
+  override importRequirements(): readonly ImportRequirement[] {
+    return [];
+  }
+}
+
+export class DropFunctionCall extends PostgresOpFactoryCallNode {
+  readonly factoryName = 'dropFunction' as const;
+  readonly operationClass = 'destructive' as const;
+  readonly schemaName: string;
+  readonly functionName: string;
+  readonly signature: string;
+  readonly label: string;
+
+  constructor(schemaName: string, functionName: string, signature: string) {
+    super();
+    this.schemaName = schemaName;
+    this.functionName = functionName;
+    this.signature = signature;
+    this.label = `Drop function "${functionName}"`;
+    this.freeze();
+  }
+
+  async toOp(_lowerer?: ExecuteRequestLowerer): Promise<Op> {
+    return dropFunction({
+      schemaName: this.schemaName,
+      functionName: this.functionName,
+      signature: this.signature,
+    });
+  }
+
+  renderTypeScript(): string {
+    const opts = [
+      `schema: ${jsonToTsSource(this.schemaName)}`,
+      `functionName: ${jsonToTsSource(this.functionName)}`,
+      `signature: ${jsonToTsSource(this.signature)}`,
+    ];
+    return `this.dropFunction({ ${opts.join(', ')} })`;
+  }
+
+  override importRequirements(): readonly ImportRequirement[] {
+    return [];
+  }
+}
+
 export class DropNativeEnumTypeCall extends PostgresOpFactoryCallNode {
   readonly factoryName = 'dropNativeEnumType' as const;
   readonly operationClass = 'destructive' as const;
@@ -1984,6 +2087,8 @@ export type PostgresOpFactoryCall =
   | CreateNativeEnumTypeCall
   | DropNativeEnumTypeCall
   | AddNativeEnumValueCall
+  | CreateFunctionCall
+  | DropFunctionCall
   | CreatePostgresRlsPolicyCall
   | DropPostgresRlsPolicyCall
   | EnableRowLevelSecurityCall

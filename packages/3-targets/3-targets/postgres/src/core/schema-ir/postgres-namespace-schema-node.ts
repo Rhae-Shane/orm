@@ -1,6 +1,7 @@
 import type { DiffableNode } from '@internal/framework-components/control';
 import { freezeNode } from '@internal/framework-components/ir';
 import { assertNode, SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
+import type { PostgresFunctionSchemaNode } from './postgres-function-schema-node';
 import type { PostgresNativeEnumSchemaNode } from './postgres-native-enum-schema-node';
 import type { PostgresTableSchemaNode } from './postgres-table-schema-node';
 import { PostgresSchemaNodeKind } from './schema-node-kinds';
@@ -15,6 +16,8 @@ export interface PostgresNamespaceSchemaNodeInput {
    * entity's grade); introspection builds nodes with no `control`.
    */
   readonly nativeEnums?: readonly PostgresNativeEnumSchemaNode[];
+  /** Managed Postgres functions declared in this namespace. */
+  readonly functions?: readonly PostgresFunctionSchemaNode[];
 }
 
 /**
@@ -26,7 +29,7 @@ export interface PostgresNamespaceSchemaNodeInput {
  * (`postgres-namespace`), distinct from `SqlSchemaIR`'s own (`sql-schema`).
  *
  * `id` is the schema name; `isEqualTo` is identity on it; `children()` returns
- * the table nodes plus `nativeEnums`.
+ * the table nodes plus `nativeEnums` and `functions`.
  *
  * `nativeEnums` is the diff-tree representation of native enum types the
  * differ pairs — the sole enum carrier, built directly by both sides: the
@@ -39,12 +42,14 @@ export class PostgresNamespaceSchemaNode extends SqlSchemaIRNode implements Diff
   readonly schemaName: string;
   readonly tables: Readonly<Record<string, PostgresTableSchemaNode>>;
   readonly nativeEnums: readonly PostgresNativeEnumSchemaNode[];
+  readonly functions: readonly PostgresFunctionSchemaNode[];
 
   constructor(input: PostgresNamespaceSchemaNodeInput) {
     super();
     this.schemaName = input.schemaName;
     this.tables = Object.freeze({ ...input.tables });
     this.nativeEnums = Object.freeze([...(input.nativeEnums ?? [])]);
+    this.functions = Object.freeze([...(input.functions ?? [])]);
     freezeNode(this);
   }
 
@@ -57,7 +62,7 @@ export class PostgresNamespaceSchemaNode extends SqlSchemaIRNode implements Diff
   }
 
   children(): readonly DiffableNode[] {
-    return [...Object.values(this.tables), ...this.nativeEnums];
+    return [...Object.values(this.tables), ...this.nativeEnums, ...this.functions];
   }
 
   static is(node: SqlSchemaIRNode): node is PostgresNamespaceSchemaNode {

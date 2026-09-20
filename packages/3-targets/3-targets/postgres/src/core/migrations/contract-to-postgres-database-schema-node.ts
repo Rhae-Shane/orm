@@ -16,6 +16,7 @@ import type { PostgresRlsPolicy } from '../postgres-rls-policy';
 import type { PostgresContract } from '../postgres-schema';
 import { isPostgresSchema } from '../postgres-schema';
 import { PostgresDatabaseSchemaNode } from '../schema-ir/postgres-database-schema-node';
+import { PostgresFunctionSchemaNode } from '../schema-ir/postgres-function-schema-node';
 import { PostgresNamespaceSchemaNode } from '../schema-ir/postgres-namespace-schema-node';
 import { PostgresNativeEnumSchemaNode } from '../schema-ir/postgres-native-enum-schema-node';
 import { PostgresPolicySchemaNode } from '../schema-ir/postgres-policy-schema-node';
@@ -276,10 +277,25 @@ export function contractToPostgresDatabaseSchemaNode(
         }),
     );
 
+    const functions = Object.values(ns.entries.function ?? {}).map(
+      (entity) =>
+        new PostgresFunctionSchemaNode({
+          functionName: entity.functionName,
+          namespaceId: ddlSchema,
+          signature: entity.signature,
+          returns: entity.returns,
+          body: entity.body,
+          language: entity.language,
+          volatility: entity.volatility,
+          ...ifDefined('control', entity.control),
+        }),
+    );
+
     namespaces[ddlSchema] = new PostgresNamespaceSchemaNode({
       schemaName: ddlSchema,
       tables,
       nativeEnums,
+      functions,
     });
   }
 
